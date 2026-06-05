@@ -40,6 +40,75 @@ button:disabled {
   opacity: 0.55;
 }
 
+.auth-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, oklch(35% 0.038 160), oklch(26% 0.028 166)),
+    oklch(32% 0.035 160);
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid oklch(82% 0.025 150);
+  border-radius: 8px;
+  background: oklch(98% 0.008 150);
+  box-shadow: 0 22px 60px oklch(20% 0.03 160 / 28%);
+}
+
+.auth-card h1 {
+  margin: 2px 0 0;
+  font-size: 1.7rem;
+}
+
+.auth-card p,
+.auth-card span {
+  margin: 0;
+  color: oklch(54% 0.026 158);
+}
+
+.auth-card label {
+  display: grid;
+  gap: 7px;
+  font-weight: 780;
+}
+
+.auth-message {
+  color: oklch(45% 0.12 28);
+  font-size: 0.9rem;
+}
+
+.auth-session-button {
+  position: fixed;
+  z-index: 20;
+  right: 18px;
+  bottom: 18px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 16px;
+  background: oklch(30% 0.035 160);
+  color: oklch(97% 0.01 150);
+  font-weight: 820;
+  box-shadow: 0 12px 26px oklch(20% 0.025 160 / 22%);
+}
+
+.public-site {
+  min-height: 100dvh;
+  background: oklch(94% 0.02 152);
+}
+
+.public-site .workspace {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 272px 1fr;

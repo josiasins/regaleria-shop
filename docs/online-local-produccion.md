@@ -43,6 +43,7 @@ Configuracion actual:
 - Dominio interno: `https://sistema.regaleriashop.com`.
 - Web publica: GitHub Pages desde `josiasins/regaleria-shop`.
 - Dominio publico: `https://regaleriashop.com`.
+- Acceso interno: Supabase Auth con email y contraseña.
 
 Nota: Render quedo limitado a un dominio personalizado en el plan actual, por eso la web publica se prepara con GitHub Pages en lugar de un segundo dominio custom en Render.
 
@@ -88,6 +89,18 @@ Variables clave:
 - `VITE_PUBLIC_DOMAIN`: `regaleriashop.com`.
 - `VITE_INTERNAL_DOMAIN`: `sistema.regaleriashop.com`.
 - `OPENAI_API_KEY`: solo servidor/local, nunca expuesta al navegador.
+
+## Acceso al sistema interno
+
+`sistema.regaleriashop.com` y los dominios `onrender.com` quedan protegidos por Supabase Auth.
+
+La web publica `regaleriashop.com` no muestra el menu interno ni requiere login; solo muestra la tienda inicial/ecommerce.
+
+Para dejar el acceso realmente cerrado:
+
+- Crear usuarios autorizados en Supabase Auth.
+- Desactivar registro publico de usuarios si no se quiere permitir altas espontaneas.
+- Mantener contrasenas fuera del codigo y fuera de variables `VITE_*`.
 
 ## Chrome instalable
 

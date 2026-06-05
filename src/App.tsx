@@ -30,10 +30,13 @@ import { clsx } from "clsx";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi, generateProductImagesWithOpenAi, storeProductImage } from "./aiClient";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import type { Customer, ImportProductRow, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleLine, StockMovementType, Supplier } from "./types";
+import type { Session } from "@supabase/supabase-js";
 
 const sections = [
   { id: "panel", label: "Panel", icon: ChartLineUp },
@@ -80,6 +83,127 @@ const roleLabels: Record<Role, string> = {
 const allSectionIds = sections.map((section) => section.id);
 
 export function App() {
+  if (isPublicWebsite()) return <PublicSite />;
+
+  return (
+    <AuthGate>
+      <InternalApp />
+    </AuthGate>
+  );
+}
+
+function isPublicWebsite() {
+  const hostname = window.location.hostname.toLowerCase();
+  const publicDomain = String(import.meta.env.VITE_PUBLIC_DOMAIN || "regaleriashop.com").toLowerCase();
+  return hostname === publicDomain || hostname === `www.${publicDomain}`;
+}
+
+function shouldRequireInternalLogin() {
+  const hostname = window.location.hostname.toLowerCase();
+  const internalDomain = String(import.meta.env.VITE_INTERNAL_DOMAIN || "sistema.regaleriashop.com").toLowerCase();
+  return hostname === internalDomain || hostname.endsWith(".onrender.com");
+}
+
+function AuthGate({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(shouldRequireInternalLogin());
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const requiresLogin = shouldRequireInternalLogin();
+
+  useEffect(() => {
+    if (!requiresLogin || !supabase) {
+      setIsLoading(false);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setIsLoading(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => data.subscription.unsubscribe();
+  }, [requiresLogin]);
+
+  const signIn = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supabase) return;
+    setMessage("Ingresando...");
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setMessage(error ? "Email o contraseña incorrectos." : "");
+  };
+
+  const signOut = async () => {
+    await supabase?.auth.signOut();
+  };
+
+  if (!requiresLogin) return <>{children}</>;
+
+  if (!isSupabaseConfigured) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="brand-mark">R</div>
+          <h1>Sistema interno</h1>
+          <p>Falta configurar Supabase para activar el ingreso seguro.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="brand-mark">R</div>
+          <h1>Sistema interno</h1>
+          <p>Verificando acceso...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="auth-screen">
+        <form className="auth-card" onSubmit={signIn}>
+          <div className="brand-mark">R</div>
+          <span>Regaleria Shop</span>
+          <h1>Sistema interno</h1>
+          <p>Ingresá con el usuario autorizado del negocio.</p>
+          <label>
+            Email
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
+          </label>
+          <label>
+            Contraseña
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+          </label>
+          <button className="primary-action full" type="submit">Ingresar</button>
+          {message && <strong className="auth-message">{message}</strong>}
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <>
+      <button className="auth-session-button" onClick={signOut}>Salir</button>
+      {children}
+    </>
+  );
+}
+
+function PublicSite() {
+  return (
+    <main className="public-site">
+      <PublicShop />
+    </main>
+  );
+}
+
+function InternalApp() {
   const [section, setSection] = useState<Section>("panel");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
