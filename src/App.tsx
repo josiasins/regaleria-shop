@@ -134,6 +134,18 @@ function AuthGate({ children }: { children: ReactNode }) {
     setMessage(error ? "Email o contraseña incorrectos." : "");
   };
 
+  const signInWithGoogle = async () => {
+    if (!supabase) return;
+    setMessage("Abriendo Google...");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) setMessage("Google todavia no esta configurado en Supabase.");
+  };
+
   const signOut = async () => {
     await supabase?.auth.signOut();
   };
@@ -171,7 +183,12 @@ function AuthGate({ children }: { children: ReactNode }) {
           <div className="brand-mark">R</div>
           <span>Regaleria Shop</span>
           <h1>Sistema interno</h1>
-          <p>Ingresá con el usuario autorizado del negocio.</p>
+          <p>Ingresá con una cuenta autorizada del negocio.</p>
+          <button className="google-action" type="button" onClick={signInWithGoogle}>
+            <GlobeHemisphereWest size={19} />
+            Ingresar con Google
+          </button>
+          <div className="auth-divider"><span>o con email</span></div>
           <label>
             Email
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />

@@ -291,7 +291,7 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alternativas descartadas: crear otro dominio custom en Render, porque el boton aparece deshabilitado por limite del plan/cuenta.
 
 ### Acceso protegido al sistema interno
-- Decision: bloquear `sistema.regaleriashop.com` y despliegues `onrender.com` con Supabase Auth por email y contraseña.
+- Decision: bloquear `sistema.regaleriashop.com` y despliegues `onrender.com` con Supabase Auth, priorizando ingreso con Google y dejando email/contraseña como respaldo.
 - Motivo: el panel interno contiene ventas, stock, compras, gastos y reportes del negocio; no debe quedar publico aunque la web ecommerce si lo sea.
 - Estado: el dominio publico `regaleriashop.com` muestra solo la tienda; el dominio interno muestra pantalla de ingreso antes del panel.
 - Alternativas descartadas: usar una contraseña fija embebida en el frontend, porque seria visible en el codigo publicado.

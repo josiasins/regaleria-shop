@@ -78,6 +78,40 @@ button:disabled {
   font-weight: 780;
 }
 
+.google-action {
+  min-height: 46px;
+  border: 1px solid oklch(78% 0.022 150);
+  border-radius: 8px;
+  background: white;
+  color: oklch(26% 0.018 158);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 850;
+}
+
+.google-action:hover {
+  background: oklch(96% 0.01 150);
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: oklch(58% 0.028 158);
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: oklch(84% 0.02 150);
+}
+
 .auth-message {
   color: oklch(45% 0.12 28);
   font-size: 0.9rem;
