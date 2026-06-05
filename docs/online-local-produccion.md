@@ -32,35 +32,44 @@ Estado del proyecto PostgreSQL:
 - Auth configurado con Site URL `https://sistema.regaleriashop.com`.
 - Redirect URLs productivas configuradas: `https://sistema.regaleriashop.com/**` y `https://regaleriashop.com/**`.
 
-## Hosting gratis recomendado para iniciar
+## Hosting gratis configurado para iniciar
 
-Supabase cubre backend, base, login y archivos. Para servir la app React conviene usar un hosting frontend gratuito como Vercel, Netlify o Cloudflare Pages.
+Supabase cubre backend, base, login y archivos. La app React se sirve desde hosting frontend gratuito.
 
-Configuracion recomendada:
+Configuracion actual:
 
-- `regaleriashop.com`: web publica/ecommerce.
-- `www.regaleriashop.com`: alias de la web publica.
-- `sistema.regaleriashop.com`: sistema interno.
+- Sistema interno: Render Static Site `regaleria-shop`.
+- URL temporal interna: `https://regaleria-shop.onrender.com`.
+- Dominio interno: `https://sistema.regaleriashop.com`.
+- Web publica: GitHub Pages desde `josiasins/regaleria-shop`.
+- Dominio publico: `https://regaleriashop.com`.
+
+Nota: Render quedo limitado a un dominio personalizado en el plan actual, por eso la web publica se prepara con GitHub Pages en lugar de un segundo dominio custom en Render.
 
 ## DNS
-
-Cuando se cree el proyecto de hosting frontend, cargar los registros que entregue ese proveedor.
 
 Porkbun:
 
 - `regaleriashop.com` esta en la cuenta.
-- La pantalla DNS no muestra registros activos para el dominio.
-- No se cargaron registros aun porque falta elegir/desplegar el hosting frontend. Supabase funciona como backend, no como hosting directo de la app React.
+- Registro interno cargado: `CNAME sistema -> regaleria-shop.onrender.com`.
+- Render verifico `sistema.regaleriashop.com`; el certificado HTTPS puede tardar algunos minutos.
+- Existen registros MX/TXT de email y registros por defecto de Porkbun. No se borraron para evitar romper correo o configuraciones existentes.
 
 Estructura esperada:
 
 | Host | Uso | Destino |
 | --- | --- | --- |
-| `@` | Web publica | Hosting frontend de la web |
-| `www` | Web publica | Alias del hosting frontend |
-| `sistema` | Panel interno | Hosting frontend del sistema |
+| `@` | Web publica | GitHub Pages |
+| `www` | Web publica | Alias futuro de GitHub Pages |
+| `sistema` | Panel interno | `regaleria-shop.onrender.com` |
 
 Supabase se configura desde variables de entorno y no necesita ser el destino directo del dominio principal salvo que se usen funciones o endpoints propios.
+
+Registros pendientes para GitHub Pages:
+
+- Reemplazar el ALIAS raiz actual de Porkbun por los A records oficiales de GitHub Pages.
+- Agregar `www` como CNAME hacia `josiasins.github.io` cuando se quiera activar `www.regaleriashop.com`.
+- Verificar el dominio en GitHub Pages cuando el workflow termine su primer deploy.
 
 ## Variables
 

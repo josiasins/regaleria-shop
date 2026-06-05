@@ -166,7 +166,11 @@
 - [x] Crear proyecto real de Supabase.
 - [x] Ejecutar migracion PostgreSQL real.
 - [x] Activar Supabase Auth base y URLs productivas.
-- [ ] Deploy frontend interno en `sistema.regaleriashop.com`.
-- [ ] Deploy web publica en `regaleriashop.com`.
+- [x] Deploy frontend interno base en Render.
+- [x] DNS interno `sistema.regaleriashop.com` cargado y verificado.
+- [x] Preparar GitHub Pages para web publica en `regaleriashop.com`.
+- [ ] Certificado HTTPS final de `sistema.regaleriashop.com`.
+- [ ] Deploy web publica final en `regaleriashop.com`.
 - [ ] Conectar la app actual a datos reales en Supabase.
-- [ ] Configurar DNS en Porkbun cuando exista destino de hosting frontend.
+- [x] Configurar DNS interno en Porkbun.
+- [ ] Configurar DNS publico en Porkbun para GitHub Pages.

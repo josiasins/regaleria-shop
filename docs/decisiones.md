@@ -271,3 +271,21 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Decision: no cargar registros DNS en Porkbun hasta tener el destino del hosting frontend.
 - Motivo: Supabase es backend/API y no sirve directamente la app React; apuntar `regaleriashop.com` o `sistema.regaleriashop.com` sin hosting produciria errores o una pagina equivocada.
 - Alternativas descartadas: crear CNAMEs provisorios sin destino confirmado, porque complica la propagacion y puede confundir pruebas.
+
+### Hosting interno en Render
+- Decision: desplegar el sistema interno como Static Site en Render con el servicio `regaleria-shop`.
+- Motivo: permite publicar rapido desde GitHub, mantener plan gratuito inicial y usar Supabase como backend real.
+- Estado: sitio temporal `https://regaleria-shop.onrender.com`, dominio `sistema.regaleriashop.com` verificado en Render y certificado HTTPS pendiente de emision.
+- Alternativas descartadas: usar Supabase como hosting frontend, porque Supabase cubre backend, Auth y Storage, pero no sirve directamente la app React.
+
+### Dominio interno en Porkbun
+- Decision: crear en Porkbun un CNAME `sistema.regaleriashop.com` hacia `regaleria-shop.onrender.com`.
+- Motivo: Render pidio ese registro para verificar el dominio interno.
+- Estado: registro DNS cargado y verificado por Render.
+- Alternativas descartadas: borrar todos los registros existentes del dominio, porque habia registros de email y hosting por defecto que no debian tocarse sin una razon directa.
+
+### Web publica con GitHub Pages
+- Decision: preparar GitHub Pages para publicar `regaleriashop.com` desde el repositorio `josiasins/regaleria-shop`.
+- Motivo: Render bloqueo dominios personalizados adicionales en el plan actual; GitHub Pages permite publicar una web estatica con dominio propio sin costo inicial.
+- Estado: workflow `.github/workflows/pages.yml` y `public/CNAME` agregados; falta configurar DNS del dominio central hacia GitHub Pages y verificar Pages en GitHub.
+- Alternativas descartadas: crear otro dominio custom en Render, porque el boton aparece deshabilitado por limite del plan/cuenta.
