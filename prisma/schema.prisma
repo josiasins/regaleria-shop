@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DUENO
+  ADMINISTRADOR
+  ENCARGADO
+  CAJERO
+}
+
+enum SyncStatus {
+  SINCRONIZADO
+  PENDIENTE
+  CON_CONFLICTO
+  FALLO
+}
+
+enum TransferStatus {
+  PENDIENTE
+  CONFIRMADO
+  RECHAZADO
+}
+
+model User {
+  id             String   @id @default(uuid())
+  supabaseAuthId String?  @unique
+  name           String
+  email          String   @unique
+  role           Role
+  createdAt      DateTime @default(now())
+  auditLogs      AuditLog[]
+}
+
+model Product {
+  id          String       @id @default(uuid())
+  localId     String?      @unique
+  name        String
+  category    String
+  supplierId  String?
+  supplierRecord Supplier? @relation(fields: [supplierId], references: [id])
+  supplier    String
+  description String
+  publishable Boolean      @default(false)
+  imageUrl    String?
+  imageUrls   String[]
+  syncStatus  SyncStatus   @default(SINCRONIZADO)
+  variants    Variant[]
+  movements   StockMovement[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Variant {
+  id         String   @id @default(uuid())
+  localId    String?  @unique
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  name       String
+  sku        String   @unique
+  barcode    String?  @unique
+  stock      Int
+  lowStockAt Int
+  cost       Decimal
+  price      Decimal
+  saleLines  SaleLine[]
+  quoteLines QuoteLine[]
+  purchaseLines PurchaseLine[]
+  onlineOrderLines OnlineOrderLine[]
+}
+
+model Sale {
+  id            String      @id @default(uuid())
+  localId       String?     @unique
+  receiptNumber String      @unique
+  type          String
+  customerId    String?
+  customer      Customer?   @relation(fields: [customerId], references: [id])
+  customerName  String?
+  shiftId       String?
+  shift         CashShift?  @relation(fields: [shiftId], references: [id])
+  discount      Decimal
+  paymentMethod String
+  internalNote  String?
+  total         Decimal
+  margin        Decimal
+  syncStatus    SyncStatus  @default(SINCRONIZADO)
+  lines         SaleLine[]
+  transfers     Transfer[]
+  createdAt     DateTime    @default(now())
+}
+
+model SaleLine {
+  id        String  @id @default(uuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id])
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  name      String
+  sku       String
+  quantity  Int
+  unitPrice Decimal
+  unitCost  Decimal
+}
+
+model Quote {
+  id           String      @id @default(uuid())
+  localId      String?     @unique
+  number       String      @unique
+  customerId   String?
+  customer     Customer?   @relation(fields: [customerId], references: [id])
+  customerName String
+  total        Decimal
+  status       String
+  internalNote String?
+  syncStatus   SyncStatus  @default(SINCRONIZADO)
+  lines        QuoteLine[]
+  transfers    Transfer[]
+  createdAt    DateTime    @default(now())
+}
+
+model QuoteLine {
+  id        String  @id @default(uuid())
+  quoteId   String
+  quote     Quote   @relation(fields: [quoteId], references: [id])
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  name      String
+  sku       String
+  quantity  Int
+  unitPrice Decimal
+  unitCost  Decimal
+}
+
+model Transfer {
+  id         String         @id @default(uuid())
+  localId    String?        @unique
+  saleId     String?
+  sale       Sale?          @relation(fields: [saleId], references: [id])
+  quoteId    String?
+  quote      Quote?         @relation(fields: [quoteId], references: [id])
+  amount     Decimal
+  sender     String
+  status     TransferStatus @default(PENDIENTE)
+  note       String
+  syncStatus SyncStatus     @default(SINCRONIZADO)
+  createdAt  DateTime       @default(now())
+}
+
+model Expense {
+  id         String     @id @default(uuid())
+  localId    String?    @unique
+  category   String
+  amount     Decimal
+  supplierId String?
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id])
+  vendor     String
+  note       String
+  syncStatus SyncStatus @default(SINCRONIZADO)
+  createdAt  DateTime   @default(now())
+}
+
+model PurchaseReceipt {
+  id             String         @id @default(uuid())
+  localId        String?        @unique
+  number         String         @unique
+  documentType   String
+  documentNumber String
+  supplierId     String?
+  supplierRecord Supplier?      @relation(fields: [supplierId], references: [id])
+  supplier       String
+  total          Decimal
+  syncStatus     SyncStatus     @default(SINCRONIZADO)
+  lines          PurchaseLine[]
+  createdAt      DateTime       @default(now())
+}
+
+model Customer {
+  id         String      @id @default(uuid())
+  localId    String?     @unique
+  name       String
+  phone      String?
+  email      String?
+  note       String?
+  syncStatus SyncStatus  @default(SINCRONIZADO)
+  sales      Sale[]
+  quotes     Quote[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Supplier {
+  id         String            @id @default(uuid())
+  localId    String?           @unique
+  name       String
+  phone      String?
+  email      String?
+  note       String?
+  syncStatus SyncStatus        @default(SINCRONIZADO)
+  products   Product[]
+  purchases  PurchaseReceipt[]
+  expenses   Expense[]
+  payments   SupplierPayment[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+model OnlineOrder {
+  id              String            @id @default(uuid())
+  localId         String?           @unique
+  number          String            @unique
+  customerName    String
+  customerContact String
+  total           Decimal
+  status          String
+  syncStatus      SyncStatus        @default(SINCRONIZADO)
+  lines           OnlineOrderLine[]
+  createdAt       DateTime          @default(now())
+}
+
+model OnlineOrderLine {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     OnlineOrder @relation(fields: [orderId], references: [id])
+  variantId String
+  variant   Variant     @relation(fields: [variantId], references: [id])
+  name      String
+  sku       String
+  quantity  Int
+  unitPrice Decimal
+  unitCost  Decimal
+}
+
+model PurchaseLine {
+  id         String          @id @default(uuid())
+  receiptId  String
+  receipt    PurchaseReceipt @relation(fields: [receiptId], references: [id])
+  variantId  String
+  variant    Variant         @relation(fields: [variantId], references: [id])
+  name       String
+  sku        String
+  quantity   Int
+  unitCost   Decimal
+  subtotal   Decimal
+}
+
+model StockMovement {
+  id         String     @id @default(uuid())
+  localId    String?    @unique
+  productId  String
+  product    Product    @relation(fields: [productId], references: [id])
+  variantId  String
+  type       String
+  quantity   Int
+  reason     String
+  syncStatus SyncStatus @default(SINCRONIZADO)
+  createdAt  DateTime   @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json
+  createdAt DateTime @default(now())
+}
+
+model BusinessProfile {
+  id            String   @id @default(uuid())
+  businessName  String
+  publicDomain  String
+  internalDomain String
+  currency      String   @default("ARS")
+  phone         String?
+  address       String?
+  receiptLegend String
+  backupSchedule String
+  updatedAt     DateTime @updatedAt
+}
+
+model FileAsset {
+  id         String   @id @default(uuid())
+  bucket     String
+  path       String   @unique
+  publicUrl  String?
+  entity     String
+  entityId   String?
+  mimeType   String
+  sizeBytes  Int?
+  createdAt  DateTime @default(now())
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model CashClosure {
+  id            String     @id @default(uuid())
+  localId       String?    @unique
+  number        String     @unique
+  date          DateTime
+  cashTotal     Decimal
+  transferTotal Decimal
+  cardTotal     Decimal
+  otherTotal    Decimal
+  expensesTotal Decimal
+  note          String?
+  syncStatus    SyncStatus @default(SINCRONIZADO)
+  createdAt     DateTime   @default(now())
+}
+
+model CashShift {
+  id                  String     @id @default(uuid())
+  localId             String?    @unique
+  number              String     @unique
+  openedAt            DateTime   @default(now())
+  openedBy            Role
+  initialCash         Decimal
+  note                String?
+  closedAt            DateTime?
+  closedBy            Role?
+  declaredClosingCash Decimal?
+  expectedClosingCash Decimal?
+  closingNote         String?
+  syncStatus          SyncStatus @default(SINCRONIZADO)
+  sales               Sale[]
+}
+
+model SupplierPayment {
+  id         String     @id @default(uuid())
+  localId    String?    @unique
+  supplierId String?
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id])
+  supplierName String
+  amount     Decimal
+  note       String?
+  syncStatus SyncStatus @default(SINCRONIZADO)
+  createdAt  DateTime   @default(now())
+}
+
+model RolePermission {
+  id          String   @id @default(uuid())
+  role        Role     @unique
+  permissions String[]
+  updatedAt   DateTime @updatedAt
+}
+
+model BackupRun {
+  id        String   @id @default(uuid())
+  provider  String
+  status    String
+  filePath  String?
+  note      String?
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+}

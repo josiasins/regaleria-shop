@@ -1,0 +1,19 @@
+{
+  "name": "Regaleria Shop - Sistema Interno",
+  "short_name": "Regaleria",
+  "description": "Sistema interno para stock, ventas, compras, gastos y catalogo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7faf8",
+  "theme_color": "#e9f0ed",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

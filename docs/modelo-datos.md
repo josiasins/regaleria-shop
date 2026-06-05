@@ -1,0 +1,55 @@
+# Modelo De Datos Principal
+
+El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
+
+## Entidades
+
+- User: usuario con rol.
+- Customer: cliente reutilizable para ventas y presupuestos, con contacto y notas.
+- Supplier: proveedor reutilizable para productos, compras y gastos.
+- Product: producto base con categoria, proveedor, descripcion y estado publicable.
+- Variant: variante vendible con SKU, codigo de barra, stock, costo y precio.
+- Category: lista administrable de categorias para productos y reportes.
+- Sale: venta con comprobante interno, pago, total, margen, fecha/hora, cliente y turno asociado en ventas nuevas.
+- SaleLine: lineas de venta.
+- Quote: presupuesto sin descuento de stock hasta convertirse.
+- QuoteLine: lineas de presupuesto.
+- Transfer: comprobante manual de transferencia asociado a venta o presupuesto.
+- Expense: gasto del negocio.
+- PurchaseReceipt: factura, remito u otro comprobante de compra de mercaderia.
+- PurchaseLine: lineas de compra que actualizan stock y costo de variantes.
+- OnlineOrder: pedido creado desde la web publica.
+- OnlineOrderLine: lineas del pedido web.
+- StockMovement: historial de movimientos de stock.
+- CashClosure: cierre de caja diario con totales por medio de pago y gastos.
+- CashShift: turno operativo de mostrador con efectivo inicial declarado, responsable, apertura, cierre, efectivo contado, efectivo esperado, nota y estado de sincronizacion.
+- SupplierPayment: pago parcial o total a proveedor.
+- RolePermission: permisos editables por rol.
+- BusinessProfile: configuracion inicial del negocio, dominios, moneda, contacto, leyenda de comprobantes y politica de backups.
+- FileAsset: registro de archivos guardados en Storage, asociado a productos, compras, transferencias o gastos.
+- BackupRun: registro de ejecuciones de backup.
+- AuditLog: registro de acciones importantes.
+
+## Relaciones clave
+
+- Sale y Quote pueden asociarse a Customer, pero conservan `customerName` para mantener el dato historico del comprobante.
+- Product y PurchaseReceipt pueden asociarse a Supplier, pero conservan `supplier` para mantener el texto usado en el momento de la carga.
+- PurchaseReceipt genera PurchaseLine, StockMovement de ingreso y Expense de categoria Reposicion.
+- OnlineOrder descuenta stock mediante lineas conectadas a Variant y queda como pedido interno, no como factura fiscal.
+- Product se edita visualmente desde Catalogo; Variant y StockMovement sostienen cantidades, costos y precios operativos.
+- Product puede tener varias imagenes para galeria publicable.
+- CashClosure resume ventas y gastos del dia para control interno.
+- SupplierPayment permite construir saldo por proveedor junto con PurchaseReceipt.
+- RolePermission permite que Configuracion cambie visibilidad de modulos y permiso de descuentos.
+- BusinessProfile alimenta Configuracion > Operativa y define `regaleriashop.com` como web publica y `sistema.regaleriashop.com` como sistema interno.
+- FileAsset separa imagenes publicas de producto de comprobantes privados de compras, transferencias y gastos.
+- BackupRun permite auditar si los respaldos se ejecutaron correctamente.
+
+## Offline futuro
+
+Las entidades operativas incluyen `localId` y `syncStatus` para permitir creacion local futura. Los estados previstos son:
+
+- sincronizado.
+- pendiente.
+- con conflicto.
+- fallo.

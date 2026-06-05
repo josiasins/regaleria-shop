@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+public/generated/products/*
+!public/generated/products/.gitkeep
+
+.npm-cache/
+backups/
