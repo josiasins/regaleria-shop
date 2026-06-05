@@ -169,7 +169,9 @@
 - [x] Deploy frontend interno base en Render.
 - [x] DNS interno `sistema.regaleriashop.com` cargado y verificado.
 - [x] Preparar GitHub Pages para web publica en `regaleriashop.com`.
-- [ ] Certificado HTTPS final de `sistema.regaleriashop.com`.
+- [x] Certificado HTTPS final de `sistema.regaleriashop.com`.
+- [x] Activar GitHub Pages con workflow de build.
+- [x] Registrar `regaleriashop.com` como dominio custom en GitHub Pages.
 - [ ] Deploy web publica final en `regaleriashop.com`.
 - [ ] Conectar la app actual a datos reales en Supabase.
 - [x] Configurar DNS interno en Porkbun.

@@ -275,7 +275,7 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 ### Hosting interno en Render
 - Decision: desplegar el sistema interno como Static Site en Render con el servicio `regaleria-shop`.
 - Motivo: permite publicar rapido desde GitHub, mantener plan gratuito inicial y usar Supabase como backend real.
-- Estado: sitio temporal `https://regaleria-shop.onrender.com`, dominio `sistema.regaleriashop.com` verificado en Render y certificado HTTPS pendiente de emision.
+- Estado: sitio temporal `https://regaleria-shop.onrender.com`, dominio `https://sistema.regaleriashop.com` verificado en Render y respondiendo por HTTPS.
 - Alternativas descartadas: usar Supabase como hosting frontend, porque Supabase cubre backend, Auth y Storage, pero no sirve directamente la app React.
 
 ### Dominio interno en Porkbun
@@ -287,5 +287,5 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 ### Web publica con GitHub Pages
 - Decision: preparar GitHub Pages para publicar `regaleriashop.com` desde el repositorio `josiasins/regaleria-shop`.
 - Motivo: Render bloqueo dominios personalizados adicionales en el plan actual; GitHub Pages permite publicar una web estatica con dominio propio sin costo inicial.
-- Estado: workflow `.github/workflows/pages.yml` y `public/CNAME` agregados; falta configurar DNS del dominio central hacia GitHub Pages y verificar Pages en GitHub.
+- Estado: workflow `.github/workflows/pages.yml` y `public/CNAME` agregados, GitHub Pages activado con Actions y `regaleriashop.com` guardado como dominio custom. Falta reemplazar DNS publico en Porkbun; hoy el dominio raiz aun redirige a Porkbun Link.
 - Alternativas descartadas: crear otro dominio custom en Render, porque el boton aparece deshabilitado por limite del plan/cuenta.

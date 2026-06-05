@@ -52,8 +52,9 @@ Porkbun:
 
 - `regaleriashop.com` esta en la cuenta.
 - Registro interno cargado: `CNAME sistema -> regaleria-shop.onrender.com`.
-- Render verifico `sistema.regaleriashop.com`; el certificado HTTPS puede tardar algunos minutos.
+- Render verifico `sistema.regaleriashop.com` y la URL responde por HTTPS.
 - Existen registros MX/TXT de email y registros por defecto de Porkbun. No se borraron para evitar romper correo o configuraciones existentes.
+- El dominio raiz `regaleriashop.com` todavia redirige a Porkbun Link (`regaleriashop-com.l.ink`) hasta reemplazar el registro raiz.
 
 Estructura esperada:
 
@@ -69,7 +70,7 @@ Registros pendientes para GitHub Pages:
 
 - Reemplazar el ALIAS raiz actual de Porkbun por los A records oficiales de GitHub Pages.
 - Agregar `www` como CNAME hacia `josiasins.github.io` cuando se quiera activar `www.regaleriashop.com`.
-- Verificar el dominio en GitHub Pages cuando el workflow termine su primer deploy.
+- GitHub Pages ya tiene guardado `regaleriashop.com` como dominio custom; falta que el DNS publico apunte a GitHub para completar el chequeo.
 
 ## Variables
 
