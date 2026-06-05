@@ -55,7 +55,8 @@ Porkbun:
 - Registro interno cargado: `CNAME sistema -> regaleria-shop.onrender.com`.
 - Render verifico `sistema.regaleriashop.com` y la URL responde por HTTPS.
 - Existen registros MX/TXT de email y registros por defecto de Porkbun. No se borraron para evitar romper correo o configuraciones existentes.
-- El dominio raiz `regaleriashop.com` todavia redirige a Porkbun Link (`regaleriashop-com.l.ink`) hasta reemplazar el registro raiz.
+- El dominio raiz `regaleriashop.com` apunta a GitHub Pages.
+- `www.regaleriashop.com` apunta a GitHub Pages.
 
 Estructura esperada:
 
@@ -67,11 +68,12 @@ Estructura esperada:
 
 Supabase se configura desde variables de entorno y no necesita ser el destino directo del dominio principal salvo que se usen funciones o endpoints propios.
 
-Registros pendientes para GitHub Pages:
+Registros actuales para GitHub Pages:
 
-- Reemplazar el ALIAS raiz actual de Porkbun por los A records oficiales de GitHub Pages.
-- Agregar `www` como CNAME hacia `josiasins.github.io` cuando se quiera activar `www.regaleriashop.com`.
-- GitHub Pages ya tiene guardado `regaleriashop.com` como dominio custom; falta que el DNS publico apunte a GitHub para completar el chequeo.
+- `ALIAS regaleriashop.com -> josiasins.github.io`.
+- `CNAME www.regaleriashop.com -> josiasins.github.io`.
+- GitHub Pages ya tiene guardado `regaleriashop.com` como dominio custom.
+- El sitio publico responde por HTTP. HTTPS esta pendiente de emision de certificado en GitHub Pages.
 
 ## Variables
 
@@ -101,6 +103,11 @@ Para dejar el acceso realmente cerrado:
 - Crear usuarios autorizados en Supabase Auth.
 - Desactivar registro publico de usuarios si no se quiere permitir altas espontaneas.
 - Mantener contrasenas fuera del codigo y fuera de variables `VITE_*`.
+
+Estado actual:
+
+- Usuario inicial creado en Supabase Auth.
+- Registro publico de usuarios desactivado.
 
 ## Chrome instalable
 

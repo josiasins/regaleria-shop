@@ -172,7 +172,11 @@
 - [x] Certificado HTTPS final de `sistema.regaleriashop.com`.
 - [x] Activar GitHub Pages con workflow de build.
 - [x] Registrar `regaleriashop.com` como dominio custom en GitHub Pages.
-- [ ] Deploy web publica final en `regaleriashop.com`.
+- [x] Configurar DNS publico en Porkbun para GitHub Pages.
+- [x] Deploy web publica en `regaleriashop.com` por HTTP.
+- [ ] Certificado HTTPS final de `regaleriashop.com`.
+- [x] Proteger sistema interno con Supabase Auth.
+- [x] Crear usuario inicial autorizado.
+- [x] Desactivar registro publico de usuarios en Supabase Auth.
 - [ ] Conectar la app actual a datos reales en Supabase.
 - [x] Configurar DNS interno en Porkbun.
-- [ ] Configurar DNS publico en Porkbun para GitHub Pages.
