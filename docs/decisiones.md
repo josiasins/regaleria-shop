@@ -240,6 +240,16 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: un visitante anonimo solo puede leer productos publicados; cargar esa vista limitada dentro del panel ocultaria temporalmente productos internos.
 - Alternativas descartadas: consultar antes de autenticar, porque mezcla los permisos de la tienda publica con los del administrador.
 
+### Validacion de escritura contra Auth
+- Decision: autorizar cambios de catalogo comparando `auth.uid()` con el correo guardado en `auth.users`.
+- Motivo: es mas robusto que depender de que cada proveedor OAuth incluya el correo en la misma posicion del token.
+- Alternativas descartadas: validar exclusivamente `auth.jwt()->>'email'`, porque la estructura del token puede variar y provocar que la interfaz cambie localmente sin persistir.
+
+### Escritura de catalogo mediante operacion segura
+- Decision: guardar productos mediante la funcion autenticada `save_catalog_product`.
+- Motivo: centraliza la validacion del dueño y la escritura atomica, evitando diferencias entre permisos de insercion y actualizacion del `upsert` directo.
+- Alternativas descartadas: mantener el `upsert` desde el navegador, porque un rechazo de RLS dejaba el cambio solo en memoria.
+
 ### Menu responsive tipo drawer
 - Decision: ocultar el menu lateral en tablet/celular y abrirlo desde un boton hamburguesa.
 - Motivo: la navegacion principal debe estar disponible sin ocupar espacio permanente en pantallas chicas.

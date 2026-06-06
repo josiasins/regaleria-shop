@@ -48,7 +48,12 @@ export async function loadCloudCatalog() {
 export async function saveCloudProduct(product: Product) {
   if (!isCloudCatalogEnabled()) return true;
   if (!supabase) return false;
-  const { error } = await supabase.from("public_catalog_products").upsert(catalogRow(product), { onConflict: "id" });
+  const row = catalogRow(product);
+  const { error } = await supabase.rpc("save_catalog_product", {
+    product_id: row.id,
+    product_publishable: row.publishable,
+    product_data: row.data
+  });
   if (error) {
     console.error("No se pudo actualizar el producto compartido.", error.message);
     return false;

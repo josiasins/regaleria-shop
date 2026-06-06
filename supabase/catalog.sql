@@ -7,6 +7,51 @@ create table if not exists public.public_catalog_products (
 
 alter table public.public_catalog_products enable row level security;
 
+create or replace function public.is_catalog_owner()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where id = auth.uid()
+      and lower(email) = 'josias.insfran66@gmail.com'
+  );
+$$;
+
+revoke all on function public.is_catalog_owner() from public;
+grant execute on function public.is_catalog_owner() to authenticated;
+
+create or replace function public.save_catalog_product(
+  product_id text,
+  product_publishable boolean,
+  product_data jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_catalog_owner() then
+    raise exception 'Not authorized to update the catalog';
+  end if;
+
+  insert into public.public_catalog_products (id, publishable, data, updated_at)
+  values (product_id, product_publishable, product_data, now())
+  on conflict (id) do update
+  set publishable = excluded.publishable,
+      data = excluded.data,
+      updated_at = excluded.updated_at;
+end;
+$$;
+
+revoke all on function public.save_catalog_product(text, boolean, jsonb) from public;
+grant execute on function public.save_catalog_product(text, boolean, jsonb) to authenticated;
+
 drop policy if exists "Public can read published catalog" on public.public_catalog_products;
 create policy "Public can read published catalog"
 on public.public_catalog_products for select
@@ -17,26 +62,26 @@ drop policy if exists "Authorized owner can read catalog" on public.public_catal
 create policy "Authorized owner can read catalog"
 on public.public_catalog_products for select
 to authenticated
-using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com');
+using (public.is_catalog_owner());
 
 drop policy if exists "Authorized owner can insert catalog" on public.public_catalog_products;
 create policy "Authorized owner can insert catalog"
 on public.public_catalog_products for insert
 to authenticated
-with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com');
+with check (public.is_catalog_owner());
 
 drop policy if exists "Authorized owner can update catalog" on public.public_catalog_products;
 create policy "Authorized owner can update catalog"
 on public.public_catalog_products for update
 to authenticated
-using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com')
-with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com');
+using (public.is_catalog_owner())
+with check (public.is_catalog_owner());
 
 drop policy if exists "Authorized owner can delete catalog" on public.public_catalog_products;
 create policy "Authorized owner can delete catalog"
 on public.public_catalog_products for delete
 to authenticated
-using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com');
+using (public.is_catalog_owner());
 
 grant usage on schema public to anon, authenticated;
 grant select on public.public_catalog_products to anon;
