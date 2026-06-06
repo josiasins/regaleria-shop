@@ -898,6 +898,7 @@ function Stock() {
   });
   const [importText, setImportText] = useState("");
   const [importedCount, setImportedCount] = useState(0);
+  const [productSaveStatus, setProductSaveStatus] = useState("");
 
   useEffect(() => {
     const found = products.flatMap((product) => product.variants).find((variant) => variant.id === variantDraftId);
@@ -925,9 +926,10 @@ function Stock() {
     );
   });
 
-  const submitProduct = () => {
+  const submitProduct = async () => {
     if (!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0) return;
-    addProduct({
+    setProductSaveStatus("Guardando en la nube...");
+    const savedProduct = await addProduct({
       name: newProduct.name,
       category: newProduct.category || "Sin categoria",
       supplier: newProduct.supplier || "Sin proveedor",
@@ -944,6 +946,11 @@ function Stock() {
         price: newProduct.price
       }
     });
+    if (!savedProduct) {
+      setProductSaveStatus("No se pudo guardar. Revisa la conexion e intenta nuevamente.");
+      return;
+    }
+    setProductSaveStatus("Producto guardado y sincronizado.");
     setNewProduct({
       name: "",
       category: "",
@@ -1093,6 +1100,7 @@ function Stock() {
               <button className="primary-action" onClick={submitProduct} disabled={!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0}>
                 <PlusCircle size={19} /> Crear producto
               </button>
+              {productSaveStatus && <span className="muted-text">{productSaveStatus}</span>}
             </div>
           </Panel>
         )}
@@ -2457,13 +2465,14 @@ function ProductEditor({
   product: Product;
   suppliers: Supplier[];
   categories: string[];
-  onSave: (input: ProductUpdateInput) => void;
+  onSave: (input: ProductUpdateInput) => Promise<boolean>;
   onBack: () => void;
 }) {
   const [aiBasePhoto, setAiBasePhoto] = useState("");
   const [aiImageStatus, setAiImageStatus] = useState("Subir foto base para preparar variantes.");
   const [selectedImage, setSelectedImage] = useState(0);
   const [isSavingImage, setIsSavingImage] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
   const [draft, setDraft] = useState({
     name: product.name,
     category: product.category,
@@ -2495,10 +2504,15 @@ function ProductEditor({
   const gallery = draft.imageUrls.filter(Boolean);
   const mainImage = gallery[selectedImage] ?? gallery[0] ?? product.imageUrl;
 
-  const save = () => {
+  const save = async () => {
     const imageUrls = gallery.length ? gallery : [draft.imageUrl].filter(Boolean);
-    onSave({ productId: product.id, ...draft, imageUrl: imageUrls[0] || draft.imageUrl, imageUrls });
-    onBack();
+    setSaveStatus("Guardando en la nube...");
+    const saved = await onSave({ productId: product.id, ...draft, imageUrl: imageUrls[0] || draft.imageUrl, imageUrls });
+    if (saved) {
+      onBack();
+      return;
+    }
+    setSaveStatus("No se pudo guardar en la nube. Intenta nuevamente.");
   };
   const addImageUrl = (url: string) => {
     const clean = url.trim();
@@ -2559,6 +2573,7 @@ function ProductEditor({
         <button className="primary-action" onClick={save} disabled={!draft.name.trim()}>
           <CheckCircle size={18} /> Guardar producto
         </button>
+        {saveStatus && <span className="muted-text">{saveStatus}</span>}
       </div>
       <div className="product-editor-layout">
         <section className="editor-media">

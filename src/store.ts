@@ -57,9 +57,9 @@ interface AppState {
   catalogStatus: "cargando" | "actualizado" | "error";
   initializeCatalog: () => Promise<void>;
   setRole: (role: AppState["activeRole"]) => void;
-  addProduct: (product: NewProductInput) => Product;
+  addProduct: (product: NewProductInput) => Promise<Product | null>;
   updateProductPublishable: (input: PublishUpdateInput) => void;
-  updateProductDetails: (input: ProductUpdateInput) => void;
+  updateProductDetails: (input: ProductUpdateInput) => Promise<boolean>;
   updateVariant: (input: VariantUpdateInput) => void;
   importProducts: (rows: ImportProductRow[]) => number;
   addCustomer: (input: CustomerDraftInput) => Customer | null;
@@ -225,7 +225,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ catalogStatus: seeded ? "actualizado" : "error" });
   },
   setRole: (role) => set({ activeRole: role }),
-  addProduct: (input) => {
+  addProduct: async (input) => {
     const now = new Date().toISOString();
     const product: Product = {
       id: `local_prod_${crypto.randomUUID()}`,
@@ -260,8 +260,12 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: now,
       syncStatus: "pendiente"
     };
-    set((state) => ({ products: [product, ...state.products], movements: [movement, ...state.movements] }));
-    void saveCloudProduct(product);
+    const saved = await saveCloudProduct(product);
+    if (!saved) {
+      set({ catalogStatus: "error" });
+      return null;
+    }
+    set((state) => ({ products: [product, ...state.products], movements: [movement, ...state.movements], catalogStatus: "actualizado" }));
     return product;
   },
   updateProductPublishable: (input) => {
@@ -273,27 +277,31 @@ export const useStore = create<AppState>((set, get) => ({
     const product = get().products.find((item) => item.id === input.productId);
     if (product) void saveCloudProduct(product);
   },
-  updateProductDetails: (input) => {
-    if (!input.name.trim()) return;
+  updateProductDetails: async (input) => {
+    if (!input.name.trim()) return false;
+    const current = get().products.find((item) => item.id === input.productId);
+    if (!current) return false;
+    const product: Product = {
+      ...current,
+      name: input.name.trim(),
+      category: input.category.trim() || "Sin categoria",
+      supplier: input.supplier.trim() || "Sin proveedor",
+      description: input.description.trim(),
+      imageUrl: input.imageUrl.trim() || current.imageUrl,
+      imageUrls: input.imageUrls?.length ? input.imageUrls.map((url) => url.trim()).filter(Boolean) : current.imageUrls,
+      publishable: input.publishable,
+      syncStatus: "sincronizado"
+    };
+    const saved = await saveCloudProduct(product);
+    if (!saved) {
+      set({ catalogStatus: "error" });
+      return false;
+    }
     set((state) => ({
-      products: state.products.map((product) =>
-        product.id === input.productId
-          ? {
-              ...product,
-              name: input.name.trim(),
-              category: input.category.trim() || "Sin categoria",
-              supplier: input.supplier.trim() || "Sin proveedor",
-              description: input.description.trim(),
-              imageUrl: input.imageUrl.trim() || product.imageUrl,
-              imageUrls: input.imageUrls?.length ? input.imageUrls.map((url) => url.trim()).filter(Boolean) : product.imageUrls,
-              publishable: input.publishable,
-              syncStatus: "pendiente"
-            }
-          : product
-      )
+      products: state.products.map((item) => (item.id === product.id ? product : item)),
+      catalogStatus: "actualizado"
     }));
-    const product = get().products.find((item) => item.id === input.productId);
-    if (product) void saveCloudProduct(product);
+    return true;
   },
   updateVariant: (input) => {
     if (!input.name.trim() || !input.sku.trim()) return;
