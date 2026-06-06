@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { businessProfile, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
 import type {
   BusinessProfile,
@@ -53,6 +54,8 @@ interface AppState {
   categories: string[];
   rolePermissions: RolePermissions;
   activeRole: Role;
+  catalogStatus: "cargando" | "actualizado" | "error";
+  initializeCatalog: () => Promise<void>;
   setRole: (role: AppState["activeRole"]) => void;
   addProduct: (product: NewProductInput) => Product;
   updateProductPublishable: (input: PublishUpdateInput) => void;
@@ -199,9 +202,28 @@ function shouldCreateContact(name: string) {
   return normalized.length > 0 && normalized !== "consumidor final";
 }
 
+function syncProductsToCloud(products: Product[], productIds?: string[]) {
+  const selected = productIds ? products.filter((product) => productIds.includes(product.id)) : products;
+  for (const product of selected) void saveCloudProduct(product);
+}
+
 export const useStore = create<AppState>((set, get) => ({
   ...initialDataState(),
   activeRole: "dueno",
+  catalogStatus: "cargando",
+  initializeCatalog: async () => {
+    const cloudProducts = await loadCloudCatalog();
+    if (cloudProducts === null) {
+      set({ catalogStatus: "error" });
+      return;
+    }
+    if (cloudProducts.length) {
+      set({ products: cloudProducts, catalogStatus: "actualizado" });
+      return;
+    }
+    const seeded = await seedCloudCatalog(get().products);
+    set({ catalogStatus: seeded ? "actualizado" : "error" });
+  },
   setRole: (role) => set({ activeRole: role }),
   addProduct: (input) => {
     const now = new Date().toISOString();
@@ -239,6 +261,7 @@ export const useStore = create<AppState>((set, get) => ({
       syncStatus: "pendiente"
     };
     set((state) => ({ products: [product, ...state.products], movements: [movement, ...state.movements] }));
+    void saveCloudProduct(product);
     return product;
   },
   updateProductPublishable: (input) => {
@@ -247,6 +270,8 @@ export const useStore = create<AppState>((set, get) => ({
         product.id === input.productId ? { ...product, publishable: input.publishable, syncStatus: "pendiente" } : product
       )
     }));
+    const product = get().products.find((item) => item.id === input.productId);
+    if (product) void saveCloudProduct(product);
   },
   updateProductDetails: (input) => {
     if (!input.name.trim()) return;
@@ -267,6 +292,8 @@ export const useStore = create<AppState>((set, get) => ({
           : product
       )
     }));
+    const product = get().products.find((item) => item.id === input.productId);
+    if (product) void saveCloudProduct(product);
   },
   updateVariant: (input) => {
     if (!input.name.trim() || !input.sku.trim()) return;
@@ -289,6 +316,8 @@ export const useStore = create<AppState>((set, get) => ({
         )
       }))
     }));
+    const product = get().products.find((item) => item.variants.some((variant) => variant.id === input.variantId));
+    if (product) void saveCloudProduct(product);
   },
   importProducts: (rows) => {
     const validRows = rows.filter((row) => row.name.trim() && row.sku.trim() && row.price > 0);
@@ -333,6 +362,7 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...newMovements, ...state.movements],
       categories: Array.from(new Set([...state.categories, ...newProducts.map((product) => product.category)]))
     }));
+    for (const product of newProducts) void saveCloudProduct(product);
     return newProducts.length;
   },
   addCustomer: (input) => {
@@ -411,6 +441,8 @@ export const useStore = create<AppState>((set, get) => ({
             }
       )
     }));
+    const product = get().products.find((item) => item.id === found.product.id);
+    if (product) void saveCloudProduct(product);
     return movement;
   },
   addQuickSale: (variantId, quantity, paymentMethod, shiftId, discount = 0) => {
@@ -459,6 +491,7 @@ export const useStore = create<AppState>((set, get) => ({
             }
       )
     }));
+    syncProductsToCloud(get().products, [found.product.id]);
     return sale;
   },
   addDetailedSale: (input) => {
@@ -491,6 +524,7 @@ export const useStore = create<AppState>((set, get) => ({
       products: applySaleStock(state.products, sale),
       customers: newCustomer ? [newCustomer, ...state.customers] : state.customers
     }));
+    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
     return sale;
   },
   addQuote: (input) => {
@@ -577,6 +611,7 @@ export const useStore = create<AppState>((set, get) => ({
         })
       }))
     }));
+    syncProductsToCloud(get().products, cleanLines.map((line) => line.productId));
     return receipt;
   },
   closeCashDay: (note) => {
@@ -707,6 +742,7 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...movementsForOrder, ...state.movements],
       products: applySaleStock(state.products, { ...order, receiptNumber: order.number, type: "detallada", discount: 0, paymentMethod: "otro", margin: 0 })
     }));
+    syncProductsToCloud(get().products, cleanLines.map((line) => line.productId));
     return order;
   },
   confirmTransfer: (id) => {
@@ -743,6 +779,7 @@ export const useStore = create<AppState>((set, get) => ({
       products: applySaleStock(state.products, sale),
       quotes: state.quotes.map((item) => (item.id === id ? { ...item, status: "convertido", syncStatus: "pendiente" } : item))
     }));
+    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
     return sale;
   },
   markAllSynced: () => {

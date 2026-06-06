@@ -218,6 +218,28 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: los formularios de mostrador, stock y catalogo necesitan legibilidad y botones tactiles antes que conservar la composicion de escritorio.
 - Alternativas descartadas: escalar todo proporcionalmente, porque genera texto chico, tablas apretadas y scroll horizontal global.
 
+## 2026-06-06
+
+### Catalogo compartido entre sistema y web
+- Decision: usar una tabla publica controlada en PostgreSQL/Supabase como fuente comun para el catalogo del sistema interno y la tienda publica.
+- Motivo: publicar, ocultar, editar fotos, precios, descripciones o stock desde el sistema debe reflejarse en la web sin volver a desplegarla.
+- Alternativas descartadas: mantener una copia estatica dentro del frontend publico, porque se desactualiza y obliga a publicar el sitio por cada cambio.
+
+### Lectura publica y escritura autenticada
+- Decision: permitir lectura anonima solo de productos marcados como publicables y reservar altas o cambios al usuario interno autorizado.
+- Motivo: la tienda necesita consultar productos sin login, pero ningun visitante debe poder modificar el catalogo.
+- Alternativas descartadas: exponer toda la tabla al publico o depender solo de controles visuales del frontend, porque no protegen los datos en la base.
+
+### Actualizacion automatica del catalogo
+- Decision: refrescar el catalogo compartido al abrir cada aplicacion y luego cada diez segundos mientras permanece abierta.
+- Motivo: mantiene ambos lados actualizados con una implementacion simple y predecible; tambien refleja cambios de stock generados por ventas y compras.
+- Alternativas descartadas: exigir un boton manual de sincronizacion, porque genera dudas y permite que la web quede desactualizada.
+
+### Sincronizacion interna posterior al login
+- Decision: iniciar la lectura compartida del panel interno despues de validar la sesion de Google.
+- Motivo: un visitante anonimo solo puede leer productos publicados; cargar esa vista limitada dentro del panel ocultaria temporalmente productos internos.
+- Alternativas descartadas: consultar antes de autenticar, porque mezcla los permisos de la tienda publica con los del administrador.
+
 ### Menu responsive tipo drawer
 - Decision: ocultar el menu lateral en tablet/celular y abrirlo desde un boton hamburguesa.
 - Motivo: la navegacion principal debe estar disponible sin ocupar espacio permanente en pantallas chicas.

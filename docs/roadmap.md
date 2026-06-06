@@ -67,6 +67,8 @@
 - [x] Filtros por categoria, proveedor y estado web.
 - [x] Busqueda especifica dentro de catalogo.
 - [x] Galeria de varias fotos por producto.
+- [x] Catalogo real compartido entre el sistema interno y la web publica.
+- [x] Publicacion, ocultamiento y cambios de producto reflejados automaticamente en la web.
 
 ## Etapa 6: Offline parcial
 
@@ -84,7 +86,7 @@
 - [x] Carrito.
 - [x] Pedido online conectado al stock.
 - [x] Pedido web interno sin facturacion fiscal.
-- [ ] Futuro: pagina publica separada del panel interno.
+- [x] Pagina publica separada del panel interno.
 - [ ] Futuro: estados de pedido mas completos.
 - [ ] Futuro: metodos de entrega o retiro.
 
@@ -183,5 +185,6 @@
 - [x] Verificar ingreso Google productivo con el correo autorizado.
 - [x] Restringir archivos privados de Storage al correo autorizado.
 - [ ] Rotar contraseña PostgreSQL expuesta en una configuracion OAuth incorrecta.
-- [ ] Conectar la app actual a datos reales en Supabase.
+- [x] Conectar catalogo y stock publicable a datos reales en Supabase.
+- [ ] Migrar ventas, compras, clientes, proveedores y finanzas desde el estado local a tablas reales de Supabase.
 - [x] Configurar DNS interno en Porkbun.

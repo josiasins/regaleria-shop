@@ -167,3 +167,14 @@ Buckets previstos en Supabase Storage:
 - `expense-documents`: privado, comprobantes de gastos.
 
 El SQL inicial esta en `supabase/storage.sql`.
+
+# Sincronizacion Entre Sistema Y Web
+
+El sistema interno y la web publica usan `public.public_catalog_products` en Supabase como fuente comun del catalogo.
+
+- El usuario interno autenticado puede crear y actualizar productos.
+- La web publica solo puede leer filas con `publishable = true`.
+- Los cambios de nombre, fotos, descripcion, precio, stock y visibilidad se guardan al realizar la operacion interna correspondiente.
+- Ambas aplicaciones cargan el catalogo al abrir y vuelven a consultarlo cada diez segundos.
+- La sincronizacion interna comienza despues de validar el ingreso con Google.
+- Un producto ocultado deja de aparecer en la siguiente actualizacion de la web publica.

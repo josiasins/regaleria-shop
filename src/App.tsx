@@ -32,6 +32,7 @@ import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi, generateProductImagesWithOpenAi, storeProductImage } from "./aiClient";
+import { isCloudCatalogEnabled } from "./catalogCloud";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
@@ -95,6 +96,17 @@ export function App() {
       <InternalApp />
     </AuthGate>
   );
+}
+
+function useCatalogSync() {
+  const initializeCatalog = useStore((state) => state.initializeCatalog);
+
+  useEffect(() => {
+    if (!isCloudCatalogEnabled()) return;
+    void initializeCatalog();
+    const refresh = window.setInterval(() => void initializeCatalog(), 10_000);
+    return () => window.clearInterval(refresh);
+  }, [initializeCatalog]);
 }
 
 function isPublicWebsite() {
@@ -242,6 +254,8 @@ function AuthGate({ children }: { children: ReactNode }) {
 }
 
 function PublicSite() {
+  useCatalogSync();
+
   return (
     <main className="public-site">
       <PublicShop />
@@ -250,6 +264,8 @@ function PublicSite() {
 }
 
 function InternalApp() {
+  useCatalogSync();
+
   const [section, setSection] = useState<Section>("panel");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -2310,6 +2326,7 @@ function System() {
 
 function PublicShop() {
   const products = useStore((state) => state.products);
+  const catalogStatus = useStore((state) => state.catalogStatus);
   const onlineOrders = useStore((state) => state.onlineOrders);
   const addOnlineOrder = useStore((state) => state.addOnlineOrder);
   const publishableProducts = products.filter((product) => product.publishable);
@@ -2334,11 +2351,11 @@ function PublicShop() {
     <section className="workspace">
       <div className="public-hero">
         <div>
-          <span>Vista publica inicial</span>
+          <span>Tienda online</span>
           <h2>Regalos listos para retirar</h2>
-          <p>Esta pantalla simula la web publica conectada al mismo stock interno.</p>
+          <p>Catalogo conectado con el stock y las publicaciones del sistema interno.</p>
         </div>
-        <strong>{publishableProducts.length} productos visibles</strong>
+        <strong>{catalogStatus === "cargando" ? "Actualizando..." : `${publishableProducts.length} productos visibles`}</strong>
       </div>
       <div className="shop-layout">
         <div className="shop-grid">
