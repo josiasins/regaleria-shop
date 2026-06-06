@@ -319,3 +319,8 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Decision: reemplazar la clave publishable rechazada por Auth con la clave publica anon compatible en local, GitHub Pages y Render.
 - Motivo: la clave anterior devolvia `Invalid API key` y hacia que un usuario valido pareciera tener email o contraseña incorrectos.
 - Pendiente de seguridad: rotar la contraseña de PostgreSQL porque se habia cargado por error como secreto OAuth antes de esta correccion.
+
+### Cabeceras HTTP del sistema interno
+- Fecha: 2026-06-06.
+- Decision: configurar directamente en Render CSP, `X-Frame-Options`, HSTS, `X-Content-Type-Options`, `Permissions-Policy` y `Referrer-Policy`.
+- Motivo: Render no aplico todas las reglas declaradas en `_headers`; la configuracion del hosting permite verificar que las cabeceras lleguen realmente al navegador.

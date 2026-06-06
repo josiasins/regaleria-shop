@@ -121,7 +121,7 @@ Estado actual:
 - Allowlist de correo agregada en la app para impedir acceso interno a sesiones no autorizadas.
 - Politicas de Storage preparadas para aceptar archivos privados solo del correo autorizado.
 - Cargas hacia los endpoints locales de IA limitadas a 15 MB.
-- Cabeceras de seguridad preparadas para el hosting compatible con `_headers`.
+- Cabeceras de seguridad aplicadas en Render: CSP, bloqueo de iframes, HSTS, `nosniff`, permisos restringidos y politica de referencia.
 - Clave publica de Supabase Auth corregida en local, GitHub Pages y Render.
 - Pendiente: rotar la contraseña de PostgreSQL y actualizar las conexiones locales.
 
