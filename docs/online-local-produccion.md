@@ -118,6 +118,7 @@ Estado actual:
 - Usuario inicial creado en Supabase Auth.
 - Registro publico de usuarios desactivado.
 - Google OAuth habilitado con cliente web exclusivo `Regaleria Shop`.
+- `josias.insfran66@gmail.com` agregado como unico usuario de prueba y acceso Google verificado de punta a punta contra `sistema.regaleriashop.com`.
 - Allowlist de correo agregada en la app para impedir acceso interno a sesiones no autorizadas.
 - Politicas de Storage preparadas para aceptar archivos privados solo del correo autorizado.
 - Cargas hacia los endpoints locales de IA limitadas a 15 MB.

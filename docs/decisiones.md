@@ -313,6 +313,7 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Decision: crear un cliente OAuth web exclusivo llamado `Regaleria Shop` y conectarlo con Supabase Auth.
 - Motivo: permite ingresar con `josias.insfran66@gmail.com` sin depender de una contraseña propia de la aplicacion.
 - Seguridad: el callback queda limitado al endpoint oficial del proyecto Supabase y la app mantiene su allowlist de correo.
+- Verificacion: el correo autorizado fue agregado como usuario de prueba y el flujo completo abrio correctamente el panel interno en `sistema.regaleriashop.com`.
 
 ### Correccion de credenciales de Supabase
 - Fecha: 2026-06-06.
