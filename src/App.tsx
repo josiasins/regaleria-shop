@@ -64,6 +64,11 @@ type TransferPage = "cargar" | "comprobantes";
 type ExpensePage = "cargar" | "recientes" | "resumen" | "cierre";
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
 
+const internalAllowedEmails = String(import.meta.env.VITE_INTERNAL_ALLOWED_EMAILS || "josias.insfran66@gmail.com")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
   { title: "Personas", ids: ["clientes", "proveedores"] },
@@ -104,6 +109,12 @@ function shouldRequireInternalLogin() {
   return hostname === internalDomain || hostname.endsWith(".onrender.com");
 }
 
+function isAuthorizedInternalSession(session: Session | null) {
+  if (!session) return false;
+  const sessionEmail = session.user.email?.toLowerCase();
+  return Boolean(sessionEmail && internalAllowedEmails.includes(sessionEmail));
+}
+
 function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(shouldRequireInternalLogin());
@@ -140,7 +151,10 @@ function AuthGate({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin
+        redirectTo: window.location.origin,
+        queryParams: {
+          prompt: "select_account"
+        }
       }
     });
     if (error) setMessage("Google todavia no esta configurado en Supabase.");
@@ -200,6 +214,21 @@ function AuthGate({ children }: { children: ReactNode }) {
           <button className="primary-action full" type="submit">Ingresar</button>
           {message && <strong className="auth-message">{message}</strong>}
         </form>
+      </main>
+    );
+  }
+
+  if (!isAuthorizedInternalSession(session)) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="brand-mark">R</div>
+          <span>Regaleria Shop</span>
+          <h1>Cuenta no autorizada</h1>
+          <p>El sistema interno solo acepta cuentas habilitadas por el dueño.</p>
+          <strong className="auth-message">{session.user.email || "Cuenta sin email"}</strong>
+          <button className="primary-action full" type="button" onClick={signOut}>Salir y elegir otra cuenta</button>
+        </section>
       </main>
     );
   }

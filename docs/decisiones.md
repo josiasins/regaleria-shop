@@ -295,3 +295,27 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: el panel interno contiene ventas, stock, compras, gastos y reportes del negocio; no debe quedar publico aunque la web ecommerce si lo sea.
 - Estado: el dominio publico `regaleriashop.com` muestra solo la tienda; el dominio interno muestra pantalla de ingreso antes del panel.
 - Alternativas descartadas: usar una contraseña fija embebida en el frontend, porque seria visible en el codigo publicado.
+
+### Allowlist de correo para sistema interno
+- Fecha: 2026-06-05.
+- Decision: limitar el ingreso interno a sesiones autenticadas cuyo email este en `VITE_INTERNAL_ALLOWED_EMAILS`; el correo inicial autorizado es `josias.insfran66@gmail.com`.
+- Motivo: Supabase Auth confirma identidad, pero la app tambien necesita decidir quien pertenece al negocio. Sin esta regla, cualquier usuario autenticado que lograra una sesion valida podria ver el panel.
+- Alternativas descartadas: confiar solo en que el registro publico esta desactivado, porque OAuth y usuarios creados por error pueden ampliar el acceso si no existe una allowlist.
+
+### Endurecimiento inicial de seguridad
+- Fecha: 2026-06-06.
+- Decision: restringir escritura y lectura privada de Storage al correo autorizado, limitar cargas de IA a 15 MB y agregar cabeceras contra MIME sniffing, iframes y permisos innecesarios.
+- Motivo: la autenticacion visual no alcanza si los archivos privados aceptan a cualquier usuario autenticado o si una carga excesiva puede agotar memoria.
+- Alternativas descartadas: dejar politicas generales para `authenticated`, porque permitirian acceso a futuros usuarios creados por error.
+
+### Google OAuth productivo
+- Fecha: 2026-06-06.
+- Decision: crear un cliente OAuth web exclusivo llamado `Regaleria Shop` y conectarlo con Supabase Auth.
+- Motivo: permite ingresar con `josias.insfran66@gmail.com` sin depender de una contraseña propia de la aplicacion.
+- Seguridad: el callback queda limitado al endpoint oficial del proyecto Supabase y la app mantiene su allowlist de correo.
+
+### Correccion de credenciales de Supabase
+- Fecha: 2026-06-06.
+- Decision: reemplazar la clave publishable rechazada por Auth con la clave publica anon compatible en local, GitHub Pages y Render.
+- Motivo: la clave anterior devolvia `Invalid API key` y hacia que un usuario valido pareciera tener email o contraseña incorrectos.
+- Pendiente de seguridad: rotar la contraseña de PostgreSQL porque se habia cargado por error como secreto OAuth antes de esta correccion.

@@ -5,6 +5,7 @@ import OpenAI, { toFile } from "openai";
 const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 const generatedDir = path.resolve(process.cwd(), "public/generated/products");
+const maxRequestBytes = 15 * 1024 * 1024;
 
 const aiPrompts = {
   purchaseSystem:
@@ -24,9 +25,23 @@ function sendJson(res, status, payload) {
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxRequestBytes) {
+      const error = new Error("El archivo supera el limite de 15 MB.");
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
   const body = Buffer.concat(chunks).toString("utf8");
   return body ? JSON.parse(body) : {};
+}
+
+function sendApiError(res, error, fallbackMessage) {
+  const status = error && typeof error === "object" && "statusCode" in error ? Number(error.statusCode) : 500;
+  sendJson(res, status, { error: error instanceof Error ? error.message : fallbackMessage });
 }
 
 function createClient() {
@@ -258,7 +273,7 @@ export function registerOpenAiApi(server) {
     try {
       sendJson(res, 200, await purchasePreload(await readJson(req)));
     } catch (error) {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : "Error de IA" });
+      sendApiError(res, error, "Error de IA");
     }
   });
 
@@ -267,7 +282,7 @@ export function registerOpenAiApi(server) {
     try {
       sendJson(res, 200, await generateProductImages(await readJson(req)));
     } catch (error) {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : "Error de IA" });
+      sendApiError(res, error, "Error de IA");
     }
   });
 
@@ -276,7 +291,7 @@ export function registerOpenAiApi(server) {
     try {
       sendJson(res, 200, await saveUploadedProductImage(await readJson(req)));
     } catch (error) {
-      sendJson(res, 500, { error: error instanceof Error ? error.message : "Error al guardar imagen" });
+      sendApiError(res, error, "Error al guardar imagen");
     }
   });
 }

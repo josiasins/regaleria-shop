@@ -178,5 +178,9 @@
 - [x] Proteger sistema interno con Supabase Auth.
 - [x] Crear usuario inicial autorizado.
 - [x] Desactivar registro publico de usuarios en Supabase Auth.
+- [x] Restringir acceso interno por correo autorizado.
+- [x] Activar ingreso con Google mediante Supabase Auth.
+- [x] Restringir archivos privados de Storage al correo autorizado.
+- [ ] Rotar contraseña PostgreSQL expuesta en una configuracion OAuth incorrecta.
 - [ ] Conectar la app actual a datos reales en Supabase.
 - [x] Configurar DNS interno en Porkbun.

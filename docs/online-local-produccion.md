@@ -90,6 +90,7 @@ Variables clave:
 - `VITE_SUPABASE_ANON_KEY`: clave publica anon de Supabase.
 - `VITE_PUBLIC_DOMAIN`: `regaleriashop.com`.
 - `VITE_INTERNAL_DOMAIN`: `sistema.regaleriashop.com`.
+- `VITE_INTERNAL_ALLOWED_EMAILS`: correos autorizados para entrar al sistema interno.
 - `OPENAI_API_KEY`: solo servidor/local, nunca expuesta al navegador.
 
 ## Acceso al sistema interno
@@ -97,6 +98,8 @@ Variables clave:
 `sistema.regaleriashop.com` y los dominios `onrender.com` quedan protegidos por Supabase Auth.
 
 La web publica `regaleriashop.com` no muestra el menu interno ni requiere login; solo muestra la tienda inicial/ecommerce.
+
+Correo interno autorizado inicial: `josias.insfran66@gmail.com`.
 
 Metodo recomendado:
 
@@ -114,6 +117,13 @@ Estado actual:
 
 - Usuario inicial creado en Supabase Auth.
 - Registro publico de usuarios desactivado.
+- Google OAuth habilitado con cliente web exclusivo `Regaleria Shop`.
+- Allowlist de correo agregada en la app para impedir acceso interno a sesiones no autorizadas.
+- Politicas de Storage preparadas para aceptar archivos privados solo del correo autorizado.
+- Cargas hacia los endpoints locales de IA limitadas a 15 MB.
+- Cabeceras de seguridad preparadas para el hosting compatible con `_headers`.
+- Clave publica de Supabase Auth corregida en local, GitHub Pages y Render.
+- Pendiente: rotar la contraseña de PostgreSQL y actualizar las conexiones locales.
 
 ## Chrome instalable
 
