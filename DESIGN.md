@@ -43,6 +43,7 @@ Uso esperado: negocio fisico, monitor de mostrador o notebook, luz diurna/interi
 - Edicion de producto en vista dedicada cuando la tarea requiere imagenes, IA y datos publicables.
 - Galerias con imagen principal, miniaturas cuadradas y tiles `+` para sumar archivos.
 - La tienda pública usa verde bosque, coral y amarillo suave; prioriza búsqueda, categorías, producto, precio, stock, envío y carrito.
+- El carrito público vive en una página propia, accesible desde el encabezado; nunca se agrega como bloque al final del catálogo.
 - La marca provisional usa una `R` inspirada en cinta de regalo, con cinco propuestas documentadas para elección final.
 
 ## Reglas

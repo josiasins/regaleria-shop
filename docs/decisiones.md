@@ -399,6 +399,12 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Fecha: 2026-06-06.
 - Decision: configurar directamente en Render CSP, `X-Frame-Options`, HSTS, `X-Content-Type-Options`, `Permissions-Policy` y `Referrer-Policy`.
 - Motivo: Render no aplico todas las reglas declaradas en `_headers`; la configuracion del hosting permite verificar que las cabeceras lleguen realmente al navegador.
+# 2026-06-19 - Carrito como pagina propia
+
+- **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
+- **Motivo:** mostrarlo al final del catalogo lo hacia dificil de encontrar, especialmente en celular, y mezclaba exploracion con cierre de compra.
+- **Alternativas descartadas:** panel fijo lateral o modal, porque reducen espacio, complican el uso movil y esconden parte del proceso de checkout.
+
 # 2026-06-18 - Actualizacion del entorno de pruebas por seguridad
 
 - **Decision:** actualizar Vitest y sus dependencias transitivas a versiones sin alertas conocidas.

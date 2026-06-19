@@ -273,6 +273,9 @@ describe("Regaleria app", () => {
     await user.click(screen.getByRole("button", { name: /Web publica/i }));
 
     await user.click(screen.getAllByRole("button", { name: "Agregar" })[0]);
+    expect(screen.queryByRole("heading", { name: "Carrito" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Carrito, 1 productos/i }));
+    expect(screen.getByRole("heading", { name: "Carrito" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Nombre"), "Comprador Web");
     await user.type(screen.getByLabelText("Email"), "comprador@example.com");
     await user.type(screen.getByLabelText("Teléfono"), "3515551234");

@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowClockwise,
   Barcode,
   ChartLineUp,
@@ -2513,6 +2514,7 @@ function PublicShop() {
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [storePage, setStorePage] = useState<"catalog" | "cart">("catalog");
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -2528,20 +2530,32 @@ function PublicShop() {
   });
 
   useEffect(() => {
-    const title = selectedProduct
+    const title = storePage === "cart"
+      ? "Carrito | Regaleria Shop"
+      : selectedProduct
       ? selectedProduct.seoTitle || `${selectedProduct.name} | Regaleria Shop`
       : selectedCategory !== "Todos"
         ? `${selectedCategory} | Regaleria Shop`
         : "Regaleria Shop | Regalos, deco y accesorios";
-    const description = selectedProduct?.seoDescription || selectedProduct?.description || "Encontrá regalos, deco, bazar y accesorios con stock actualizado.";
+    const description = storePage === "cart"
+      ? "Revisá tu compra, elegí retiro o envío y confirmá tu pedido."
+      : selectedProduct?.seoDescription || selectedProduct?.description || "Encontrá regalos, deco, bazar y accesorios con stock actualizado.";
     document.title = title;
     setMetaDescription(description);
-  }, [selectedCategory, selectedProduct]);
+  }, [selectedCategory, selectedProduct, storePage]);
 
   const addToCart = (product: Product, variant: Product["variants"][number]) => {
     if (variant.stock < 1) return;
     setCart((current) => mergeLine(current, buildUiSaleLine(product, variant, 1)));
     setOrderMessage(`${product.name} se agregó al carrito.`);
+  };
+  const updateCartQuantity = (variantId: string, nextQuantity: number) => {
+    const product = publishableProducts.find((item) => item.variants.some((variant) => variant.id === variantId));
+    const variant = product?.variants.find((item) => item.id === variantId);
+    if (!variant) return;
+    setCart((current) => current
+      .map((line) => line.variantId === variantId ? { ...line, quantity: Math.min(nextQuantity, variant.stock) } : line)
+      .filter((line) => line.quantity > 0));
   };
   const submitOrder = async () => {
     setOrderMessage("Registrando pedido...");
@@ -2563,6 +2577,7 @@ function PublicShop() {
     <section className="storefront">
       <header className="store-header">
         <button className="store-brand" onClick={() => {
+          setStorePage("catalog");
           setSelectedProductId(null);
           setSelectedCategory("Todos");
         }}>
@@ -2571,25 +2586,121 @@ function PublicShop() {
         </button>
         <label className="store-search">
           <MagnifyingGlass size={20} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar regalos, deco, bazar y más" />
+          <input value={query} onChange={(event) => {
+            setQuery(event.target.value);
+            setStorePage("catalog");
+            setSelectedProductId(null);
+          }} placeholder="Buscar regalos, deco, bazar y más" />
         </label>
-        <button className="store-cart-button" onClick={() => document.getElementById("store-cart")?.scrollIntoView({ behavior: "smooth" })}>
+        <button
+          className={clsx("store-cart-button", storePage === "cart" && "active")}
+          aria-label={`Carrito, ${cart.reduce((sum, line) => sum + line.quantity, 0)} productos`}
+          onClick={() => setStorePage("cart")}
+        >
           <ShoppingCartSimple size={22} />
           <span>{cart.reduce((sum, line) => sum + line.quantity, 0)}</span>
         </button>
       </header>
       <nav className="store-categories" aria-label="Categorías de la tienda">
         <button className={clsx(selectedCategory === "Todos" && "active")} onClick={() => {
+          setStorePage("catalog");
           setSelectedCategory("Todos");
           setSelectedProductId(null);
         }}><House size={17} /> Inicio</button>
         {categories.map((category) => (
           <button key={category} className={clsx(selectedCategory === category && "active")} onClick={() => {
+            setStorePage("catalog");
             setSelectedCategory(category);
             setSelectedProductId(null);
           }}>{category}</button>
         ))}
       </nav>
+      {storePage === "cart" ? (
+        <main className="store-cart-page">
+          <button className="store-back-button" onClick={() => setStorePage("catalog")}>
+            <ArrowLeft size={18} /> Seguir comprando
+          </button>
+          <div className="store-cart-title">
+            <div>
+              <span>Tu compra</span>
+              <h1>Carrito</h1>
+              <p>{cart.length ? "Revisá los productos y completá los datos para confirmar." : "Todavía no agregaste productos."}</p>
+            </div>
+            <strong>{formatMoney(saleLineTotal(cart))}</strong>
+          </div>
+          {cart.length ? (
+            <div className="store-cart-layout">
+              <section className="store-cart-items" aria-label="Productos del carrito">
+                {cart.map((line) => {
+                  const product = publishableProducts.find((item) => item.id === line.productId);
+                  const variant = product?.variants.find((item) => item.id === line.variantId);
+                  return (
+                    <article key={line.variantId} className="store-cart-line">
+                      <img src={product?.imageUrl} alt="" />
+                      <div className="store-cart-line-info">
+                        <strong>{line.name}</strong>
+                        <span>{variant?.name} · {line.sku}</span>
+                        <small>{formatMoney(line.unitPrice)} por unidad</small>
+                      </div>
+                      <div className="store-quantity-control" aria-label={`Cantidad de ${line.name}`}>
+                        <button aria-label={`Quitar una unidad de ${line.name}`} onClick={() => updateCartQuantity(line.variantId, line.quantity - 1)}>
+                          <MinusCircle size={20} />
+                        </button>
+                        <strong>{line.quantity}</strong>
+                        <button aria-label={`Agregar una unidad de ${line.name}`} onClick={() => updateCartQuantity(line.variantId, line.quantity + 1)} disabled={line.quantity >= (variant?.stock ?? line.quantity)}>
+                          <PlusCircle size={20} />
+                        </button>
+                      </div>
+                      <strong className="store-cart-line-total">{formatMoney(line.quantity * line.unitPrice)}</strong>
+                      <button className="icon-button" aria-label={`Eliminar ${line.name} del carrito`} onClick={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))}>
+                        <Trash size={18} />
+                      </button>
+                    </article>
+                  );
+                })}
+              </section>
+              <aside className="store-cart-summary">
+                <h2>Datos de la compra</h2>
+                <div className="store-checkout-form">
+                  <label>
+                    Nombre
+                    <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre y apellido" />
+                  </label>
+                  <label>
+                    Email
+                    <input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="tu@email.com" />
+                  </label>
+                  <label>
+                    Teléfono
+                    <input value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder="WhatsApp o teléfono" />
+                  </label>
+                  <div className="segmented-control">
+                    <button className={clsx(deliveryMethod === "retiro" && "active")} onClick={() => setDeliveryMethod("retiro")}>Retiro</button>
+                    <button className={clsx(deliveryMethod === "envio" && "active")} onClick={() => setDeliveryMethod("envio")}>Envío</button>
+                  </div>
+                  {deliveryMethod === "envio" && <label>Dirección<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Calle, número y localidad" /></label>}
+                </div>
+                <div className="store-cart-total">
+                  <span>Total</span>
+                  <strong>{formatMoney(saleLineTotal(cart))}</strong>
+                </div>
+                <button className="store-checkout-button" onClick={submitOrder} disabled={!customerName.trim() || !customerContact.trim() || !customerEmail.includes("@") || (deliveryMethod === "envio" && !deliveryAddress.trim())}>
+                  Confirmar pedido
+                </button>
+                {orderMessage && <p className="store-order-message" aria-live="polite">{orderMessage}</p>}
+              </aside>
+            </div>
+          ) : (
+            <div className="store-cart-empty">
+              <ShoppingCartSimple size={38} />
+              <h2>{orderMessage.startsWith("Pedido ") ? "Pedido confirmado" : "Tu carrito está vacío"}</h2>
+              <p>{orderMessage || "Explorá el catálogo y agregá los productos que quieras comprar."}</p>
+              <button className="store-primary-button" onClick={() => setStorePage("catalog")}>Ver productos</button>
+            </div>
+          )}
+        </main>
+      ) : (
+        <>
       {!selectedProduct && selectedCategory === "Todos" && !query.trim() && (
         <section className="store-hero" style={heroProduct ? { backgroundImage: `linear-gradient(90deg, rgba(18,42,33,.92), rgba(18,42,33,.28)), url("${heroProduct.imageUrl}")` } : undefined}>
           <div>
@@ -2641,36 +2752,8 @@ function PublicShop() {
           {!visibleProducts.length && <div className="store-empty">No encontramos productos con esos filtros.</div>}
         </main>
       )}
-      <aside className="store-cart" id="store-cart">
-        <div className="store-cart-heading">
-          <div><span>Tu compra</span><h2>Carrito</h2></div>
-          <strong>{formatMoney(saleLineTotal(cart))}</strong>
-        </div>
-          <CartLines lines={cart} onRemove={(variant) => setCart((current) => current.filter((line) => line.variantId !== variant))} />
-          <div className="store-checkout-form">
-            <label>
-              Nombre
-              <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre y apellido" />
-            </label>
-            <label>
-              Email
-              <input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="tu@email.com" />
-            </label>
-            <label>
-              Teléfono
-              <input value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder="WhatsApp o teléfono" />
-            </label>
-            <div className="segmented-control">
-              <button className={clsx(deliveryMethod === "retiro" && "active")} onClick={() => setDeliveryMethod("retiro")}>Retiro</button>
-              <button className={clsx(deliveryMethod === "envio" && "active")} onClick={() => setDeliveryMethod("envio")}>Envío</button>
-            </div>
-            {deliveryMethod === "envio" && <label>Dirección<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Calle, número y localidad" /></label>}
-          </div>
-          <button className="store-checkout-button" onClick={submitOrder} disabled={!cart.length || !customerName.trim() || !customerContact.trim() || !customerEmail.includes("@") || (deliveryMethod === "envio" && !deliveryAddress.trim())}>
-            Confirmar pedido
-          </button>
-          {orderMessage && <p className="store-order-message">{orderMessage}</p>}
-      </aside>
+        </>
+      )}
       {!isPublicWebsite() && (
         <section className="store-admin-preview">
           <Panel title="Pedidos y correos generados">
