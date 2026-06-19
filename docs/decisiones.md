@@ -399,6 +399,12 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Fecha: 2026-06-06.
 - Decision: configurar directamente en Render CSP, `X-Frame-Options`, HSTS, `X-Content-Type-Options`, `Permissions-Policy` y `Referrer-Policy`.
 - Motivo: Render no aplico todas las reglas declaradas en `_headers`; la configuracion del hosting permite verificar que las cabeceras lleguen realmente al navegador.
+# 2026-06-18 - Actualizacion del entorno de pruebas por seguridad
+
+- **Decision:** actualizar Vitest y sus dependencias transitivas a versiones sin alertas conocidas.
+- **Motivo:** la auditoria de dependencias detecto vulnerabilidades en herramientas de desarrollo, incluida una critica en una version anterior del servidor de pruebas.
+- **Resultado:** `npm audit` informa cero vulnerabilidades y la suite completa conserva sus 22 pruebas aprobadas.
+
 # 2026-06-18 - Pedido web y descuento de stock en una sola operacion
 
 - **Decision:** registrar el pedido web y descontar sus variantes dentro de una unica funcion transaccional de PostgreSQL.
