@@ -31,8 +31,9 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { analyzePurchaseWithOpenAi, generateProductImagesWithOpenAi, storeProductImage } from "./aiClient";
+import { analyzePurchaseWithOpenAi, generateProductImagesWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
+import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
@@ -2545,19 +2546,23 @@ function ProductEditor({
     });
     setSelectedImage(0);
   };
-  const loadProductPhoto = (file?: File) => {
+  const loadProductPhoto = async (file?: File) => {
     if (!file) return;
     setIsSavingImage(true);
+    setAiImageStatus("Subiendo imagen...");
     const reader = new FileReader();
-    reader.onload = async () => {
-      const preview = String(reader.result ?? "");
-      setAiBasePhoto(preview);
-      const stored = await storeProductImage({ productName: draft.name || product.name, image: preview });
-      addImageUrl(stored?.url ?? preview);
-      setAiImageStatus(stored?.notes ?? "Foto base cargada. Lista para generar presentaciones.");
-      setIsSavingImage(false);
-    };
+    reader.onload = () => setAiBasePhoto(String(reader.result ?? ""));
     reader.readAsDataURL(file);
+    try {
+      const url = await uploadProductImage(product.id, draft.name || product.name, file);
+      addImageUrl(url);
+      setAiImageStatus("Imagen guardada en la nube. Guarda el producto para aplicar el cambio.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo subir la imagen.";
+      setAiImageStatus(message);
+    } finally {
+      setIsSavingImage(false);
+    }
   };
   const generateAiImages = async () => {
     setAiImageStatus("Generando con OpenAI...");
@@ -2597,7 +2602,7 @@ function ProductEditor({
           <span>Editar producto</span>
           <h2>{product.name}</h2>
         </div>
-        <button className="primary-action" onClick={save} disabled={!draft.name.trim()}>
+        <button className="primary-action" onClick={save} disabled={!draft.name.trim() || isSavingImage}>
           <CheckCircle size={18} /> Guardar producto
         </button>
         {saveStatus && <span className="muted-text">{saveStatus}</span>}
@@ -2648,14 +2653,14 @@ function ProductEditor({
             ))}
             {Array.from({ length: Math.max(0, 4 - gallery.length) }).map((_, index) => (
               <label className="image-tile add-tile" key={`add-${index}`}>
-                <input type="file" accept="image/*" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
                 <PlusCircle size={24} />
               </label>
             ))}
           </div>
           <div className="image-actions">
             <label className="secondary-action">
-              <input type="file" accept="image/*" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
               <PlusCircle size={18} /> Agregar imagen
             </label>
             <button className="secondary-action" onClick={() => removeImage(selectedImage)} disabled={!gallery.length}>
@@ -2712,7 +2717,7 @@ function ProductEditor({
             <div className="form-grid two">
               <label>
                 Foto base
-                <input type="file" accept="image/*" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
               </label>
               <button className="secondary-action" onClick={generateAiImages} disabled={!aiBasePhoto && !mainImage}>
                 <Package size={18} /> Preparar con IA

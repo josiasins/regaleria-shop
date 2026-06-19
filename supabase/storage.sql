@@ -13,15 +13,16 @@ on storage.objects for select
 using (bucket_id = 'product-images');
 
 drop policy if exists "Authenticated users can manage business files" on storage.objects;
+drop policy if exists "Authorized owner can manage business files" on storage.objects;
 
 create policy "Authorized owner can manage business files"
 on storage.objects for all
 to authenticated
 using (
   bucket_id in ('product-images', 'purchase-documents', 'transfer-receipts', 'expense-documents')
-  and lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com'
+  and public.is_catalog_owner()
 )
 with check (
   bucket_id in ('product-images', 'purchase-documents', 'transfer-receipts', 'expense-documents')
-  and lower(coalesce(auth.jwt() ->> 'email', '')) = 'josias.insfran66@gmail.com'
+  and public.is_catalog_owner()
 );

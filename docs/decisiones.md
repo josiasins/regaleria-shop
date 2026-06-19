@@ -262,6 +262,16 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: los comprobantes anteriores deben seguir siendo auditables aunque el producto deje de venderse.
 - Alternativas descartadas: borrar en cascada el historial, porque destruiría trazabilidad contable y de stock.
 
+### Imágenes de producto en Supabase Storage
+- Decision: subir las fotos de producto directamente al bucket público `product-images` desde el sistema autenticado.
+- Motivo: el despliegue de Render es estático y no ejecuta el endpoint local que anteriormente recibía las imágenes.
+- Alternativas descartadas: guardar imágenes base64 dentro del producto, porque aumenta mucho el tamaño del catálogo y puede fallar al sincronizar.
+
+### Límites de imágenes publicables
+- Decision: aceptar JPG, PNG y WebP de hasta 8 MB, con error visible antes de guardar.
+- Motivo: evita formatos que Chrome y la web pública no muestran consistentemente, además de cargas excesivamente pesadas.
+- Alternativas descartadas: aceptar cualquier archivo con `image/*`, porque fotos HEIC u originales muy grandes pueden subir pero luego no renderizar correctamente.
+
 ### Menu responsive tipo drawer
 - Decision: ocultar el menu lateral en tablet/celular y abrirlo desde un boton hamburguesa.
 - Motivo: la navegacion principal debe estar disponible sin ocupar espacio permanente en pantallas chicas.
