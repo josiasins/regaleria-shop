@@ -61,6 +61,19 @@ export async function saveCloudProduct(product: Product) {
   return true;
 }
 
+export async function deleteCloudProduct(productId: string) {
+  if (!isCloudCatalogEnabled()) return true;
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("delete_catalog_product", {
+    product_id: productId
+  });
+  if (error) {
+    console.error("No se pudo eliminar el producto compartido.", error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function seedCloudCatalog(products: Product[]) {
   if (!isCloudCatalogEnabled()) return true;
   if (!supabase || !products.length) return false;

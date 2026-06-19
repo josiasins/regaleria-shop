@@ -186,6 +186,39 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
   });
 
+  it("allows the owner to delete a product after confirmation", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+
+    expect(screen.getByRole("button", { name: "Eliminar" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    expect(screen.getByText(/Esta acción no se puede deshacer/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Confirmar eliminación/i }));
+
+    expect(await screen.findByText("Productos del catalogo")).toBeInTheDocument();
+    expect(screen.queryByText("Set matero premium")).not.toBeInTheDocument();
+    expect(screen.getByText("2 de 2 ficha(s), 1 visibles en web publica.")).toBeInTheDocument();
+  });
+
+  it("shows product deletion only to owners and administrators", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<App />);
+    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    expect(screen.getByRole("button", { name: "Eliminar" })).toBeInTheDocument();
+
+    unmount();
+    resetStore();
+    render(<App />);
+    await user.selectOptions(screen.getByLabelText("Rol activo"), "encargado");
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
+  });
+
   it("shows a limited menu for the cashier role", async () => {
     const user = userEvent.setup();
     render(<App />);

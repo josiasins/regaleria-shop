@@ -52,6 +52,25 @@ $$;
 revoke all on function public.save_catalog_product(text, boolean, jsonb) from public;
 grant execute on function public.save_catalog_product(text, boolean, jsonb) to authenticated;
 
+create or replace function public.delete_catalog_product(product_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_catalog_owner() then
+    raise exception 'Not authorized to delete catalog products';
+  end if;
+
+  delete from public.public_catalog_products
+  where id = product_id;
+end;
+$$;
+
+revoke all on function public.delete_catalog_product(text) from public;
+grant execute on function public.delete_catalog_product(text) to authenticated;
+
 drop policy if exists "Public can read published catalog" on public.public_catalog_products;
 create policy "Public can read published catalog"
 on public.public_catalog_products for select

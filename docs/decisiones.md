@@ -250,6 +250,18 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: centraliza la validacion del dueño y la escritura atomica, evitando diferencias entre permisos de insercion y actualizacion del `upsert` directo.
 - Alternativas descartadas: mantener el `upsert` desde el navegador, porque un rechazo de RLS dejaba el cambio solo en memoria.
 
+## 2026-06-18
+
+### Baja de productos restringida
+- Decision: permitir eliminar productos únicamente a los roles Dueño y Administrador, desde la vista dedicada de edición y con confirmación.
+- Motivo: es una acción destructiva que también quita el producto de la web pública; debe estar fuera del flujo cotidiano de encargados y cajeros.
+- Alternativas descartadas: mostrar el botón en cada tarjeta o habilitarlo a todos los roles, porque aumenta el riesgo de bajas accidentales.
+
+### Historial conservado al eliminar
+- Decision: eliminar la ficha activa del catálogo y la web, conservando ventas, compras y movimientos históricos que ya guardaron sus datos operativos.
+- Motivo: los comprobantes anteriores deben seguir siendo auditables aunque el producto deje de venderse.
+- Alternativas descartadas: borrar en cascada el historial, porque destruiría trazabilidad contable y de stock.
+
 ### Menu responsive tipo drawer
 - Decision: ocultar el menu lateral en tablet/celular y abrirlo desde un boton hamburguesa.
 - Motivo: la navegacion principal debe estar disponible sin ocupar espacio permanente en pantallas chicas.

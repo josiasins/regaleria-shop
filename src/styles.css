@@ -1161,6 +1161,67 @@ label {
   font-size: 1.35rem;
 }
 
+.delete-product-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid oklch(82% 0.06 25);
+  border-radius: 8px;
+  background: oklch(97% 0.018 25);
+}
+
+.delete-product-zone > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.delete-product-zone span {
+  color: oklch(46% 0.045 25);
+  font-size: 0.88rem;
+}
+
+.danger-action {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid oklch(52% 0.16 25);
+  border-radius: 7px;
+  background: oklch(48% 0.16 25);
+  color: oklch(98% 0.006 25);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-action:hover {
+  background: oklch(43% 0.16 25);
+}
+
+.danger-action:focus-visible {
+  outline: 3px solid oklch(78% 0.09 25);
+  outline-offset: 2px;
+}
+
+.danger-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-text {
+  color: oklch(43% 0.15 25) !important;
+  font-weight: 750;
+}
+
 .product-editor-layout {
   display: grid;
   grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
@@ -1610,6 +1671,12 @@ label {
   .editor-header {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .delete-product-zone,
+  .delete-confirm-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

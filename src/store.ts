@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
+import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { businessProfile, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
 import type {
   BusinessProfile,
@@ -58,6 +58,7 @@ interface AppState {
   initializeCatalog: () => Promise<void>;
   setRole: (role: AppState["activeRole"]) => void;
   addProduct: (product: NewProductInput) => Promise<Product | null>;
+  deleteProduct: (productId: string, requestedBy: Role) => Promise<boolean>;
   updateProductPublishable: (input: PublishUpdateInput) => void;
   updateProductDetails: (input: ProductUpdateInput) => Promise<boolean>;
   updateVariant: (input: VariantUpdateInput) => void;
@@ -267,6 +268,20 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set((state) => ({ products: [product, ...state.products], movements: [movement, ...state.movements], catalogStatus: "actualizado" }));
     return product;
+  },
+  deleteProduct: async (productId, requestedBy) => {
+    if (requestedBy !== "dueno" && requestedBy !== "administrador") return false;
+    if (!get().products.some((product) => product.id === productId)) return false;
+    const deleted = await deleteCloudProduct(productId);
+    if (!deleted) {
+      set({ catalogStatus: "error" });
+      return false;
+    }
+    set((state) => ({
+      products: state.products.filter((product) => product.id !== productId),
+      catalogStatus: "actualizado"
+    }));
+    return true;
   },
   updateProductPublishable: (input) => {
     set((state) => ({

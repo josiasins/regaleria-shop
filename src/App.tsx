@@ -1988,7 +1988,9 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
   const products = useStore((state) => state.products);
   const suppliers = useStore((state) => state.suppliers);
   const categories = useStore((state) => state.categories);
+  const activeRole = useStore((state) => state.activeRole);
   const updateProductDetails = useStore((state) => state.updateProductDetails);
+  const deleteProduct = useStore((state) => state.deleteProduct);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("todas");
@@ -2006,7 +2008,17 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
   });
   const editingProduct = products.find((product) => product.id === editingProductId);
   if (editingProduct) {
-    return <ProductEditor product={editingProduct} suppliers={suppliers} categories={categories} onSave={updateProductDetails} onBack={onBack} />;
+    return (
+      <ProductEditor
+        product={editingProduct}
+        suppliers={suppliers}
+        categories={categories}
+        canDelete={activeRole === "dueno" || activeRole === "administrador"}
+        onSave={updateProductDetails}
+        onDelete={(productId) => deleteProduct(productId, activeRole)}
+        onBack={onBack}
+      />
+    );
   }
 
   return (
@@ -2459,13 +2471,17 @@ function ProductEditor({
   product,
   suppliers,
   categories,
+  canDelete,
   onSave,
+  onDelete,
   onBack
 }: {
   product: Product;
   suppliers: Supplier[];
   categories: string[];
+  canDelete: boolean;
   onSave: (input: ProductUpdateInput) => Promise<boolean>;
+  onDelete: (productId: string) => Promise<boolean>;
   onBack: () => void;
 }) {
   const [aiBasePhoto, setAiBasePhoto] = useState("");
@@ -2473,6 +2489,8 @@ function ProductEditor({
   const [selectedImage, setSelectedImage] = useState(0);
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState("");
   const [draft, setDraft] = useState({
     name: product.name,
     category: product.category,
@@ -2561,6 +2579,15 @@ function ProductEditor({
     });
     setAiImageStatus(aiResult ? `${aiResult.notes} Revisar antes de guardar la ficha.` : "Se prepararon 3 imagenes en modo demo. Revisar antes de guardar.");
   };
+  const removeProduct = async () => {
+    setDeleteStatus("Eliminando de la nube...");
+    const deleted = await onDelete(product.id);
+    if (deleted) {
+      onBack();
+      return;
+    }
+    setDeleteStatus("No se pudo eliminar el producto. Intenta nuevamente.");
+  };
 
   return (
     <section className="workspace product-editor-page">
@@ -2575,6 +2602,38 @@ function ProductEditor({
         </button>
         {saveStatus && <span className="muted-text">{saveStatus}</span>}
       </div>
+      {canDelete && (
+        <section className="delete-product-zone" aria-label="Eliminar producto">
+          {!isConfirmingDelete ? (
+            <>
+              <div>
+                <strong>Eliminar producto</strong>
+                <span>Se quitará del catálogo y de la web. El historial de operaciones se conserva.</span>
+              </div>
+              <button className="danger-action" onClick={() => setIsConfirmingDelete(true)}>
+                <Trash size={18} /> Eliminar
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <strong>¿Eliminar “{product.name}”?</strong>
+                <span>Esta acción no se puede deshacer.</span>
+                {deleteStatus && <span className="error-text">{deleteStatus}</span>}
+              </div>
+              <div className="delete-confirm-actions">
+                <button className="secondary-action" onClick={() => {
+                  setIsConfirmingDelete(false);
+                  setDeleteStatus("");
+                }}>Cancelar</button>
+                <button className="danger-action" onClick={removeProduct} disabled={deleteStatus === "Eliminando de la nube..."}>
+                  <Trash size={18} /> Confirmar eliminación
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
       <div className="product-editor-layout">
         <section className="editor-media">
           <div className="editor-main-image">
