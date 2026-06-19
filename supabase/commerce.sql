@@ -1,0 +1,76 @@
+create table if not exists public.store_orders (
+  id text primary key,
+  customer_email text not null,
+  status text not null default 'nuevo',
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.store_email_queue (
+  id text primary key,
+  order_id text not null references public.store_orders(id) on delete cascade,
+  recipient text not null,
+  kind text not null,
+  status text not null default 'pendiente',
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.store_orders enable row level security;
+alter table public.store_email_queue enable row level security;
+
+drop policy if exists "Owner reads store orders" on public.store_orders;
+create policy "Owner reads store orders" on public.store_orders
+for select to authenticated using (public.is_catalog_owner());
+
+drop policy if exists "Owner reads email queue" on public.store_email_queue;
+create policy "Owner reads email queue" on public.store_email_queue
+for select to authenticated using (public.is_catalog_owner());
+
+grant select on public.store_orders, public.store_email_queue to authenticated;
+
+create or replace function public.create_store_order(order_data jsonb, email_data jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  email_item jsonb;
+begin
+  if coalesce(order_data->>'id', '') = ''
+    or coalesce(order_data->>'customerName', '') = ''
+    or coalesce(order_data->>'customerEmail', '') = ''
+    or jsonb_array_length(coalesce(order_data->'lines', '[]'::jsonb)) = 0 then
+    raise exception 'Pedido incompleto';
+  end if;
+
+  insert into public.store_orders (id, customer_email, status, data, created_at)
+  values (
+    order_data->>'id',
+    lower(order_data->>'customerEmail'),
+    coalesce(order_data->>'status', 'nuevo'),
+    order_data,
+    coalesce((order_data->>'createdAt')::timestamptz, now())
+  )
+  on conflict (id) do nothing;
+
+  for email_item in select value from jsonb_array_elements(coalesce(email_data, '[]'::jsonb))
+  loop
+    insert into public.store_email_queue (id, order_id, recipient, kind, status, data, created_at)
+    values (
+      email_item->>'id',
+      order_data->>'id',
+      lower(email_item->>'to'),
+      email_item->>'kind',
+      coalesce(email_item->>'status', 'pendiente'),
+      email_item,
+      coalesce((email_item->>'createdAt')::timestamptz, now())
+    )
+    on conflict (id) do nothing;
+  end loop;
+end;
+$$;
+
+revoke all on function public.create_store_order(jsonb, jsonb) from public;
+grant execute on function public.create_store_order(jsonb, jsonb) to anon, authenticated;

@@ -8,7 +8,7 @@ product
 
 - Dueño de regaleria: necesita ver ventas, margen, compras, gastos, caja, stock y decisiones.
 - Administrador: opera casi todo el sistema y mantiene configuracion.
-- Encargado: gestiona mostrador, stock, compras, proveedores, clientes y catalogo.
+- Encargado: gestiona mostrador, stock, compras, clientes y catalogo sin acceso a la agenda ni datos de proveedores.
 - Cajero: cobra, arma presupuestos, consulta clientes y confirma transferencias.
 
 ## Proposito
@@ -22,7 +22,8 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 - Cada cambio importante deja historial o estado de sincronizacion.
 - El sistema es online en V1, pero conserva base para offline parcial.
 - Los datos repetibles, como categorias, clientes y proveedores, se administran como listas reutilizables.
-- La IA funciona como asistente de precarga: acelera compras e imagenes, pero no confirma operaciones sensibles sin revision humana.
+- La IA queda limitada a precarga documental de compras; las imágenes de producto se gestionan manualmente.
+- La tienda pública debe funcionar como ecommerce real: categorías dinámicas, búsqueda, ficha de producto, carrito, pedidos persistentes y comunicaciones.
 
 ## Anti-referencias
 

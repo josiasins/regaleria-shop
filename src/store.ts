@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
+import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
 import type {
   BusinessProfile,
@@ -33,7 +34,9 @@ import type {
   SupplierPayment,
   Transfer,
   TransferDraftInput,
-  VariantUpdateInput
+  VariantUpdateInput,
+  VariantCreateInput,
+  EmailMessage
 } from "./types";
 
 interface AppState {
@@ -50,6 +53,7 @@ interface AppState {
   cashClosures: CashClosure[];
   cashShifts: CashShift[];
   supplierPayments: SupplierPayment[];
+  emailMessages: EmailMessage[];
   businessProfile: BusinessProfile;
   categories: string[];
   rolePermissions: RolePermissions;
@@ -62,6 +66,7 @@ interface AppState {
   updateProductPublishable: (input: PublishUpdateInput) => void;
   updateProductDetails: (input: ProductUpdateInput) => Promise<boolean>;
   updateVariant: (input: VariantUpdateInput) => void;
+  addVariant: (input: VariantCreateInput) => Promise<boolean>;
   importProducts: (rows: ImportProductRow[]) => number;
   addCustomer: (input: CustomerDraftInput) => Customer | null;
   updateCustomer: (id: string, input: CustomerDraftInput) => void;
@@ -82,7 +87,7 @@ interface AppState {
   removeCategory: (category: string) => void;
   updateRolePermissions: (role: Role, permissions: RolePermissions[Role]) => void;
   addTransfer: (input: TransferDraftInput) => Transfer | null;
-  addOnlineOrder: (input: OnlineOrderDraftInput) => OnlineOrder | null;
+  addOnlineOrder: (input: OnlineOrderDraftInput) => Promise<OnlineOrder | null>;
   confirmTransfer: (id: string) => void;
   convertQuote: (id: string) => Sale | null;
   markAllSynced: () => void;
@@ -165,6 +170,7 @@ function initialDataState() {
     cashClosures: structuredClone(cashClosures),
     cashShifts: structuredClone(cashShifts),
     supplierPayments: structuredClone(supplierPayments),
+    emailMessages: [],
     businessProfile: structuredClone(businessProfile),
     categories: structuredClone(categories),
     rolePermissions: structuredClone(rolePermissions),
@@ -213,13 +219,18 @@ export const useStore = create<AppState>((set, get) => ({
   activeRole: "dueno",
   catalogStatus: "cargando",
   initializeCatalog: async () => {
-    const cloudProducts = await loadCloudCatalog();
+    const [cloudProducts, commerce] = await Promise.all([loadCloudCatalog(), loadCloudCommerce()]);
     if (cloudProducts === null) {
       set({ catalogStatus: "error" });
       return;
     }
     if (cloudProducts.length) {
-      set({ products: cloudProducts, catalogStatus: "actualizado" });
+      set({
+        products: cloudProducts,
+        onlineOrders: commerce.orders.length ? commerce.orders : get().onlineOrders,
+        emailMessages: commerce.emails.length ? commerce.emails : get().emailMessages,
+        catalogStatus: "actualizado"
+      });
       return;
     }
     const seeded = await seedCloudCatalog(get().products);
@@ -236,7 +247,10 @@ export const useStore = create<AppState>((set, get) => ({
       description: input.description.trim(),
       publishable: input.publishable,
       imageUrl: input.imageUrl.trim() || "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=80",
-      imageUrls: [input.imageUrl.trim() || "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=80"],
+      imageUrls: input.imageUrls?.length ? input.imageUrls : [input.imageUrl.trim() || "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=80"],
+      slug: input.slug?.trim(),
+      seoTitle: input.seoTitle?.trim(),
+      seoDescription: input.seoDescription?.trim(),
       syncStatus: "pendiente",
       variants: [
         {
@@ -304,6 +318,9 @@ export const useStore = create<AppState>((set, get) => ({
       description: input.description.trim(),
       imageUrl: input.imageUrl.trim() || current.imageUrl,
       imageUrls: input.imageUrls?.length ? input.imageUrls.map((url) => url.trim()).filter(Boolean) : current.imageUrls,
+      slug: input.slug?.trim(),
+      seoTitle: input.seoTitle?.trim(),
+      seoDescription: input.seoDescription?.trim(),
       publishable: input.publishable,
       syncStatus: "sincronizado"
     };
@@ -341,6 +358,32 @@ export const useStore = create<AppState>((set, get) => ({
     }));
     const product = get().products.find((item) => item.variants.some((variant) => variant.id === input.variantId));
     if (product) void saveCloudProduct(product);
+  },
+  addVariant: async (input) => {
+    if (!input.name.trim() || !input.sku.trim() || input.price <= 0) return false;
+    const current = get().products.find((product) => product.id === input.productId);
+    if (!current || current.variants.some((variant) => variant.sku.toLowerCase() === input.sku.trim().toLowerCase())) return false;
+    const product: Product = {
+      ...current,
+      variants: [
+        ...current.variants,
+        {
+          id: `local_var_${crypto.randomUUID()}`,
+          name: input.name.trim(),
+          sku: input.sku.trim(),
+          barcode: input.barcode.trim(),
+          stock: Math.max(input.stock, 0),
+          lowStockAt: Math.max(input.lowStockAt, 0),
+          cost: Math.max(input.cost, 0),
+          price: Math.max(input.price, 0)
+        }
+      ],
+      syncStatus: "sincronizado"
+    };
+    const saved = await saveCloudProduct(product);
+    if (!saved) return false;
+    set((state) => ({ products: state.products.map((item) => (item.id === product.id ? product : item)) }));
+    return true;
   },
   importProducts: (rows) => {
     const validRows = rows.filter((row) => row.name.trim() && row.sku.trim() && row.price > 0);
@@ -585,7 +628,7 @@ export const useStore = create<AppState>((set, get) => ({
     const cleanLines = input.lines.filter((line) => line.quantity > 0 && line.unitCost >= 0);
     if (!input.supplier.trim() || !input.documentNumber.trim() || !cleanLines.length) return null;
     const createdAt = new Date().toISOString();
-    const total = cleanLines.reduce((sum, line) => sum + line.subtotal, 0);
+    const total = cleanLines.reduce((sum, line) => sum + line.subtotal, 0) + Math.max(input.shippingCost, 0);
     const receipt: PurchaseReceipt = {
       id: `local_purchase_${crypto.randomUUID()}`,
       number: nextNumber("COM", get().purchaseReceipts.length),
@@ -593,6 +636,8 @@ export const useStore = create<AppState>((set, get) => ({
       documentNumber: input.documentNumber.trim(),
       supplier: input.supplier.trim(),
       lines: cleanLines,
+      shippingCost: money(Math.max(input.shippingCost, 0)),
+      shippingNote: input.shippingNote.trim(),
       total: money(total),
       createdAt,
       syncStatus: "pendiente"
@@ -602,7 +647,7 @@ export const useStore = create<AppState>((set, get) => ({
       category: "Reposicion",
       amount: receipt.total,
       vendor: receipt.supplier,
-      note: `${receipt.documentType} ${receipt.documentNumber}`,
+      note: `${receipt.documentType} ${receipt.documentNumber}${receipt.shippingCost ? ` · Envío ${money(receipt.shippingCost)}` : ""}`,
       createdAt,
       syncStatus: "pendiente"
     };
@@ -734,7 +779,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ transfers: [transfer, ...state.transfers] }));
     return transfer;
   },
-  addOnlineOrder: (input) => {
+  addOnlineOrder: async (input) => {
     const cleanLines = input.lines.filter((line) => line.quantity > 0);
     if (!input.customerName.trim() || !input.customerContact.trim() || !cleanLines.length) return null;
     if (!hasAvailableStock(get().products, cleanLines)) return null;
@@ -744,6 +789,9 @@ export const useStore = create<AppState>((set, get) => ({
       number: nextNumber("WEB", get().onlineOrders.length),
       customerName: input.customerName.trim(),
       customerContact: input.customerContact.trim(),
+      customerEmail: input.customerEmail.trim(),
+      deliveryMethod: input.deliveryMethod,
+      deliveryAddress: input.deliveryAddress.trim(),
       lines: cleanLines,
       total: totals.total,
       status: "nuevo",
@@ -760,8 +808,45 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: order.createdAt,
       syncStatus: "pendiente"
     }));
+    const isFirstPurchase = !get().onlineOrders.some((item) => item.customerEmail.toLowerCase() === order.customerEmail.toLowerCase());
+    const emailMessages: EmailMessage[] = [
+      ...(isFirstPurchase && order.customerEmail
+        ? [{
+            id: `local_email_${crypto.randomUUID()}`,
+            kind: "bienvenida" as const,
+            to: order.customerEmail,
+            subject: "Bienvenido a Regaleria Shop",
+            html: `<h1>Gracias por elegirnos, ${order.customerName}</h1><p>Ya registramos tu cuenta de compra para que tus próximos pedidos sean más simples.</p>`,
+            createdAt: order.createdAt,
+            status: "pendiente" as const
+          }]
+        : []),
+      ...(order.customerEmail
+        ? [{
+            id: `local_email_${crypto.randomUUID()}`,
+            kind: "confirmacion_pedido" as const,
+            to: order.customerEmail,
+            subject: `Recibimos tu pedido ${order.number}`,
+            html: `<h1>Pedido confirmado</h1><p>Hola ${order.customerName}, recibimos tu pedido ${order.number} por ${money(order.total)}.</p><p>Modalidad: ${order.deliveryMethod === "envio" ? `Envío a ${order.deliveryAddress}` : "Retiro en el local"}.</p>`,
+            createdAt: order.createdAt,
+            status: "pendiente" as const
+          }]
+        : []),
+      {
+        id: `local_email_${crypto.randomUUID()}`,
+        kind: "aviso_negocio" as const,
+        to: "josias.insfran66@gmail.com",
+        subject: `Nuevo pedido web ${order.number}`,
+        html: `<h1>Nuevo pedido web</h1><p>${order.customerName} realizó el pedido ${order.number} por ${money(order.total)}.</p><p>Contacto: ${order.customerContact} · ${order.customerEmail}</p>`,
+        createdAt: order.createdAt,
+        status: "pendiente" as const
+      }
+    ];
+    const saved = await saveCloudOrder(order, emailMessages);
+    if (!saved) return null;
     set((state) => ({
       onlineOrders: [order, ...state.onlineOrders],
+      emailMessages: [...emailMessages, ...state.emailMessages],
       movements: [...movementsForOrder, ...state.movements],
       products: applySaleStock(state.products, { ...order, receiptNumber: order.number, type: "detallada", discount: 0, paymentMethod: "otro", margin: 0 })
     }));

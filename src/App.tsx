@@ -8,6 +8,9 @@ import {
   FileText,
   Gear,
   GlobeHemisphereWest,
+  Heart,
+  House,
+  EnvelopeSimple,
   Keyboard,
   ListBullets,
   MagnifyingGlass,
@@ -31,7 +34,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { analyzePurchaseWithOpenAi, generateProductImagesWithOpenAi } from "./aiClient";
+import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
@@ -113,7 +116,7 @@ function useCatalogSync() {
 function isPublicWebsite() {
   const hostname = window.location.hostname.toLowerCase();
   const publicDomain = String(import.meta.env.VITE_PUBLIC_DOMAIN || "regaleriashop.com").toLowerCase();
-  return hostname === publicDomain || hostname === `www.${publicDomain}`;
+  return hostname === publicDomain || hostname === `www.${publicDomain}` || new URLSearchParams(window.location.search).get("preview") === "public";
 }
 
 function shouldRequireInternalLogin() {
@@ -266,6 +269,9 @@ function PublicSite() {
 
 function InternalApp() {
   useCatalogSync();
+  useEffect(() => {
+    document.title = "Regaleria | Gestión";
+  }, []);
 
   const [section, setSection] = useState<Section>("panel");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -864,6 +870,9 @@ function Stock() {
   const updateVariant = useStore((state) => state.updateVariant);
   const importProducts = useStore((state) => state.importProducts);
   const adjustStock = useStore((state) => state.adjustStock);
+  const addVariant = useStore((state) => state.addVariant);
+  const activeRole = useStore((state) => state.activeRole);
+  const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
   const [stockPage, setStockPage] = useState<StockPage>("control");
   const [query, setQuery] = useState("");
   const [newProduct, setNewProduct] = useState({
@@ -873,6 +882,9 @@ function Stock() {
     description: "",
     publishable: true,
     imageUrl: "",
+    imageUrls: [] as string[],
+    seoTitle: "",
+    seoDescription: "",
     variantName: "Unico",
     sku: "",
     barcode: "",
@@ -900,6 +912,20 @@ function Stock() {
   const [importText, setImportText] = useState("");
   const [importedCount, setImportedCount] = useState(0);
   const [productSaveStatus, setProductSaveStatus] = useState("");
+  const [newProductImageStatus, setNewProductImageStatus] = useState("");
+  const [isUploadingNewProductImages, setIsUploadingNewProductImages] = useState(false);
+  const [variantMode, setVariantMode] = useState<"editar" | "crear">("editar");
+  const [newVariant, setNewVariant] = useState({
+    productId: products[0]?.id ?? "",
+    name: "",
+    sku: "",
+    barcode: "",
+    stock: 0,
+    lowStockAt: 3,
+    cost: 0,
+    price: 0
+  });
+  const [variantStatus, setVariantStatus] = useState("");
 
   useEffect(() => {
     const found = products.flatMap((product) => product.variants).find((variant) => variant.id === variantDraftId);
@@ -937,6 +963,10 @@ function Stock() {
       description: newProduct.description,
       publishable: newProduct.publishable,
       imageUrl: newProduct.imageUrl,
+      imageUrls: newProduct.imageUrls,
+      seoTitle: newProduct.seoTitle,
+      seoDescription: newProduct.seoDescription,
+      slug: slugify(newProduct.name),
       variant: {
         name: newProduct.variantName || "Unico",
         sku: newProduct.sku,
@@ -959,6 +989,9 @@ function Stock() {
       description: "",
       publishable: true,
       imageUrl: "",
+      imageUrls: [],
+      seoTitle: "",
+      seoDescription: "",
       variantName: "Unico",
       sku: "",
       barcode: "",
@@ -969,6 +1002,29 @@ function Stock() {
     });
     setStockPage("control");
   };
+  const uploadNewProductPhotos = async (files?: FileList | null) => {
+    if (!files?.length) return;
+    setIsUploadingNewProductImages(true);
+    setNewProductImageStatus(`Subiendo ${files.length} imagen(es)...`);
+    const uploaded: string[] = [];
+    const errors: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        uploaded.push(await uploadProductImage(`draft-${slugify(newProduct.name || "producto")}`, newProduct.name || "producto", file));
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`);
+      }
+    }
+    if (uploaded.length) {
+      setNewProduct((current) => ({
+        ...current,
+        imageUrl: current.imageUrl || uploaded[0],
+        imageUrls: [...current.imageUrls, ...uploaded]
+      }));
+    }
+    setNewProductImageStatus(errors.length ? `${uploaded.length} cargada(s). ${errors[0]}` : `${uploaded.length} imagen(es) guardada(s) en la nube.`);
+    setIsUploadingNewProductImages(false);
+  };
 
   const submitMovement = () => {
     const result = adjustStock(movement);
@@ -978,6 +1034,14 @@ function Stock() {
     }
   };
   const submitVariant = () => updateVariant({ variantId: variantDraftId, ...variantDraft });
+  const submitNewVariant = async () => {
+    setVariantStatus("Guardando variante...");
+    const saved = await addVariant(newVariant);
+    setVariantStatus(saved ? "Variante agregada y sincronizada." : "No se pudo agregar. Revisa el SKU y los datos.");
+    if (saved) {
+      setNewVariant((current) => ({ ...current, name: "", sku: "", barcode: "", stock: 0, cost: 0, price: 0 }));
+    }
+  };
   const submitImport = () => {
     const count = importProducts(parseImportRows(importText));
     setImportedCount(count);
@@ -1021,7 +1085,7 @@ function Stock() {
                 <img src={product.imageUrl} alt="" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
                 <div>
                   <strong>{product.name}</strong>
-                  <span>{product.category} · {product.supplier}</span>
+                  <span>{product.category}{canSeeSupplier ? ` · ${product.supplier}` : ""}</span>
                   <div className="variant-chips">
                     {product.variants.map((variant) => (
                       <span className={clsx("chip", variant.stock <= variant.lowStockAt && "warning")} key={variant.id}>
@@ -1043,7 +1107,7 @@ function Stock() {
                 Producto
                 <input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} placeholder="Ej: Llavero personalizado" />
               </label>
-              <div className="form-grid two">
+              <div className={clsx("form-grid", canSeeSupplier ? "two" : "one")}>
                 <label>
                   Categoria
                   <select value={newProduct.category} onChange={(event) => setNewProduct({ ...newProduct, category: event.target.value })}>
@@ -1053,15 +1117,43 @@ function Stock() {
                     ))}
                   </select>
                 </label>
-                <label>
+                {canSeeSupplier && <label>
                   Proveedor
                   <input value={newProduct.supplier} onChange={(event) => setNewProduct({ ...newProduct, supplier: event.target.value })} placeholder="Proveedor" />
+                </label>}
+              </div>
+              <div className="product-photo-uploader">
+                <label className="secondary-action">
+                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => uploadNewProductPhotos(event.target.files)} />
+                  <PlusCircle size={18} /> Agregar fotos
                 </label>
+                <span className="muted-text">{newProductImageStatus || "Podés seleccionar varias imágenes JPG, PNG o WebP."}</span>
+                {newProduct.imageUrls.length > 0 && (
+                  <div className="new-product-photo-grid">
+                    {newProduct.imageUrls.map((url, index) => (
+                      <div key={url}>
+                        <img src={url} alt={`Foto ${index + 1}`} />
+                        <button type="button" title="Quitar foto" onClick={() => setNewProduct((current) => {
+                          const next = current.imageUrls.filter((item) => item !== url);
+                          return { ...current, imageUrls: next, imageUrl: next[0] ?? "" };
+                        })}><Trash size={16} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <label>
                 Descripcion publicable
                 <input value={newProduct.description} onChange={(event) => setNewProduct({ ...newProduct, description: event.target.value })} placeholder="Texto corto para catalogo" />
               </label>
+              <SeoGuidance
+                name={newProduct.name}
+                description={newProduct.description}
+                seoTitle={newProduct.seoTitle}
+                seoDescription={newProduct.seoDescription}
+                onTitleChange={(seoTitle) => setNewProduct({ ...newProduct, seoTitle })}
+                onDescriptionChange={(seoDescription) => setNewProduct({ ...newProduct, seoDescription })}
+              />
               <div className="form-grid two">
                 <label>
                   Variante
@@ -1098,7 +1190,7 @@ function Stock() {
                 <input type="checkbox" checked={newProduct.publishable} onChange={(event) => setNewProduct({ ...newProduct, publishable: event.target.checked })} />
                 Preparar para catalogo online
               </label>
-              <button className="primary-action" onClick={submitProduct} disabled={!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0}>
+              <button className="primary-action" onClick={submitProduct} disabled={!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0 || isUploadingNewProductImages}>
                 <PlusCircle size={19} /> Crear producto
               </button>
               {productSaveStatus && <span className="muted-text">{productSaveStatus}</span>}
@@ -1146,7 +1238,12 @@ function Stock() {
           </Panel>
         )}
         {stockPage === "variante" && (
-          <Panel title="Editar variante">
+          <Panel title={variantMode === "editar" ? "Editar variante" : "Agregar variante"}>
+            <div className="segmented-control variant-mode-control" aria-label="Modo de variante">
+              <button className={clsx(variantMode === "editar" && "active")} onClick={() => setVariantMode("editar")}>Editar existente</button>
+              <button className={clsx(variantMode === "crear" && "active")} onClick={() => setVariantMode("crear")}>Agregar nueva</button>
+            </div>
+            {variantMode === "editar" ? (
             <div className="form-grid one compact">
               <label>
                 Variante
@@ -1186,6 +1283,31 @@ function Stock() {
                 <PencilSimple size={18} /> Guardar variante
               </button>
             </div>
+            ) : (
+              <div className="form-grid one compact">
+                <label>
+                  Producto
+                  <select value={newVariant.productId} onChange={(event) => setNewVariant({ ...newVariant, productId: event.target.value })}>
+                    {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                  </select>
+                </label>
+                <div className="form-grid two">
+                  <label>Nombre<input value={newVariant.name} onChange={(event) => setNewVariant({ ...newVariant, name: event.target.value })} placeholder="Color, tamaño o modelo" /></label>
+                  <label>SKU<input value={newVariant.sku} onChange={(event) => setNewVariant({ ...newVariant, sku: event.target.value })} /></label>
+                </div>
+                <label>Código de barra<input value={newVariant.barcode} onChange={(event) => setNewVariant({ ...newVariant, barcode: event.target.value })} /></label>
+                <div className="form-grid four">
+                  <label>Stock<input type="number" min={0} value={newVariant.stock} onChange={(event) => setNewVariant({ ...newVariant, stock: Number(event.target.value) })} /></label>
+                  <label>Mínimo<input type="number" min={0} value={newVariant.lowStockAt} onChange={(event) => setNewVariant({ ...newVariant, lowStockAt: Number(event.target.value) })} /></label>
+                  <label>Costo<input type="number" min={0} value={newVariant.cost} onChange={(event) => setNewVariant({ ...newVariant, cost: Number(event.target.value) })} /></label>
+                  <label>Precio<input type="number" min={0} value={newVariant.price} onChange={(event) => setNewVariant({ ...newVariant, price: Number(event.target.value) })} /></label>
+                </div>
+                <button className="primary-action" onClick={submitNewVariant} disabled={!newVariant.productId || !newVariant.name.trim() || !newVariant.sku.trim() || newVariant.price <= 0}>
+                  <PlusCircle size={18} /> Agregar variante
+                </button>
+                {variantStatus && <span className="muted-text">{variantStatus}</span>}
+              </div>
+            )}
           </Panel>
         )}
         {stockPage === "importacion" && (
@@ -1240,6 +1362,9 @@ function Purchases() {
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState(0);
+  const [shippingCost, setShippingCost] = useState(0);
+  const [shippingNote, setShippingNote] = useState("");
+  const [autoCostPulse, setAutoCostPulse] = useState(false);
   const [lines, setLines] = useState<PurchaseLine[]>([]);
   const [paymentSupplier, setPaymentSupplier] = useState(suppliers[0]?.name ?? "");
   const [paymentAmount, setPaymentAmount] = useState(0);
@@ -1250,6 +1375,13 @@ function Purchases() {
   const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>([]);
   const [aiStatus, setAiStatus] = useState("Esperando comprobante.");
   const selected = findProductVariant(products, variantId);
+  useEffect(() => {
+    if (!selected) return;
+    setUnitCost(selected.variant.cost);
+    setAutoCostPulse(true);
+    const timer = window.setTimeout(() => setAutoCostPulse(false), 650);
+    return () => window.clearTimeout(timer);
+  }, [selected?.variant.id]);
   const supplierBalances = suppliers.map((supplier) => {
     const purchasesTotal = purchaseReceipts.filter((receipt) => receipt.supplier === supplier.name).reduce((sum, receipt) => sum + receipt.total, 0);
     const paymentsTotal = supplierPayments.filter((payment) => payment.supplier === supplier.name).reduce((sum, payment) => sum + payment.amount, 0);
@@ -1263,13 +1395,15 @@ function Purchases() {
   };
   const submitReceipt = () => {
     const supplier = resolveSupplierName(suppliers, supplierChoice, newSupplierName);
-    const receipt = addPurchaseReceipt({ documentType, documentNumber, supplier, lines });
+    const receipt = addPurchaseReceipt({ documentType, documentNumber, supplier, lines, shippingCost, shippingNote });
     if (receipt) {
       setDocumentNumber("");
       setSupplierChoice(suppliers[0]?.id ?? "nuevo");
       setNewSupplierName("");
       setQuantity(1);
       setUnitCost(0);
+      setShippingCost(0);
+      setShippingNote("");
       setLines([]);
       setPurchasePage("recientes");
     }
@@ -1405,10 +1539,13 @@ function Purchases() {
             <input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} placeholder="Ej: A-0001-00012345" />
           </label>
           {supplierChoice === "nuevo" && (
-            <label>
-              Nuevo proveedor
-              <input value={newSupplierName} onChange={(event) => setNewSupplierName(event.target.value)} placeholder="Proveedor mayorista" />
-            </label>
+            <div className="inline-notice">
+              <label>
+                Nuevo proveedor
+                <input value={newSupplierName} onChange={(event) => setNewSupplierName(event.target.value)} placeholder="Proveedor mayorista" />
+              </label>
+              <span>Al registrar la compra quedará guardado automáticamente en Proveedores.</span>
+            </div>
           )}
           <div className="line-builder purchase-builder">
             <label>
@@ -1421,19 +1558,30 @@ function Purchases() {
               Cant.
               <input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
             </label>
-            <label>
-              Costo
-              <input type="number" min={0} value={unitCost} onChange={(event) => setUnitCost(Number(event.target.value))} />
-            </label>
+            <div className={clsx("purchase-cost-field", autoCostPulse && "auto-filled-field")}>
+              <label htmlFor="purchase-unit-cost">Costo</label>
+              <input id="purchase-unit-cost" type="number" min={0} value={unitCost} onChange={(event) => setUnitCost(Number(event.target.value))} />
+              <span>{autoCostPulse ? "Costo anterior precargado" : "Editable para esta compra"}</span>
+            </div>
             <button className="secondary-action" onClick={addLine} disabled={!selected || quantity < 1}>
               <PlusCircle size={18} /> Agregar
             </button>
           </div>
           <PurchaseLines lines={lines} onRemove={(variant) => setLines((current) => current.filter((line) => line.variantId !== variant))} />
+          <div className="form-grid two purchase-shipping">
+            <label>
+              Costo de envío
+              <input type="number" min={0} value={shippingCost} onChange={(event) => setShippingCost(Number(event.target.value))} />
+            </label>
+            <label>
+              Detalle de envío
+              <input value={shippingNote} onChange={(event) => setShippingNote(event.target.value)} placeholder="Transporte, guía o modalidad" />
+            </label>
+          </div>
           <div className="checkout-row">
             <div>
               <span>Total compra</span>
-              <strong>{formatMoney(purchaseLineTotal(lines))}</strong>
+              <strong>{formatMoney(purchaseLineTotal(lines) + shippingCost)}</strong>
             </div>
             <button className="primary-action" onClick={submitReceipt} disabled={!resolveSupplierName(suppliers, supplierChoice, newSupplierName).trim() || !documentNumber.trim() || !lines.length}>
               <Truck size={19} /> Registrar compra
@@ -1446,7 +1594,7 @@ function Purchases() {
           <DataList
             items={purchaseReceipts.map((receipt) => ({
               title: `${receipt.number} · ${receipt.documentType}`,
-              meta: `${receipt.supplier} · ${receipt.documentNumber} · ${receipt.lines.length} linea(s)`,
+              meta: `${receipt.supplier} · ${receipt.documentNumber} · ${receipt.lines.length} linea(s)${receipt.shippingCost ? ` · Envío ${formatMoney(receipt.shippingCost)}` : ""}`,
               value: formatMoney(receipt.total)
             }))}
           />
@@ -1990,6 +2138,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
   const suppliers = useStore((state) => state.suppliers);
   const categories = useStore((state) => state.categories);
   const activeRole = useStore((state) => state.activeRole);
+  const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
   const updateProductDetails = useStore((state) => state.updateProductDetails);
   const deleteProduct = useStore((state) => state.deleteProduct);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -2015,6 +2164,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
         suppliers={suppliers}
         categories={categories}
         canDelete={activeRole === "dueno" || activeRole === "administrador"}
+        canSeeSupplier={canSeeSupplier}
         onSave={updateProductDetails}
         onDelete={(productId) => deleteProduct(productId, activeRole)}
         onBack={onBack}
@@ -2054,12 +2204,12 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
             <option key={category} value={category}>{category}</option>
           ))}
         </select>
-        <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)}>
+        {canSeeSupplier && <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)}>
           <option value="todos">Todos los proveedores</option>
           {suppliers.map((supplier) => (
             <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
           ))}
-        </select>
+        </select>}
         <select value={webFilter} onChange={(event) => setWebFilter(event.target.value)}>
           <option value="todos">Todos los estados</option>
           <option value="publicables">Web publica</option>
@@ -2068,7 +2218,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
       </div>
       <div className={clsx("catalog-grid", viewMode === "list" && "list-view")}>
         {filteredProducts.map((product) => (
-          <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} />
+          <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} showSupplier={canSeeSupplier} />
         ))}
       </div>
     </section>
@@ -2280,6 +2430,13 @@ function System() {
             <SettingItem title="Dominio publico" text={businessProfile.publicDomain} />
             <SettingItem title="Sistema interno" text={businessProfile.internalDomain} />
           </div>
+          <div className="brand-concepts-panel">
+            <div>
+              <strong>Propuestas de marca</strong>
+              <span>Cinco caminos visuales. La opción 1, cinta formando una R, queda como dirección provisional.</span>
+            </div>
+            <img src="/brand/logo-concepts.png" alt="Cinco propuestas de logo para Regaleria Shop" />
+          </div>
         </Panel>
         )}
         {settingsPage === "categorias" && (
@@ -2349,88 +2506,256 @@ function PublicShop() {
   const products = useStore((state) => state.products);
   const catalogStatus = useStore((state) => state.catalogStatus);
   const onlineOrders = useStore((state) => state.onlineOrders);
+  const emailMessages = useStore((state) => state.emailMessages);
   const addOnlineOrder = useStore((state) => state.addOnlineOrder);
   const publishableProducts = products.filter((product) => product.publishable);
+  const categories = Array.from(new Set(publishableProducts.map((product) => product.category))).sort();
+  const [query, setQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"retiro" | "envio">("retiro");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [cart, setCart] = useState<SaleLine[]>([]);
+  const [orderMessage, setOrderMessage] = useState("");
+  const selectedProduct = publishableProducts.find((product) => product.id === selectedProductId);
+  const visibleProducts = publishableProducts.filter((product) => {
+    const matchesCategory = selectedCategory === "Todos" || product.category === selectedCategory;
+    const search = query.trim().toLowerCase();
+    return matchesCategory && (!search || `${product.name} ${product.description} ${product.category}`.toLowerCase().includes(search));
+  });
+
+  useEffect(() => {
+    const title = selectedProduct
+      ? selectedProduct.seoTitle || `${selectedProduct.name} | Regaleria Shop`
+      : selectedCategory !== "Todos"
+        ? `${selectedCategory} | Regaleria Shop`
+        : "Regaleria Shop | Regalos, deco y accesorios";
+    const description = selectedProduct?.seoDescription || selectedProduct?.description || "Encontrá regalos, deco, bazar y accesorios con stock actualizado.";
+    document.title = title;
+    setMetaDescription(description);
+  }, [selectedCategory, selectedProduct]);
 
   const addToCart = (product: Product, variant: Product["variants"][number]) => {
     if (variant.stock < 1) return;
     setCart((current) => mergeLine(current, buildUiSaleLine(product, variant, 1)));
+    setOrderMessage(`${product.name} se agregó al carrito.`);
   };
-  const submitOrder = () => {
-    const order = addOnlineOrder({ customerName, customerContact, lines: cart });
+  const submitOrder = async () => {
+    setOrderMessage("Registrando pedido...");
+    const order = await addOnlineOrder({ customerName, customerContact, customerEmail, deliveryMethod, deliveryAddress, lines: cart });
     if (order) {
       setCustomerName("");
       setCustomerContact("");
+      setCustomerEmail("");
+      setDeliveryAddress("");
       setCart([]);
+      setOrderMessage(`Pedido ${order.number} recibido. Te enviaremos la confirmación por correo.`);
+    } else {
+      setOrderMessage("No se pudo registrar el pedido. Revisa los datos e intenta nuevamente.");
     }
   };
+  const heroProduct = publishableProducts.find((product) => product.imageUrl) ?? publishableProducts[0];
 
   return (
-    <section className="workspace">
-      <div className="public-hero">
-        <div>
-          <span>Tienda online</span>
-          <h2>Regalos listos para retirar</h2>
-          <p>Catalogo conectado con el stock y las publicaciones del sistema interno.</p>
-        </div>
-        <strong>{catalogStatus === "cargando" ? "Actualizando..." : `${publishableProducts.length} productos visibles`}</strong>
+    <section className="storefront">
+      <header className="store-header">
+        <button className="store-brand" onClick={() => {
+          setSelectedProductId(null);
+          setSelectedCategory("Todos");
+        }}>
+          <span className="store-brand-mark">R</span>
+          <span><strong>Regaleria</strong><small>Shop</small></span>
+        </button>
+        <label className="store-search">
+          <MagnifyingGlass size={20} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar regalos, deco, bazar y más" />
+        </label>
+        <button className="store-cart-button" onClick={() => document.getElementById("store-cart")?.scrollIntoView({ behavior: "smooth" })}>
+          <ShoppingCartSimple size={22} />
+          <span>{cart.reduce((sum, line) => sum + line.quantity, 0)}</span>
+        </button>
+      </header>
+      <nav className="store-categories" aria-label="Categorías de la tienda">
+        <button className={clsx(selectedCategory === "Todos" && "active")} onClick={() => {
+          setSelectedCategory("Todos");
+          setSelectedProductId(null);
+        }}><House size={17} /> Inicio</button>
+        {categories.map((category) => (
+          <button key={category} className={clsx(selectedCategory === category && "active")} onClick={() => {
+            setSelectedCategory(category);
+            setSelectedProductId(null);
+          }}>{category}</button>
+        ))}
+      </nav>
+      {!selectedProduct && selectedCategory === "Todos" && !query.trim() && (
+        <section className="store-hero" style={heroProduct ? { backgroundImage: `linear-gradient(90deg, rgba(18,42,33,.92), rgba(18,42,33,.28)), url("${heroProduct.imageUrl}")` } : undefined}>
+          <div>
+            <span>Regalos para cada momento</span>
+            <h1>Encontrá algo especial sin dar mil vueltas</h1>
+            <p>Productos con stock actualizado, retiro en el local y opciones de envío.</p>
+            <button onClick={() => document.getElementById("store-products")?.scrollIntoView({ behavior: "smooth" })}>Ver productos</button>
+          </div>
+        </section>
+      )}
+      <div className="store-benefits">
+        <span><Truck size={21} /> Envíos y retiro</span>
+        <span><CheckCircle size={21} /> Stock actualizado</span>
+        <span><Heart size={21} /> Selección para regalar</span>
       </div>
-      <div className="shop-layout">
-        <div className="shop-grid">
-          {publishableProducts.map((product) => (
-            <article className="shop-item" key={product.id}>
-              <img src={product.imageUrl} alt="" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
-              <div>
-                <strong>{product.name}</strong>
-                <p>{product.description}</p>
-                {product.variants.map((variant) => (
-                  <button className="secondary-action full" key={variant.id} onClick={() => addToCart(product, variant)} disabled={variant.stock < 1}>
-                    <ShoppingCartSimple size={18} />
-                    {variant.name} · {formatMoney(variant.price)}
+      {selectedProduct ? (
+        <StoreProductDetail product={selectedProduct} onBack={() => setSelectedProductId(null)} onAdd={addToCart} />
+      ) : (
+        <main className="store-content" id="store-products">
+          <div className="store-section-heading">
+            <div>
+              <span>{selectedCategory === "Todos" ? "Catálogo" : selectedCategory}</span>
+              <h2>{query.trim() ? `Resultados para “${query.trim()}”` : selectedCategory === "Todos" ? "Productos destacados" : `Todo en ${selectedCategory}`}</h2>
+            </div>
+            <strong>{catalogStatus === "cargando" ? "Actualizando..." : `${visibleProducts.length} productos`}</strong>
+          </div>
+          <div className="store-product-grid">
+            {visibleProducts.map((product) => {
+              const available = product.variants.filter((variant) => variant.stock > 0);
+              const startingPrice = Math.min(...product.variants.map((variant) => variant.price));
+              return (
+                <article className="store-product-card" key={product.id}>
+                  <button className="store-product-image" onClick={() => setSelectedProductId(product.id)}>
+                    <img src={product.imageUrl} alt={`${product.name}, ${product.category}`} />
                   </button>
-                ))}
-              </div>
-            </article>
-          ))}
+                  <div>
+                    <span>{product.category}</span>
+                    <button className="store-product-name" onClick={() => setSelectedProductId(product.id)}>{product.name}</button>
+                    <strong>{formatMoney(startingPrice)}</strong>
+                    <small>{available.length ? `${available.length} opción(es) con stock` : "Sin stock"}</small>
+                    <button className="store-primary-button" onClick={() => available[0] && addToCart(product, available[0])} disabled={!available.length}>
+                      <ShoppingCartSimple size={18} /> Agregar
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          {!visibleProducts.length && <div className="store-empty">No encontramos productos con esos filtros.</div>}
+        </main>
+      )}
+      <aside className="store-cart" id="store-cart">
+        <div className="store-cart-heading">
+          <div><span>Tu compra</span><h2>Carrito</h2></div>
+          <strong>{formatMoney(saleLineTotal(cart))}</strong>
         </div>
-        <Panel title="Carrito web">
           <CartLines lines={cart} onRemove={(variant) => setCart((current) => current.filter((line) => line.variantId !== variant))} />
-          <div className="form-grid one compact">
+          <div className="store-checkout-form">
             <label>
               Nombre
-              <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Cliente web" />
+              <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nombre y apellido" />
             </label>
             <label>
-              Contacto
-              <input value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder="Telefono o email" />
+              Email
+              <input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="tu@email.com" />
             </label>
-          </div>
-          <div className="checkout-row">
-            <div>
-              <span>Total pedido</span>
-              <strong>{formatMoney(saleLineTotal(cart))}</strong>
+            <label>
+              Teléfono
+              <input value={customerContact} onChange={(event) => setCustomerContact(event.target.value)} placeholder="WhatsApp o teléfono" />
+            </label>
+            <div className="segmented-control">
+              <button className={clsx(deliveryMethod === "retiro" && "active")} onClick={() => setDeliveryMethod("retiro")}>Retiro</button>
+              <button className={clsx(deliveryMethod === "envio" && "active")} onClick={() => setDeliveryMethod("envio")}>Envío</button>
             </div>
-            <button className="primary-action" onClick={submitOrder} disabled={!cart.length || !customerName.trim() || !customerContact.trim()}>
-              <Storefront size={19} /> Crear pedido
-            </button>
+            {deliveryMethod === "envio" && <label>Dirección<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Calle, número y localidad" /></label>}
           </div>
-          <DataList
+          <button className="store-checkout-button" onClick={submitOrder} disabled={!cart.length || !customerName.trim() || !customerContact.trim() || !customerEmail.includes("@") || (deliveryMethod === "envio" && !deliveryAddress.trim())}>
+            Confirmar pedido
+          </button>
+          {orderMessage && <p className="store-order-message">{orderMessage}</p>}
+      </aside>
+      {!isPublicWebsite() && (
+        <section className="store-admin-preview">
+          <Panel title="Pedidos y correos generados">
+            <DataList
             items={onlineOrders.slice(0, 4).map((order) => ({
               title: order.number,
-              meta: `${order.customerName} · ${order.status}`,
+              meta: `${order.customerName} · ${order.status} · ${order.deliveryMethod}`,
               value: formatMoney(order.total)
             }))}
           />
-        </Panel>
-      </div>
+          <DataList items={emailMessages.slice(0, 4).map((email) => ({ title: email.subject, meta: `${email.to} · ${email.status}`, value: email.kind }))} />
+          </Panel>
+        </section>
+      )}
+      <footer className="store-footer">
+        <div className="store-brand"><span className="store-brand-mark">R</span><span><strong>Regaleria</strong><small>Shop</small></span></div>
+        <p>Regalos, deco y accesorios seleccionados con cariño.</p>
+        <span><EnvelopeSimple size={17} /> Atención por email y WhatsApp</span>
+      </footer>
     </section>
   );
 }
 
-function ProductCard({ product, onEdit, viewMode }: { product: Product; onEdit: () => void; viewMode: "grid" | "list" }) {
+function StoreProductDetail({ product, onBack, onAdd }: { product: Product; onBack: () => void; onAdd: (product: Product, variant: Product["variants"][number]) => void }) {
+  const gallery = product.imageUrls?.length ? product.imageUrls : [product.imageUrl];
+  const [image, setImage] = useState(gallery[0]);
+  const [variantId, setVariantId] = useState(product.variants.find((variant) => variant.stock > 0)?.id ?? product.variants[0]?.id ?? "");
+  const variant = product.variants.find((item) => item.id === variantId);
+  return (
+    <main className="store-product-detail">
+      <button className="store-back-button" onClick={onBack}>Volver al catálogo</button>
+      <div className="store-product-gallery">
+        <img src={image} alt={product.name} />
+        <div>{gallery.map((url, index) => <button key={url} className={clsx(url === image && "active")} onClick={() => setImage(url)}><img src={url} alt={`${product.name}, vista ${index + 1}`} /></button>)}</div>
+      </div>
+      <div className="store-product-info">
+        <span>{product.category}</span>
+        <h1>{product.name}</h1>
+        <p>{product.description}</p>
+        <label>Elegí una opción<select value={variantId} onChange={(event) => setVariantId(event.target.value)}>{product.variants.map((item) => <option key={item.id} value={item.id} disabled={item.stock < 1}>{item.name} · {formatMoney(item.price)}{item.stock < 1 ? " · Sin stock" : ""}</option>)}</select></label>
+        {variant && <><strong className="store-detail-price">{formatMoney(variant.price)}</strong><small>{variant.stock > 0 ? `${variant.stock} disponible(s)` : "Sin stock"}</small></>}
+        <button className="store-primary-button large" onClick={() => variant && onAdd(product, variant)} disabled={!variant || variant.stock < 1}><ShoppingCartSimple size={20} /> Agregar al carrito</button>
+      </div>
+    </main>
+  );
+}
+
+function SeoGuidance({
+  name,
+  description,
+  seoTitle,
+  seoDescription,
+  onTitleChange,
+  onDescriptionChange
+}: {
+  name: string;
+  description: string;
+  seoTitle: string;
+  seoDescription: string;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+}) {
+  const titleValue = seoTitle || name;
+  const descriptionValue = seoDescription || description;
+  const checks = [
+    { ok: titleValue.length >= 30 && titleValue.length <= 60, text: "Título entre 30 y 60 caracteres" },
+    { ok: descriptionValue.length >= 90 && descriptionValue.length <= 160, text: "Descripción entre 90 y 160 caracteres" },
+    { ok: name.trim().length > 3 && titleValue.toLowerCase().includes(name.trim().toLowerCase().split(" ")[0] ?? ""), text: "El título menciona el producto" },
+    { ok: description.trim().length >= 40, text: "La ficha explica qué es y para quién sirve" }
+  ];
+  const score = checks.filter((check) => check.ok).length;
+  return (
+    <section className="seo-guidance">
+      <div className="seo-heading">
+        <div><strong>SEO para la web</strong><span>{score}/4 recomendaciones cumplidas</span></div>
+        <span className={clsx("seo-score", score >= 3 && "good")}>{score >= 3 ? "Bien preparado" : "A mejorar"}</span>
+      </div>
+      <label>Título SEO<input value={seoTitle} onChange={(event) => onTitleChange(event.target.value)} placeholder={name ? `${name} | Regaleria Shop` : "Nombre del producto | Regaleria Shop"} /><small>{titleValue.length}/60</small></label>
+      <label>Descripción SEO<textarea value={seoDescription} onChange={(event) => onDescriptionChange(event.target.value)} placeholder={description || "Resumen claro del producto, beneficio y ocasión de regalo."} /><small>{descriptionValue.length}/160</small></label>
+      <div className="seo-checks">{checks.map((check) => <span className={clsx(check.ok && "complete")} key={check.text}><CheckCircle size={15} /> {check.text}</span>)}</div>
+    </section>
+  );
+}
+
+function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Product; onEdit: () => void; viewMode: "grid" | "list"; showSupplier: boolean }) {
   const [imageIndex, setImageIndex] = useState(0);
   const totalStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
   const gallery = product.imageUrls?.length ? product.imageUrls : [product.imageUrl];
@@ -2459,7 +2784,7 @@ function ProductCard({ product, onEdit, viewMode }: { product: Product; onEdit: 
         </div>
         <div className="catalog-meta">
           <span className="chip">{product.category}</span>
-          <span className="chip">{product.supplier}</span>
+          {showSupplier && <span className="chip">{product.supplier}</span>}
           <span className={clsx("chip", product.publishable && "success")}>{product.publishable ? "Web publica" : "Interno"}</span>
           <span className="chip">Stock {totalStock}</span>
         </div>
@@ -2473,6 +2798,7 @@ function ProductEditor({
   suppliers,
   categories,
   canDelete,
+  canSeeSupplier,
   onSave,
   onDelete,
   onBack
@@ -2481,12 +2807,12 @@ function ProductEditor({
   suppliers: Supplier[];
   categories: string[];
   canDelete: boolean;
+  canSeeSupplier: boolean;
   onSave: (input: ProductUpdateInput) => Promise<boolean>;
   onDelete: (productId: string) => Promise<boolean>;
   onBack: () => void;
 }) {
-  const [aiBasePhoto, setAiBasePhoto] = useState("");
-  const [aiImageStatus, setAiImageStatus] = useState("Subir foto base para preparar variantes.");
+  const [imageStatus, setImageStatus] = useState("Seleccioná una o varias imágenes JPG, PNG o WebP.");
   const [selectedImage, setSelectedImage] = useState(0);
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
@@ -2499,6 +2825,9 @@ function ProductEditor({
     description: product.description,
     imageUrl: product.imageUrl,
     imageUrls: product.imageUrls?.length ? product.imageUrls : [product.imageUrl],
+    slug: product.slug ?? slugify(product.name),
+    seoTitle: product.seoTitle ?? "",
+    seoDescription: product.seoDescription ?? "",
     publishable: product.publishable
   });
 
@@ -2510,6 +2839,9 @@ function ProductEditor({
       description: product.description,
       imageUrl: product.imageUrl,
       imageUrls: product.imageUrls?.length ? product.imageUrls : [product.imageUrl],
+      slug: product.slug ?? slugify(product.name),
+      seoTitle: product.seoTitle ?? "",
+      seoDescription: product.seoDescription ?? "",
       publishable: product.publishable
     });
     setSelectedImage(0);
@@ -2536,8 +2868,11 @@ function ProductEditor({
   const addImageUrl = (url: string) => {
     const clean = url.trim();
     if (!clean) return;
-    setDraft((current) => ({ ...current, imageUrl: current.imageUrl || clean, imageUrls: [...current.imageUrls, clean] }));
-    setSelectedImage(draft.imageUrls.length);
+    setDraft((current) => {
+      const next = [...current.imageUrls, clean];
+      setSelectedImage(next.length - 1);
+      return { ...current, imageUrl: current.imageUrl || clean, imageUrls: next };
+    });
   };
   const removeImage = (index: number) => {
     setDraft((current) => {
@@ -2546,43 +2881,28 @@ function ProductEditor({
     });
     setSelectedImage(0);
   };
-  const loadProductPhoto = async (file?: File) => {
-    if (!file) return;
+  const loadProductPhotos = async (files?: FileList | null) => {
+    if (!files?.length) return;
     setIsSavingImage(true);
-    setAiImageStatus("Subiendo imagen...");
-    const reader = new FileReader();
-    reader.onload = () => setAiBasePhoto(String(reader.result ?? ""));
-    reader.readAsDataURL(file);
-    try {
-      const url = await uploadProductImage(product.id, draft.name || product.name, file);
-      addImageUrl(url);
-      setAiImageStatus("Imagen guardada en la nube. Guarda el producto para aplicar el cambio.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo subir la imagen.";
-      setAiImageStatus(message);
-    } finally {
-      setIsSavingImage(false);
+    setImageStatus(`Subiendo ${files.length} imagen(es)...`);
+    const uploaded: string[] = [];
+    const errors: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        uploaded.push(await uploadProductImage(product.id, draft.name || product.name, file));
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : `No se pudo subir ${file.name}.`);
+      }
     }
-  };
-  const generateAiImages = async () => {
-    setAiImageStatus("Generando con OpenAI...");
-    const aiResult = await generateProductImagesWithOpenAi({
-      productName: draft.name || product.name,
-      description: draft.description,
-      baseImage: aiBasePhoto
-    });
-    const seed = encodeURIComponent(product.name.toLowerCase().replace(/\s+/g, "-"));
-    const whiteBackground = `https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80&${seed}`;
-    const ambient = `https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=80&${seed}`;
-    const generatedImages = aiResult?.images.length ? aiResult.images : [whiteBackground, ambient];
-    const nextImages = [...gallery, ...generatedImages].filter(Boolean);
-    setDraft({
-      ...draft,
-      imageUrl: nextImages[0],
-      imageUrls: nextImages,
-      description: aiResult?.description || draft.description || `${product.name} presentado para regalo, con ficha lista para publicar.`
-    });
-    setAiImageStatus(aiResult ? `${aiResult.notes} Revisar antes de guardar la ficha.` : "Se prepararon 3 imagenes en modo demo. Revisar antes de guardar.");
+    if (uploaded.length) {
+      setDraft((current) => {
+        const next = [...current.imageUrls, ...uploaded];
+        setSelectedImage(next.length - 1);
+        return { ...current, imageUrl: current.imageUrl || uploaded[0], imageUrls: next };
+      });
+    }
+    setImageStatus(errors.length ? `${uploaded.length} cargada(s). ${errors[0]}` : `${uploaded.length} imagen(es) guardada(s) en la nube. Guarda el producto para confirmar.`);
+    setIsSavingImage(false);
   };
   const removeProduct = async () => {
     setDeleteStatus("Eliminando de la nube...");
@@ -2653,21 +2973,21 @@ function ProductEditor({
             ))}
             {Array.from({ length: Math.max(0, 4 - gallery.length) }).map((_, index) => (
               <label className="image-tile add-tile" key={`add-${index}`}>
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => loadProductPhotos(event.target.files)} />
                 <PlusCircle size={24} />
               </label>
             ))}
           </div>
           <div className="image-actions">
             <label className="secondary-action">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => loadProductPhotos(event.target.files)} />
               <PlusCircle size={18} /> Agregar imagen
             </label>
             <button className="secondary-action" onClick={() => removeImage(selectedImage)} disabled={!gallery.length}>
               <Trash size={18} /> Quitar actual
             </button>
           </div>
-          <span className="muted-text">{isSavingImage ? "Guardando imagen..." : `${gallery.length} imagen(es) cargada(s).`}</span>
+          <span className="muted-text">{isSavingImage ? "Guardando imágenes..." : imageStatus}</span>
         </section>
 
         <section className="editor-details">
@@ -2685,19 +3005,27 @@ function ProductEditor({
                   ))}
                 </select>
               </label>
-              <label>
+              {canSeeSupplier && <label>
                 Proveedor
                 <select value={draft.supplier} onChange={(event) => setDraft({ ...draft, supplier: event.target.value })}>
                   {supplierOptions.map((supplier) => (
                     <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
                   ))}
                 </select>
-              </label>
+              </label>}
             </div>
             <label>
               Descripcion publicable
               <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Descripcion corta para la web" />
             </label>
+            <SeoGuidance
+              name={draft.name}
+              description={draft.description}
+              seoTitle={draft.seoTitle}
+              seoDescription={draft.seoDescription}
+              onTitleChange={(seoTitle) => setDraft({ ...draft, seoTitle })}
+              onDescriptionChange={(seoDescription) => setDraft({ ...draft, seoDescription })}
+            />
             <label className="check-row">
               <input type="checkbox" checked={draft.publishable} onChange={(event) => setDraft({ ...draft, publishable: event.target.checked })} />
               Mostrar en web publica
@@ -2705,26 +3033,9 @@ function ProductEditor({
           </div>
           <div className="catalog-meta">
             <span className="chip">{draft.category}</span>
-            <span className="chip">{draft.supplier}</span>
+            {canSeeSupplier && <span className="chip">{draft.supplier}</span>}
             <span className={clsx("chip", draft.publishable && "success")}>{draft.publishable ? "Web publica" : "Interno"}</span>
           <span className="chip">Stock {totalStock}</span>
-          </div>
-          <div className="ai-product-tools editor-ai">
-            <div>
-              <strong>Asistente IA de fotos</strong>
-              <span>Usa la imagen principal o una foto base para generar fondo blanco y ambiente.</span>
-            </div>
-            <div className="form-grid two">
-              <label>
-                Foto base
-                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => loadProductPhoto(event.target.files?.[0])} />
-              </label>
-              <button className="secondary-action" onClick={generateAiImages} disabled={!aiBasePhoto && !mainImage}>
-                <Package size={18} /> Preparar con IA
-              </button>
-            </div>
-            {aiBasePhoto && <img className="ai-preview" src={aiBasePhoto} alt="" />}
-            <span className="muted-text">{aiImageStatus}</span>
           </div>
         </section>
       </div>
@@ -3029,4 +3340,24 @@ function saleLineTotal(lines: SaleLine[]) {
 
 function purchaseLineTotal(lines: PurchaseLine[]) {
   return lines.reduce((sum, line) => sum + line.subtotal, 0);
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+}
+
+function setMetaDescription(content: string) {
+  let meta = document.querySelector('meta[name="description"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute("name", "description");
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute("content", content.slice(0, 160));
 }

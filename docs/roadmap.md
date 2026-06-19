@@ -87,6 +87,12 @@
 - [x] Pedido online conectado al stock.
 - [x] Pedido web interno sin facturacion fiscal.
 - [x] Pagina publica separada del panel interno.
+- [x] Inicio ecommerce con buscador y categorías dinámicas.
+- [x] Ficha de producto con galería, variantes, precio y stock.
+- [x] Checkout con retiro o envío.
+- [x] Pedidos web persistentes en Supabase.
+- [x] Cola de correos de bienvenida, confirmación y aviso interno.
+- [ ] Activar envío efectivo por Resend con dominio remitente verificado.
 - [ ] Futuro: estados de pedido mas completos.
 - [ ] Futuro: metodos de entrega o retiro.
 
@@ -139,14 +145,17 @@
 - [x] Busqueda rapida global.
 - [x] Atajos de teclado para mostrador.
 - [ ] Mejoras de rendimiento para catalogos grandes.
+- [x] Alta de producto con selección múltiple de fotos.
+- [x] Alta de nuevas variantes.
+- [x] Compras con costo anterior precargado y costo de envío.
+- [x] Proveedor rápido persistente al confirmar la compra.
 - [x] Documentar PRODUCT.md y DESIGN.md del proyecto para sostener el sistema visual.
 
 ### Etapa 13: IA asistida
 
 - [x] Precarga de compras desde foto, PDF, texto o comprobante pegado.
 - [x] Revision humana antes de registrar compra y mover stock.
-- [x] Asistente visual para producto con foto base, fondo blanco y ambiente.
-- [x] Preparar galeria sugerida desde el editor de catalogo.
+- [x] Se retiró el asistente visual de producto por decisión operativa.
 - [x] Conexion segura a OpenAI por endpoint local del servidor.
 - [x] Generacion real de imagenes con OpenAI.
 - [x] Almacenamiento local de imagenes generadas como archivos publicos.

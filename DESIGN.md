@@ -39,9 +39,11 @@ Uso esperado: negocio fisico, monitor de mostrador o notebook, luz diurna/interi
 - Presupuestos, Transferencias, Gastos y Configuracion siguen el mismo patron de vistas superiores para separar carga, consulta, resumen y administracion.
 - En tablet y celular, las grillas operativas se apilan cuando los formularios pierden legibilidad; las barras de vistas pueden desplazarse horizontalmente.
 - El menu lateral pasa a drawer con boton hamburguesa en tablet y celular para no ocupar el primer scroll.
-- Bloques de IA asistida con estado visible, resultado revisable y accion de aplicar separada de guardar.
+- Bloques de IA documental con estado visible, resultado revisable y accion de aplicar separada de guardar.
 - Edicion de producto en vista dedicada cuando la tarea requiere imagenes, IA y datos publicables.
 - Galerias con imagen principal, miniaturas cuadradas y tiles `+` para sumar archivos.
+- La tienda pública usa verde bosque, coral y amarillo suave; prioriza búsqueda, categorías, producto, precio, stock, envío y carrito.
+- La marca provisional usa una `R` inspirada en cinta de regalo, con cinco propuestas documentadas para elección final.
 
 ## Reglas
 

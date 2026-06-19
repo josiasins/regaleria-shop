@@ -135,7 +135,7 @@ export const categories = ["Mates y termos", "Deco", "Bazar", "Regalos personali
 export const rolePermissions: RolePermissions = {
   dueno: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
   administrador: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
-  encargado: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "descuentos"],
+  encargado: ["panel", "ventas", "stock", "compras", "clientes", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "descuentos"],
   cajero: ["panel", "ventas", "clientes", "presupuestos", "pagos"]
 };
 

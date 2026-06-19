@@ -272,6 +272,26 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: evita formatos que Chrome y la web pública no muestran consistentemente, además de cargas excesivamente pesadas.
 - Alternativas descartadas: aceptar cualquier archivo con `image/*`, porque fotos HEIC u originales muy grandes pueden subir pero luego no renderizar correctamente.
 
+### Ecommerce como superficie propia
+- Decision: reemplazar la vista pública básica por inicio, buscador, categorías dinámicas, fichas de producto, variantes, carrito, retiro/envío y checkout.
+- Motivo: la web debe vender y permitir explorar, no funcionar únicamente como una demostración del catálogo interno.
+- Alternativas descartadas: conservar una grilla administrativa con botones por variante, porque no cumple expectativas normales de ecommerce.
+
+### Pedidos y correos persistentes
+- Decision: guardar pedidos web y correos generados en tablas propias de Supabase.
+- Motivo: un pedido no puede depender de la memoria del navegador del cliente y debe quedar visible para el negocio.
+- Alternativas descartadas: mantener `OnlineOrder` sólo en Zustand, porque se pierde al cerrar o recargar la página.
+
+### Proveedores restringidos
+- Decision: ocultar la sección y los datos de proveedor a Encargado y Cajero; Dueño y Administrador mantienen acceso.
+- Motivo: costos, fuentes de compra y agenda de proveedores son información administrativa sensible.
+- Alternativas descartadas: mostrar proveedores a todo rol con acceso a stock, porque excede lo necesario para operar productos.
+
+### Imágenes manuales sin generación IA
+- Decision: eliminar el generador IA del editor y permitir selección múltiple de fotos reales.
+- Motivo: la carga manual es más predecible, económica y fiel al producto que efectivamente se vende.
+- Alternativas descartadas: mantener dos caminos paralelos de imágenes, porque aumentaba confusión y fallas de persistencia.
+
 ### Menu responsive tipo drawer
 - Decision: ocultar el menu lateral en tablet/celular y abrirlo desde un boton hamburguesa.
 - Motivo: la navegacion principal debe estar disponible sin ocupar espacio permanente en pantallas chicas.

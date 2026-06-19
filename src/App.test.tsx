@@ -230,6 +230,28 @@ describe("Regaleria app", () => {
     expect(screen.queryByRole("button", { name: /Gastos/i })).not.toBeInTheDocument();
   });
 
+  it("hides suppliers from the employee role", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.selectOptions(screen.getByLabelText("Rol activo"), "encargado");
+    expect(screen.queryByRole("button", { name: "Proveedores" })).not.toBeInTheDocument();
+  });
+
+  it("can add a new variant to an existing product", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Stock/i }));
+    await user.click(screen.getByRole("button", { name: "Variante" }));
+    await user.click(screen.getByRole("button", { name: "Agregar nueva" }));
+    await user.type(screen.getByLabelText("Nombre"), "Rojo");
+    await user.type(screen.getByLabelText("SKU"), "MAT-PREM-ROJ");
+    const priceInputs = screen.getAllByLabelText("Precio");
+    await user.clear(priceInputs[0]);
+    await user.type(priceInputs[0], "19900");
+    await user.click(screen.getByRole("button", { name: /Agregar variante/i }));
+    expect(await screen.findByText(/Variante agregada y sincronizada/i)).toBeInTheDocument();
+  });
+
   it("can load and confirm a manual transfer", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -250,10 +272,11 @@ describe("Regaleria app", () => {
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Web publica/i }));
 
-    await user.click(screen.getByRole("button", { name: /Negro/i }));
+    await user.click(screen.getAllByRole("button", { name: "Agregar" })[0]);
     await user.type(screen.getByLabelText("Nombre"), "Comprador Web");
-    await user.type(screen.getByLabelText("Contacto"), "3515551234");
-    await user.click(screen.getByRole("button", { name: /Crear pedido/i }));
+    await user.type(screen.getByLabelText("Email"), "comprador@example.com");
+    await user.type(screen.getByLabelText("Teléfono"), "3515551234");
+    await user.click(screen.getByRole("button", { name: /Confirmar pedido/i }));
 
     expect(await screen.findByText("WEB-000001")).toBeInTheDocument();
     expect(screen.getByText(/Comprador Web/i)).toBeInTheDocument();
@@ -320,7 +343,7 @@ describe("Regaleria app", () => {
     expect(screen.getByText("Temporada")).toBeInTheDocument();
   });
 
-  it("can use AI assistants for purchase preload and product images", async () => {
+  it("can use the AI assistant for purchase preload", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -334,9 +357,5 @@ describe("Regaleria app", () => {
     expect(screen.getByText("Factura o remito de compra")).toBeInTheDocument();
     expect(screen.getByText(/MAT-PREM-NEG/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
-    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
-    await user.click(screen.getByRole("button", { name: /Preparar con IA/i }));
-    expect(screen.getByText(/Revisar antes de guardar/i)).toBeInTheDocument();
   });
 });

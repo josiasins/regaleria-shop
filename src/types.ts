@@ -24,6 +24,9 @@ export interface Product {
   publishable: boolean;
   imageUrl: string;
   imageUrls?: string[];
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   variants: Variant[];
   syncStatus: SyncStatus;
 }
@@ -41,7 +44,21 @@ export interface ProductUpdateInput {
   description: string;
   imageUrl: string;
   imageUrls?: string[];
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   publishable: boolean;
+}
+
+export interface VariantCreateInput {
+  productId: string;
+  name: string;
+  sku: string;
+  barcode: string;
+  stock: number;
+  lowStockAt: number;
+  cost: number;
+  price: number;
 }
 
 export interface VariantUpdateInput {
@@ -61,6 +78,10 @@ export interface NewProductInput {
   description: string;
   publishable: boolean;
   imageUrl: string;
+  imageUrls?: string[];
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   variant: {
     name: string;
     sku: string;
@@ -180,6 +201,8 @@ export interface PurchaseReceipt {
   documentNumber: string;
   supplier: string;
   lines: PurchaseLine[];
+  shippingCost: number;
+  shippingNote: string;
   total: number;
   createdAt: string;
   syncStatus: SyncStatus;
@@ -190,6 +213,8 @@ export interface PurchaseReceiptDraftInput {
   documentNumber: string;
   supplier: string;
   lines: PurchaseLine[];
+  shippingCost: number;
+  shippingNote: string;
 }
 
 export interface Customer {
@@ -231,6 +256,9 @@ export interface OnlineOrder {
   number: string;
   customerName: string;
   customerContact: string;
+  customerEmail: string;
+  deliveryMethod: "retiro" | "envio";
+  deliveryAddress: string;
   lines: SaleLine[];
   total: number;
   status: "nuevo" | "preparando" | "entregado" | "cancelado";
@@ -241,7 +269,20 @@ export interface OnlineOrder {
 export interface OnlineOrderDraftInput {
   customerName: string;
   customerContact: string;
+  customerEmail: string;
+  deliveryMethod: "retiro" | "envio";
+  deliveryAddress: string;
   lines: SaleLine[];
+}
+
+export interface EmailMessage {
+  id: string;
+  kind: "bienvenida" | "confirmacion_pedido" | "aviso_negocio";
+  to: string;
+  subject: string;
+  html: string;
+  createdAt: string;
+  status: "pendiente" | "enviado" | "fallo";
 }
 
 export interface StockMovement {
