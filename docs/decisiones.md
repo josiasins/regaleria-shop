@@ -399,3 +399,8 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Fecha: 2026-06-06.
 - Decision: configurar directamente en Render CSP, `X-Frame-Options`, HSTS, `X-Content-Type-Options`, `Permissions-Policy` y `Referrer-Policy`.
 - Motivo: Render no aplico todas las reglas declaradas en `_headers`; la configuracion del hosting permite verificar que las cabeceras lleguen realmente al navegador.
+# 2026-06-18 - Pedido web y descuento de stock en una sola operacion
+
+- **Decision:** registrar el pedido web y descontar sus variantes dentro de una unica funcion transaccional de PostgreSQL.
+- **Motivo:** el comprador anonimo no debe tener permisos generales para editar productos, pero la tienda necesita impedir sobreventas y confirmar pedido y stock como una sola operacion.
+- **Alternativas descartadas:** descontar stock desde el navegador despues de crear el pedido, porque puede fallar por permisos o conectividad y dejar datos inconsistentes.

@@ -850,7 +850,6 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...movementsForOrder, ...state.movements],
       products: applySaleStock(state.products, { ...order, receiptNumber: order.number, type: "detallada", discount: 0, paymentMethod: "otro", margin: 0 })
     }));
-    syncProductsToCloud(get().products, cleanLines.map((line) => line.productId));
     return order;
   },
   confirmTransfer: (id) => {

@@ -37,6 +37,10 @@ set search_path = public
 as $$
 declare
   email_item jsonb;
+  line_item jsonb;
+  product_data jsonb;
+  current_stock integer;
+  affected_rows integer := 0;
 begin
   if coalesce(order_data->>'id', '') = ''
     or coalesce(order_data->>'customerName', '') = ''
@@ -54,6 +58,60 @@ begin
     coalesce((order_data->>'createdAt')::timestamptz, now())
   )
   on conflict (id) do nothing;
+
+  get diagnostics affected_rows = row_count;
+  if affected_rows = 0 then
+    return;
+  end if;
+
+  for line_item in select value from jsonb_array_elements(order_data->'lines')
+  loop
+    select data
+    into product_data
+    from public.public_catalog_products
+    where id = line_item->>'productId'
+      and publishable = true
+    for update;
+
+    if product_data is null then
+      raise exception 'El producto % no esta disponible', line_item->>'productId';
+    end if;
+
+    select (variant->>'stock')::integer
+    into current_stock
+    from jsonb_array_elements(coalesce(product_data->'variants', '[]'::jsonb)) as variant
+    where variant->>'id' = line_item->>'variantId';
+
+    if current_stock is null then
+      raise exception 'La variante % no esta disponible', line_item->>'variantId';
+    end if;
+
+    if current_stock < (line_item->>'quantity')::integer then
+      raise exception 'Stock insuficiente para %', line_item->>'name';
+    end if;
+
+    update public.public_catalog_products
+    set data = jsonb_set(
+          data,
+          '{variants}',
+          (
+            select jsonb_agg(
+              case
+                when variant->>'id' = line_item->>'variantId'
+                then jsonb_set(
+                  variant,
+                  '{stock}',
+                  to_jsonb((variant->>'stock')::integer - (line_item->>'quantity')::integer)
+                )
+                else variant
+              end
+            )
+            from jsonb_array_elements(data->'variants') as variant
+          )
+        ),
+        updated_at = now()
+    where id = line_item->>'productId';
+  end loop;
 
   for email_item in select value from jsonb_array_elements(coalesce(email_data, '[]'::jsonb))
   loop
