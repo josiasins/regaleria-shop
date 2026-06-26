@@ -7,6 +7,7 @@ import type {
   BusinessProfileInput,
   CashClosure,
   CashShift,
+  CashShiftAuditUpdateInput,
   Customer,
   CustomerDraftInput,
   Expense,
@@ -25,8 +26,10 @@ import type {
   QuoteDraftInput,
   Role,
   Sale,
+  SaleAuditUpdateInput,
   SaleDraftInput,
   SaleLine,
+  SalesAuditEntry,
   StockAdjustmentInput,
   StockMovement,
   Supplier,
@@ -54,6 +57,7 @@ interface AppState {
   cashShifts: CashShift[];
   supplierPayments: SupplierPayment[];
   emailMessages: EmailMessage[];
+  salesAuditEntries: SalesAuditEntry[];
   businessProfile: BusinessProfile;
   categories: string[];
   rolePermissions: RolePermissions;
@@ -70,6 +74,8 @@ interface AppState {
   importProducts: (rows: ImportProductRow[]) => number;
   addCustomer: (input: CustomerDraftInput) => Customer | null;
   updateCustomer: (id: string, input: CustomerDraftInput) => void;
+  deleteCustomer: (id: string, requestedBy: Role) => boolean;
+  restoreCustomer: (id: string, requestedBy: Role) => boolean;
   addSupplier: (input: SupplierDraftInput) => Supplier | null;
   updateSupplier: (id: string, input: SupplierDraftInput) => void;
   adjustStock: (input: StockAdjustmentInput) => StockMovement | null;
@@ -81,6 +87,12 @@ interface AppState {
   closeCashDay: (note: string) => CashClosure;
   openCashShift: (initialCash: number, openedBy: Role, note: string) => CashShift | null;
   closeCashShift: (id: string, declaredClosingCash: number, closedBy: Role, note: string) => CashShift | null;
+  updateSaleWithAudit: (saleId: string, input: SaleAuditUpdateInput, password: string, reason: string, requestedBy: Role) => boolean;
+  deleteSaleWithAudit: (saleId: string, password: string, reason: string, requestedBy: Role) => boolean;
+  restoreSaleWithAudit: (auditEntryId: string, password: string, reason: string, requestedBy: Role) => boolean;
+  updateShiftWithAudit: (shiftId: string, input: CashShiftAuditUpdateInput, password: string, reason: string, requestedBy: Role) => boolean;
+  deleteShiftWithAudit: (shiftId: string, password: string, reason: string, requestedBy: Role) => boolean;
+  restoreShiftWithAudit: (auditEntryId: string, password: string, reason: string, requestedBy: Role) => boolean;
   addSupplierPayment: (supplier: string, amount: number, note: string) => SupplierPayment | null;
   updateBusinessProfile: (input: BusinessProfileInput) => void;
   addCategory: (category: string) => void;
@@ -95,6 +107,7 @@ interface AppState {
 
 const money = (value: number) => Math.round(value * 100) / 100;
 const nextNumber = (prefix: string, count: number) => `${prefix}-${String(count + 1).padStart(6, "0")}`;
+const ownerAuditPassword = String(import.meta.env.VITE_OWNER_AUDIT_PASSWORD || "regaleria-dueno");
 
 function findVariant(products: Product[], variantId: string) {
   for (const product of products) {
@@ -143,6 +156,20 @@ function stockMovementsForSale(sale: Sale): StockMovement[] {
   }));
 }
 
+function reversalStockMovementsForSale(sale: Sale, reason: string): StockMovement[] {
+  const createdAt = new Date().toISOString();
+  return sale.lines.map((line) => ({
+    id: `local_mov_${crypto.randomUUID()}`,
+    productId: line.productId,
+    variantId: line.variantId,
+    type: "ajuste",
+    quantity: line.quantity,
+    reason: `Anulacion ${sale.receiptNumber}: ${reason}`,
+    createdAt,
+    syncStatus: "pendiente"
+  }));
+}
+
 function applySaleStock(products: Product[], sale: Sale) {
   return products.map((product) => ({
     ...product,
@@ -153,6 +180,31 @@ function applySaleStock(products: Product[], sale: Sale) {
       return quantitySold ? { ...variant, stock: variant.stock - quantitySold } : variant;
     })
   }));
+}
+
+function restoreSaleStock(products: Product[], sale: Sale) {
+  return products.map((product) => ({
+    ...product,
+    variants: product.variants.map((variant) => {
+      const quantityRestored = sale.lines
+        .filter((line) => line.variantId === variant.id)
+        .reduce((sum, line) => sum + line.quantity, 0);
+      return quantityRestored ? { ...variant, stock: variant.stock + quantityRestored } : variant;
+    })
+  }));
+}
+
+function canRunAudit(requestedBy: Role, password: string, reason: string) {
+  return requestedBy === "dueno" && password === ownerAuditPassword && reason.trim().length >= 5;
+}
+
+function makeAuditEntry(input: Omit<SalesAuditEntry, "id" | "createdAt">): SalesAuditEntry {
+  return {
+    id: `local_audit_${crypto.randomUUID()}`,
+    createdAt: new Date().toISOString(),
+    ...input,
+    reason: input.reason.trim()
+  };
 }
 
 function initialDataState() {
@@ -171,6 +223,7 @@ function initialDataState() {
     cashShifts: structuredClone(cashShifts),
     supplierPayments: structuredClone(supplierPayments),
     emailMessages: [],
+    salesAuditEntries: [],
     businessProfile: structuredClone(businessProfile),
     categories: structuredClone(categories),
     rolePermissions: structuredClone(rolePermissions),
@@ -280,7 +333,12 @@ export const useStore = create<AppState>((set, get) => ({
       set({ catalogStatus: "error" });
       return null;
     }
-    set((state) => ({ products: [product, ...state.products], movements: [movement, ...state.movements], catalogStatus: "actualizado" }));
+    set((state) => ({
+      products: [product, ...state.products],
+      movements: [movement, ...state.movements],
+      categories: product.category && !state.categories.includes(product.category) ? [...state.categories, product.category] : state.categories,
+      catalogStatus: "actualizado"
+    }));
     return product;
   },
   deleteProduct: async (productId, requestedBy) => {
@@ -453,6 +511,28 @@ export const useStore = create<AppState>((set, get) => ({
           : customer
       )
     }));
+  },
+  deleteCustomer: (id, requestedBy) => {
+    if (requestedBy !== "dueno") return false;
+    const customer = get().customers.find((item) => item.id === id && !item.deletedAt);
+    if (!customer) return false;
+    set((state) => ({
+      customers: state.customers.map((item) =>
+        item.id === id ? { ...item, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" } : item
+      )
+    }));
+    return true;
+  },
+  restoreCustomer: (id, requestedBy) => {
+    if (requestedBy !== "dueno") return false;
+    const customer = get().customers.find((item) => item.id === id && item.deletedAt);
+    if (!customer) return false;
+    set((state) => ({
+      customers: state.customers.map((item) =>
+        item.id === id ? { ...item, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" } : item
+      )
+    }));
+    return true;
   },
   addSupplier: (input) => {
     const supplier = makeSupplier(input);
@@ -736,6 +816,152 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ cashShifts: state.cashShifts.map((item) => (item.id === id ? closedShift : item)) }));
     return closedShift;
   },
+  updateSaleWithAudit: (saleId, input, password, reason, requestedBy) => {
+    const sale = get().sales.find((item) => item.id === saleId);
+    if (!sale || !canRunAudit(requestedBy, password, reason) || input.discount < 0) return false;
+    const totals = saleTotals(sale.lines, input.discount);
+    const updatedSale: Sale = {
+      ...sale,
+      customerName: input.customerName.trim() || "Consumidor final",
+      discount: money(input.discount),
+      paymentMethod: input.paymentMethod,
+      internalNote: input.internalNote.trim(),
+      createdAt: input.createdAt || sale.createdAt,
+      total: totals.total,
+      margin: totals.margin,
+      syncStatus: "pendiente"
+    };
+    const entry = makeAuditEntry({
+      entityType: "venta",
+      entityId: sale.id,
+      entityNumber: sale.receiptNumber,
+      action: "correccion",
+      reason,
+      performedBy: requestedBy,
+      before: sale,
+      after: updatedSale
+    });
+    set((state) => ({
+      sales: state.sales.map((item) => (item.id === saleId ? updatedSale : item)),
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    return true;
+  },
+  deleteSaleWithAudit: (saleId, password, reason, requestedBy) => {
+    const sale = get().sales.find((item) => item.id === saleId);
+    if (!sale || !canRunAudit(requestedBy, password, reason)) return false;
+    const entry = makeAuditEntry({
+      entityType: "venta",
+      entityId: sale.id,
+      entityNumber: sale.receiptNumber,
+      action: "eliminacion",
+      reason,
+      performedBy: requestedBy,
+      before: sale
+    });
+    set((state) => ({
+      sales: state.sales.filter((item) => item.id !== saleId),
+      products: restoreSaleStock(state.products, sale),
+      movements: [...reversalStockMovementsForSale(sale, reason), ...state.movements],
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
+    return true;
+  },
+  restoreSaleWithAudit: (auditEntryId, password, reason, requestedBy) => {
+    const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "venta" && entry.action === "eliminacion");
+    const sale = source?.before && "receiptNumber" in source.before ? source.before : null;
+    if (!sale || get().sales.some((item) => item.id === sale.id) || !canRunAudit(requestedBy, password, reason)) return false;
+    if (!hasAvailableStock(get().products, sale.lines)) return false;
+    const restoredSale: Sale = { ...sale, syncStatus: "pendiente" };
+    const entry = makeAuditEntry({
+      entityType: "venta",
+      entityId: restoredSale.id,
+      entityNumber: restoredSale.receiptNumber,
+      action: "restauracion",
+      reason,
+      performedBy: requestedBy,
+      after: restoredSale
+    });
+    set((state) => ({
+      sales: [restoredSale, ...state.sales],
+      products: applySaleStock(state.products, restoredSale),
+      movements: [...stockMovementsForSale(restoredSale), ...state.movements],
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    syncProductsToCloud(get().products, restoredSale.lines.map((line) => line.productId));
+    return true;
+  },
+  updateShiftWithAudit: (shiftId, input, password, reason, requestedBy) => {
+    const shift = get().cashShifts.find((item) => item.id === shiftId);
+    if (!shift || !canRunAudit(requestedBy, password, reason) || input.initialCash < 0 || (input.declaredClosingCash ?? 0) < 0) return false;
+    const shiftSales = get().sales.filter((sale) => sale.shiftId === shiftId);
+    const cashTotal = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
+    const updatedShift: CashShift = {
+      ...shift,
+      openedAt: input.openedAt || shift.openedAt,
+      initialCash: money(input.initialCash),
+      note: input.note.trim(),
+      closedAt: input.closedAt || undefined,
+      declaredClosingCash: input.closedAt ? money(input.declaredClosingCash ?? 0) : undefined,
+      expectedClosingCash: input.closedAt ? money(input.initialCash + cashTotal) : undefined,
+      closingNote: input.closedAt ? input.closingNote?.trim() : undefined,
+      syncStatus: "pendiente"
+    };
+    const entry = makeAuditEntry({
+      entityType: "turno",
+      entityId: shift.id,
+      entityNumber: shift.number,
+      action: "correccion",
+      reason,
+      performedBy: requestedBy,
+      before: shift,
+      after: updatedShift
+    });
+    set((state) => ({
+      cashShifts: state.cashShifts.map((item) => (item.id === shiftId ? updatedShift : item)),
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    return true;
+  },
+  deleteShiftWithAudit: (shiftId, password, reason, requestedBy) => {
+    const shift = get().cashShifts.find((item) => item.id === shiftId);
+    if (!shift || !canRunAudit(requestedBy, password, reason)) return false;
+    const entry = makeAuditEntry({
+      entityType: "turno",
+      entityId: shift.id,
+      entityNumber: shift.number,
+      action: "eliminacion",
+      reason,
+      performedBy: requestedBy,
+      before: shift
+    });
+    set((state) => ({
+      cashShifts: state.cashShifts.filter((item) => item.id !== shiftId),
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    return true;
+  },
+  restoreShiftWithAudit: (auditEntryId, password, reason, requestedBy) => {
+    const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "turno" && entry.action === "eliminacion");
+    const shift = source?.before && "number" in source.before && "openedAt" in source.before ? source.before : null;
+    if (!shift || get().cashShifts.some((item) => item.id === shift.id) || !canRunAudit(requestedBy, password, reason)) return false;
+    const restoredShift: CashShift = { ...shift, syncStatus: "pendiente" };
+    const entry = makeAuditEntry({
+      entityType: "turno",
+      entityId: restoredShift.id,
+      entityNumber: restoredShift.number,
+      action: "restauracion",
+      reason,
+      performedBy: requestedBy,
+      after: restoredShift
+    });
+    set((state) => ({
+      cashShifts: [restoredShift, ...state.cashShifts],
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    return true;
+  },
   addSupplierPayment: (supplier, amount, note) => {
     if (!supplier.trim() || amount <= 0) return null;
     const payment: SupplierPayment = {
@@ -903,7 +1129,12 @@ export const useStore = create<AppState>((set, get) => ({
       suppliers: state.suppliers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
       cashClosures: state.cashClosures.map((item) => ({ ...item, syncStatus: "sincronizado" })),
       cashShifts: state.cashShifts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      supplierPayments: state.supplierPayments.map((item) => ({ ...item, syncStatus: "sincronizado" }))
+      supplierPayments: state.supplierPayments.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+      salesAuditEntries: state.salesAuditEntries.map((entry) => ({
+        ...entry,
+        before: entry.before ? { ...entry.before, syncStatus: "sincronizado" } : undefined,
+        after: entry.after ? { ...entry.after, syncStatus: "sincronizado" } : undefined
+      }))
     }));
   }
 }));

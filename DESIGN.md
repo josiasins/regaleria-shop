@@ -44,7 +44,9 @@ Uso esperado: negocio fisico, monitor de mostrador o notebook, luz diurna/interi
 - Galerias con imagen principal, miniaturas cuadradas y tiles `+` para sumar archivos.
 - La tienda pública usa verde bosque, coral y amarillo suave; prioriza búsqueda, categorías, producto, precio, stock, envío y carrito.
 - El carrito público vive en una página propia, accesible desde el encabezado; nunca se agrega como bloque al final del catálogo.
-- La marca provisional usa una `R` inspirada en cinta de regalo, con cinco propuestas documentadas para elección final.
+- La marca elegida usa logo dorado con caja, cinta y palabra `shop`; la fuente maestra es `public/brand/regaleria-shop-logo_NEW.af`, y las reglas completas viven en `docs/manual-marca.md`.
+- El sistema interno usa el simbolo compacto y la web publica puede usar el lockup completo cuando el espacio lo permite.
+- La paleta de marca combina oro regalo, marfil tienda, bosque operativo, salvia y coral accion; el oro se usa como firma, no como color dominante de interfaz.
 
 ## Reglas
 

@@ -70,6 +70,25 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Conteo de prueba/i)).toBeInTheDocument();
   });
 
+  it("can create a category while adding a product", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Stock/i }));
+    await user.click(screen.getByRole("button", { name: /Alta de producto/i }));
+
+    await user.type(screen.getByLabelText("Producto"), "Agenda artesanal");
+    await user.selectOptions(screen.getByLabelText("Categoria"), "__new");
+    await user.type(screen.getByLabelText("Nueva categoria"), "Papeleria");
+    await user.type(screen.getAllByLabelText("SKU")[0], "AGE-ART-001");
+    await user.clear(screen.getAllByLabelText("Precio")[0]);
+    await user.type(screen.getAllByLabelText("Precio")[0], "7200");
+    await user.click(screen.getByRole("button", { name: /Crear producto/i }));
+
+    expect(await screen.findByText("Agenda artesanal")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    expect(screen.getByRole("option", { name: "Papeleria" })).toBeInTheDocument();
+  });
+
   it("can create a detailed sale with cart lines", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -107,6 +126,47 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Ventas del turno TURNO-000001/i)).toBeInTheDocument();
     expect(screen.getByText(/CI-000003/i)).toBeInTheDocument();
     expect(screen.getByText(/Esperado en efectivo/i)).toBeInTheDocument();
+  });
+
+  it("allows only the owner to audit, void and restore sales", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Ventas/i }));
+    await user.click(screen.getByRole("button", { name: "Turnos" }));
+    await user.clear(screen.getByLabelText("Efectivo inicial"));
+    await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
+    await user.click(screen.getByRole("button", { name: "Abrir turno" }));
+    await user.click(screen.getByRole("button", { name: "Mostrador" }));
+    await user.click(screen.getByRole("button", { name: /Cobrar/i }));
+
+    await user.click(screen.getByRole("button", { name: "Auditoria" }));
+    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
+    await user.type(screen.getByLabelText("Motivo"), "Error de carga");
+    await user.clear(screen.getByLabelText("Cliente"));
+    await user.type(screen.getByLabelText("Cliente"), "Cliente auditado");
+    await user.click(screen.getByRole("button", { name: /Guardar correccion/i }));
+    expect(screen.getAllByText(/Venta corregida/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/correccion/i).length).toBeGreaterThan(0);
+
+    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
+    await user.type(screen.getByLabelText("Motivo"), "Venta duplicada");
+    await user.click(screen.getByRole("button", { name: /Anular venta/i }));
+    expect(screen.getAllByText(/Venta anulada/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/eliminacion/i).length).toBeGreaterThan(0);
+
+    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
+    await user.type(screen.getByLabelText("Motivo"), "Restaurar venta");
+    await user.click(screen.getAllByRole("button", { name: /Restaurar/i })[0]);
+    expect(screen.getAllByText(/Venta restaurada/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/restauracion/i).length).toBeGreaterThan(0);
+  });
+
+  it("hides sales audit from non-owner roles", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.click(screen.getByRole("button", { name: /Ventas/i }));
+    expect(screen.queryByRole("button", { name: "Auditoria" })).not.toBeInTheDocument();
   });
 
   it("can create a quote without closing a sale", async () => {
@@ -162,6 +222,25 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Email"), "proveedor@example.com");
     await user.click(screen.getByRole("button", { name: /Crear proveedor/i }));
     expect(screen.getByText(/Proveedor Nuevo/i)).toBeInTheDocument();
+  });
+
+  it("lets the owner delete and restore customers", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Clientes/i }));
+    await user.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+    await user.type(screen.getByLabelText("Nombre"), "Cliente a restaurar");
+    await user.click(screen.getByRole("button", { name: /Crear cliente/i }));
+
+    await user.click(screen.getAllByRole("button", { name: /Borrar/i })[0]);
+    expect(screen.queryByText("Cliente a restaurar")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Eliminados" }));
+    expect(screen.getByText("Cliente a restaurar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Restaurar/i }));
+    expect(screen.getByText("No hay clientes eliminados.")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Clientes" })[1]);
+    expect(screen.getByText("Cliente a restaurar")).toBeInTheDocument();
   });
 
   it("can edit catalog product details", async () => {

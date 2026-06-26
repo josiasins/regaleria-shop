@@ -134,6 +134,14 @@ export interface SaleDraftInput {
   internalNote?: string;
 }
 
+export interface SaleAuditUpdateInput {
+  customerName: string;
+  discount: number;
+  paymentMethod: PaymentMethod;
+  internalNote: string;
+  createdAt: string;
+}
+
 export interface Quote {
   id: string;
   number: string;
@@ -224,6 +232,8 @@ export interface Customer {
   email: string;
   note: string;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: Role;
   syncStatus: SyncStatus;
 }
 
@@ -323,6 +333,31 @@ export interface CashShift {
   expectedClosingCash?: number;
   closingNote?: string;
   syncStatus: SyncStatus;
+}
+
+export interface CashShiftAuditUpdateInput {
+  openedAt: string;
+  initialCash: number;
+  note: string;
+  closedAt?: string;
+  declaredClosingCash?: number;
+  closingNote?: string;
+}
+
+export type SalesAuditEntity = "venta" | "turno";
+export type SalesAuditAction = "correccion" | "eliminacion" | "restauracion";
+
+export interface SalesAuditEntry {
+  id: string;
+  entityType: SalesAuditEntity;
+  entityId: string;
+  entityNumber: string;
+  action: SalesAuditAction;
+  reason: string;
+  createdAt: string;
+  performedBy: Role;
+  before?: Sale | CashShift;
+  after?: Sale | CashShift;
 }
 
 export interface SupplierPayment {

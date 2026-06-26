@@ -2,6 +2,35 @@
 
 Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas descartadas.
 
+## 2026-06-26
+
+### Clientes con eliminacion recuperable
+- Decision: permitir que solo el dueño borre clientes de la lista operativa y los vea en una pestaña de Eliminados para poder restaurarlos.
+- Motivo: limpiar clientes duplicados o mal cargados no debe destruir historial ni afectar ventas/presupuestos existentes.
+- Alternativas descartadas: borrado definitivo, porque elimina trazabilidad; permitirlo a todos los roles, porque clientes se reutilizan en ventas y presupuestos.
+
+### Categoria rapida desde alta de producto
+- Decision: permitir crear una categoria nueva desde Alta de producto y guardarla en la lista administrable de categorias.
+- Motivo: durante la carga de mercaderia aparecen rubros nuevos y no conviene cortar el flujo para ir a Configuracion.
+- Alternativas descartadas: obligar a configurar categorias previamente, porque hace lenta la carga; mantener texto libre, porque genera duplicados y reportes sucios.
+
+### Auditoria protegida de ventas y turnos
+- Decision: agregar en Ventas una subvista de Auditoria visible solo para dueño, con contraseña operativa, motivo obligatorio e historial de correcciones, anulaciones y restauraciones.
+- Motivo: las ventas y turnos pueden requerir correcciones reales, pero no deben modificarse sin trazabilidad ni permiso fuerte; cada accion conserva antes/despues, fecha y responsable.
+- Alternativas descartadas: permitir edicion libre desde ventas recientes, porque borra contexto de caja; borrar registros de forma definitiva, porque impide reconstruir errores; permitirlo a administradores, porque la anulacion/restauracion afecta stock y control de caja.
+
+## 2026-06-24
+
+### Marca dorada con caja y cinta
+- Decision: adoptar como marca principal el logo dorado con caja de regalo, cinta superior y palabra `shop`; tomar `public/brand/regaleria-shop-logo_NEW.af` como fuente maestra editable y mantener SVG operativos para app/web.
+- Motivo: comunica regaleria y ecommerce de forma inmediata, se siente mas calido que la propuesta tecnica anterior y funciona para web, comprobantes, packaging y app instalada.
+- Alternativas descartadas: mantener la `R` provisoria, porque era correcta para sistema pero menos expresiva para una tienda de regalos; redibujar el logo a mano con texto de sistema, porque no respetaba la silueta aprobada; usar solo la imagen PNG, porque no escala ni se edita tan bien como SVG.
+
+### Manual de marca
+- Decision: crear `docs/manual-marca.md` como guia operativa de marca.
+- Motivo: cada nueva pantalla, pieza web, email, comprobante o material comercial necesita una referencia clara para sostener coherencia visual y no improvisar decisiones.
+- Alternativas descartadas: dejar solo una nota corta en `docs/marca.md`, porque no alcanza para guiar usos, tono, colores, fotografia, emails y ecommerce.
+
 ## 2026-06-03
 
 ### Una sola plataforma modular

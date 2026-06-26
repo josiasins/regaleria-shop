@@ -41,7 +41,7 @@ import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import type { Customer, ImportProductRow, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleLine, StockMovementType, Supplier } from "./types";
+import type { CashShiftAuditUpdateInput, Customer, ImportProductRow, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
 
 const sections = [
@@ -62,9 +62,9 @@ const sections = [
 
 type Section = (typeof sections)[number]["id"];
 type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" | "historial";
-type SalesPage = "mostrador" | "turnos" | "recientes" | "ayuda";
+type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
 type PurchasePage = "factura" | "precarga" | "recientes" | "cuentas" | "pago";
-type ContactPage = "lista" | "nuevo" | "editar";
+type ContactPage = "lista" | "nuevo" | "editar" | "eliminados";
 type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
 type ExpensePage = "cargar" | "recientes" | "resumen" | "cierre";
@@ -90,6 +90,23 @@ const roleLabels: Record<Role, string> = {
   encargado: "Encargado",
   cajero: "Cajero"
 };
+
+function toDateTimeLocal(iso?: string) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value: string, fallback: string) {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+}
+
+function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "/brand/regaleria-shop-symbol.svg" }: { className?: string; label?: string; src?: string }) {
+  return <img className={className} src={src} alt={label} />;
+}
 
 const allSectionIds = sections.map((section) => section.id);
 
@@ -187,7 +204,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="auth-screen">
         <section className="auth-card">
-          <div className="brand-mark">R</div>
+          <BrandMark />
           <h1>Sistema interno</h1>
           <p>Falta configurar Supabase para activar el ingreso seguro.</p>
         </section>
@@ -199,7 +216,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="auth-screen">
         <section className="auth-card">
-          <div className="brand-mark">R</div>
+          <BrandMark />
           <h1>Sistema interno</h1>
           <p>Verificando acceso...</p>
         </section>
@@ -211,7 +228,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="auth-screen">
         <form className="auth-card" onSubmit={signIn}>
-          <div className="brand-mark">R</div>
+          <BrandMark />
           <span>Regaleria Shop</span>
           <h1>Sistema interno</h1>
           <p>Ingresá con una cuenta autorizada del negocio.</p>
@@ -239,7 +256,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="auth-screen">
         <section className="auth-card">
-          <div className="brand-mark">R</div>
+          <BrandMark />
           <span>Regaleria Shop</span>
           <h1>Cuenta no autorizada</h1>
           <p>El sistema interno solo acepta cuentas habilitadas por el dueño.</p>
@@ -320,11 +337,7 @@ function InternalApp() {
       {isMobileNavOpen && <button className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} aria-label="Cerrar menu" />}
       <aside className={clsx("sidebar", isMobileNavOpen && "open")}>
         <div className="brand-lockup">
-          <div className="brand-mark">R</div>
-          <div>
-            <strong>Regaleria</strong>
-            <span>Sistema interno</span>
-          </div>
+          <BrandMark className="brand-lockup-logo" src="/brand/Regaleria-shop-logo-white-costado.svg" />
           <button className="mobile-menu-close" onClick={() => setIsMobileNavOpen(false)} aria-label="Cerrar menu">
             <MinusCircle size={20} />
           </button>
@@ -507,13 +520,21 @@ function Sales() {
   const customers = useStore((state) => state.customers);
   const sales = useStore((state) => state.sales);
   const cashShifts = useStore((state) => state.cashShifts);
+  const salesAuditEntries = useStore((state) => state.salesAuditEntries);
   const activeRole = useStore((state) => state.activeRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
   const addQuickSale = useStore((state) => state.addQuickSale);
   const addDetailedSale = useStore((state) => state.addDetailedSale);
   const openCashShift = useStore((state) => state.openCashShift);
   const closeCashShift = useStore((state) => state.closeCashShift);
+  const updateSaleWithAudit = useStore((state) => state.updateSaleWithAudit);
+  const deleteSaleWithAudit = useStore((state) => state.deleteSaleWithAudit);
+  const restoreSaleWithAudit = useStore((state) => state.restoreSaleWithAudit);
+  const updateShiftWithAudit = useStore((state) => state.updateShiftWithAudit);
+  const deleteShiftWithAudit = useStore((state) => state.deleteShiftWithAudit);
+  const restoreShiftWithAudit = useStore((state) => state.restoreShiftWithAudit);
   const canDiscount = rolePermissions[activeRole].includes("descuentos");
+  const isOwner = activeRole === "dueno";
   const [salesPage, setSalesPage] = useState<SalesPage>("mostrador");
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
@@ -530,6 +551,26 @@ function Sales() {
   const [detailPayment, setDetailPayment] = useState<PaymentMethod>("efectivo");
   const [detailNote, setDetailNote] = useState("");
   const [detailLines, setDetailLines] = useState<SaleLine[]>([]);
+  const [auditSaleId, setAuditSaleId] = useState(sales[0]?.id ?? "");
+  const [auditShiftId, setAuditShiftId] = useState(cashShifts[0]?.id ?? "");
+  const [saleAuditDraft, setSaleAuditDraft] = useState<SaleAuditUpdateInput>({
+    customerName: "",
+    discount: 0,
+    paymentMethod: "efectivo",
+    internalNote: "",
+    createdAt: ""
+  });
+  const [shiftAuditDraft, setShiftAuditDraft] = useState<CashShiftAuditUpdateInput>({
+    openedAt: "",
+    initialCash: 0,
+    note: "",
+    closedAt: "",
+    declaredClosingCash: 0,
+    closingNote: ""
+  });
+  const [auditPassword, setAuditPassword] = useState("");
+  const [auditReason, setAuditReason] = useState("");
+  const [auditMessage, setAuditMessage] = useState("");
 
   const selected = findProductVariant(products, variantId);
   const activeShift = cashShifts.find((shift) => !shift.closedAt);
@@ -540,6 +581,64 @@ function Sales() {
   const shiftCardSales = shiftSales.filter((sale) => sale.paymentMethod === "tarjeta").reduce((sum, sale) => sum + sale.total, 0);
   const shiftOtherSales = shiftSales.filter((sale) => sale.paymentMethod === "otro").reduce((sum, sale) => sum + sale.total, 0);
   const expectedClosingCash = (displayedShift?.initialCash ?? 0) + shiftCashSales;
+  const activeCustomers = customers.filter((customer) => !customer.deletedAt);
+  const auditSale = sales.find((sale) => sale.id === auditSaleId);
+  const auditShift = cashShifts.find((shift) => shift.id === auditShiftId);
+  const deletedAuditEntries = salesAuditEntries.filter((entry) => entry.action === "eliminacion");
+
+  useEffect(() => {
+    if (!isOwner && salesPage === "auditoria") setSalesPage("mostrador");
+  }, [isOwner, salesPage]);
+  useEffect(() => {
+    if (!sales.some((sale) => sale.id === auditSaleId)) setAuditSaleId(sales[0]?.id ?? "");
+  }, [auditSaleId, sales]);
+  useEffect(() => {
+    if (!cashShifts.some((shift) => shift.id === auditShiftId)) setAuditShiftId(cashShifts[0]?.id ?? "");
+  }, [auditShiftId, cashShifts]);
+  useEffect(() => {
+    if (!auditSale) return;
+    setSaleAuditDraft({
+      customerName: auditSale.customerName ?? "Consumidor final",
+      discount: auditSale.discount,
+      paymentMethod: auditSale.paymentMethod,
+      internalNote: auditSale.internalNote ?? "",
+      createdAt: toDateTimeLocal(auditSale.createdAt)
+    });
+  }, [auditSale?.id]);
+  useEffect(() => {
+    if (!auditShift) return;
+    setShiftAuditDraft({
+      openedAt: toDateTimeLocal(auditShift.openedAt),
+      initialCash: auditShift.initialCash,
+      note: auditShift.note,
+      closedAt: toDateTimeLocal(auditShift.closedAt),
+      declaredClosingCash: auditShift.declaredClosingCash ?? 0,
+      closingNote: auditShift.closingNote ?? ""
+    });
+  }, [auditShift?.id]);
+
+  const finishAuditAction = (ok: boolean, success: string) => {
+    setAuditMessage(ok ? success : "No se pudo completar. Revisa rol, contraseña, motivo y datos.");
+    if (ok) {
+      setAuditPassword("");
+      setAuditReason("");
+    }
+  };
+  const hasAuditFields = () => {
+    if (activeRole !== "dueno") {
+      setAuditMessage("Solo el dueño puede anular, corregir o restaurar.");
+      return false;
+    }
+    if (!auditPassword.trim()) {
+      setAuditMessage("Falta la contraseña de auditoria del dueño.");
+      return false;
+    }
+    if (auditReason.trim().length < 5) {
+      setAuditMessage("Escribi un motivo de al menos 5 caracteres.");
+      return false;
+    }
+    return true;
+  };
   useEffect(() => {
     if (activeShift) setDeclaredClosingCash(activeShift.initialCash + shiftCashSales);
   }, [activeShift?.id, shiftCashSales]);
@@ -573,7 +672,7 @@ function Sales() {
     setDetailLines((current) => mergeLine(current, buildUiSaleLine(detailSelected.product, detailSelected.variant, detailQuantity)));
   };
   const submitDetailedSale = () => {
-    const customerName = resolveCustomerName(customers, customerChoice, newCustomerName);
+    const customerName = resolveCustomerName(activeCustomers, customerChoice, newCustomerName);
     const sale = addDetailedSale({
       shiftId: activeShift?.id ?? "",
       customerName,
@@ -591,10 +690,60 @@ function Sales() {
       setSalesPage("recientes");
     }
   };
+  const saveSaleAudit = () => {
+    if (!auditSale) return;
+    if (!hasAuditFields()) return;
+    finishAuditAction(
+      updateSaleWithAudit(
+        auditSale.id,
+        { ...saleAuditDraft, createdAt: fromDateTimeLocal(saleAuditDraft.createdAt, auditSale.createdAt) },
+        auditPassword,
+        auditReason,
+        activeRole
+      ),
+      "Venta corregida y registrada en auditoria."
+    );
+  };
+  const removeSaleAudit = () => {
+    if (!auditSale) return;
+    if (!hasAuditFields()) return;
+    finishAuditAction(deleteSaleWithAudit(auditSale.id, auditPassword, auditReason, activeRole), "Venta anulada, stock devuelto e historial guardado.");
+  };
+  const saveShiftAudit = () => {
+    if (!auditShift) return;
+    if (!hasAuditFields()) return;
+    finishAuditAction(
+      updateShiftWithAudit(
+        auditShift.id,
+        {
+          ...shiftAuditDraft,
+          openedAt: fromDateTimeLocal(shiftAuditDraft.openedAt, auditShift.openedAt),
+          closedAt: shiftAuditDraft.closedAt ? fromDateTimeLocal(shiftAuditDraft.closedAt, auditShift.closedAt ?? auditShift.openedAt) : undefined
+        },
+        auditPassword,
+        auditReason,
+        activeRole
+      ),
+      "Turno corregido y registrado en auditoria."
+    );
+  };
+  const removeShiftAudit = () => {
+    if (!auditShift) return;
+    if (!hasAuditFields()) return;
+    finishAuditAction(deleteShiftWithAudit(auditShift.id, auditPassword, auditReason, activeRole), "Turno quitado del listado operativo e historial guardado.");
+  };
+  const restoreAuditEntry = (entryId: string, entityType: "venta" | "turno") => {
+    if (!hasAuditFields()) return;
+    const ok = entityType === "venta"
+      ? restoreSaleWithAudit(entryId, auditPassword, auditReason, activeRole)
+      : restoreShiftWithAudit(entryId, auditPassword, auditReason, activeRole);
+    finishAuditAction(ok, entityType === "venta" ? "Venta restaurada y stock aplicado nuevamente." : "Turno restaurado.");
+  };
   const salesTabs: { id: SalesPage; label: string; icon: typeof Receipt }[] = [
     { id: "mostrador", label: "Mostrador", icon: ShoppingCartSimple },
     { id: "turnos", label: "Turnos", icon: Wallet },
     { id: "recientes", label: "Ventas del turno", icon: ClockCounterClockwise },
+    ...(isOwner ? [{ id: "auditoria" as const, label: "Auditoria", icon: PencilSimple }] : []),
     { id: "ayuda", label: "Ayuda", icon: Keyboard }
   ];
 
@@ -668,7 +817,7 @@ function Sales() {
                 Cliente
                 <select value={customerChoice} onChange={(event) => setCustomerChoice(event.target.value)}>
                   <option value="consumidor_final">Consumidor final</option>
-                  {customers.map((customer) => (
+                  {activeCustomers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
                       {customer.name}
                     </option>
@@ -782,6 +931,157 @@ function Sales() {
           </div>
         </div>
       )}
+      {salesPage === "auditoria" && isOwner && (
+        <div className="audit-workspace">
+          <Panel title="Clave y motivo de auditoria">
+            <div className="form-grid three">
+              <label>
+                Contraseña de dueño
+                <input type="password" value={auditPassword} onChange={(event) => setAuditPassword(event.target.value)} placeholder="Requerida para corregir o restaurar" />
+              </label>
+              <label>
+                Motivo
+                <input value={auditReason} onChange={(event) => setAuditReason(event.target.value)} placeholder="Ej: error de carga, control de caja" />
+              </label>
+              <div className="audit-status" role="status">
+                {auditMessage || "Cada accion queda registrada con fecha, rol, antes y despues."}
+              </div>
+            </div>
+          </Panel>
+          <div className="audit-grid">
+            <Panel title="Auditar venta">
+              <div className="form-grid one compact">
+                <label>
+                  Venta
+                  <select value={auditSaleId} onChange={(event) => setAuditSaleId(event.target.value)}>
+                    {sales.map((sale) => (
+                      <option key={sale.id} value={sale.id}>
+                        {sale.receiptNumber} · {sale.customerName ?? "Consumidor final"} · {formatMoney(sale.total)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="form-grid two">
+                  <label>
+                    Cliente
+                    <input value={saleAuditDraft.customerName} onChange={(event) => setSaleAuditDraft((current) => ({ ...current, customerName: event.target.value }))} />
+                  </label>
+                  <label>
+                    Fecha y hora
+                    <input type="datetime-local" value={saleAuditDraft.createdAt} onChange={(event) => setSaleAuditDraft((current) => ({ ...current, createdAt: event.target.value }))} />
+                  </label>
+                </div>
+                <div className="form-grid two">
+                  <label>
+                    Medio de pago
+                    <select value={saleAuditDraft.paymentMethod} onChange={(event) => setSaleAuditDraft((current) => ({ ...current, paymentMethod: event.target.value as PaymentMethod }))}>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </label>
+                  <label>
+                    Descuento
+                    <input type="number" min={0} value={saleAuditDraft.discount} onChange={(event) => setSaleAuditDraft((current) => ({ ...current, discount: Number(event.target.value) }))} />
+                  </label>
+                </div>
+                <label>
+                  Nota interna
+                  <input value={saleAuditDraft.internalNote} onChange={(event) => setSaleAuditDraft((current) => ({ ...current, internalNote: event.target.value }))} />
+                </label>
+                {auditSale && (
+                  <div className="audit-readonly">
+                    <span>{auditSale.lines.map((line) => `${line.name} x${line.quantity}`).join(" · ")}</span>
+                    <strong>Total actual {formatMoney(auditSale.total)}</strong>
+                  </div>
+                )}
+                <div className="audit-actions">
+                  <button className="primary-action" onClick={saveSaleAudit} disabled={!auditSale}>
+                    <CheckCircle size={18} /> Guardar correccion
+                  </button>
+                  <button className="secondary-action danger" onClick={removeSaleAudit} disabled={!auditSale}>
+                    <Trash size={18} /> Anular venta
+                  </button>
+                </div>
+                {auditMessage && <span className="audit-inline-message">{auditMessage}</span>}
+              </div>
+            </Panel>
+            <Panel title="Auditar turno">
+              <div className="form-grid one compact">
+                <label>
+                  Turno
+                  <select value={auditShiftId} onChange={(event) => setAuditShiftId(event.target.value)}>
+                    {cashShifts.map((shift) => (
+                      <option key={shift.id} value={shift.id}>
+                        {shift.number} · {shift.closedAt ? "Cerrado" : "Abierto"} · {formatMoney(shift.initialCash)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="form-grid two">
+                  <label>
+                    Apertura
+                    <input type="datetime-local" value={shiftAuditDraft.openedAt} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, openedAt: event.target.value }))} />
+                  </label>
+                  <label>
+                    Efectivo inicial
+                    <input type="number" min={0} value={shiftAuditDraft.initialCash} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, initialCash: Number(event.target.value) }))} />
+                  </label>
+                </div>
+                <label>
+                  Nota de apertura
+                  <input value={shiftAuditDraft.note} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, note: event.target.value }))} />
+                </label>
+                <div className="form-grid two">
+                  <label>
+                    Cierre
+                    <input type="datetime-local" value={shiftAuditDraft.closedAt} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, closedAt: event.target.value }))} />
+                  </label>
+                  <label>
+                    Efectivo contado
+                    <input type="number" min={0} value={shiftAuditDraft.declaredClosingCash ?? 0} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, declaredClosingCash: Number(event.target.value) }))} />
+                  </label>
+                </div>
+                <label>
+                  Nota de cierre
+                  <input value={shiftAuditDraft.closingNote ?? ""} onChange={(event) => setShiftAuditDraft((current) => ({ ...current, closingNote: event.target.value }))} />
+                </label>
+                <div className="audit-actions">
+                  <button className="primary-action" onClick={saveShiftAudit} disabled={!auditShift}>
+                    <CheckCircle size={18} /> Guardar turno
+                  </button>
+                  <button className="secondary-action danger" onClick={removeShiftAudit} disabled={!auditShift}>
+                    <Trash size={18} /> Borrar turno
+                  </button>
+                </div>
+              </div>
+            </Panel>
+          </div>
+          <Panel title="Historial de auditoria y restauracion">
+            <div className="table audit-table">
+              {salesAuditEntries.map((entry) => (
+                <div className="table-row audit-row" key={entry.id}>
+                  <div>
+                    <strong>{entry.entityNumber} · {entry.entityType} · {entry.action}</strong>
+                    <span>{new Date(entry.createdAt).toLocaleString("es-AR")} · {roleLabels[entry.performedBy]} · {entry.reason}</span>
+                  </div>
+                  <span>{entry.before ? "Con respaldo" : "Sin respaldo"}</span>
+                  <strong>{entry.after ? "Actualizado" : "Archivado"}</strong>
+                  {deletedAuditEntries.some((deleted) => deleted.id === entry.id) ? (
+                    <button className="secondary-action" onClick={() => restoreAuditEntry(entry.id, entry.entityType)}>
+                      <ArrowClockwise size={18} /> Restaurar
+                    </button>
+                  ) : (
+                    <span className="muted-text">Registrado</span>
+                  )}
+                </div>
+              ))}
+              {!salesAuditEntries.length && <div className="empty-lines">Todavia no hay correcciones, anulaciones ni restauraciones registradas.</div>}
+            </div>
+          </Panel>
+        </div>
+      )}
       {salesPage === "ayuda" && (
         <Panel title="Ayuda de mostrador">
           <DataList
@@ -868,6 +1168,7 @@ function Stock() {
   const categories = useStore((state) => state.categories);
   const movements = useStore((state) => state.movements);
   const addProduct = useStore((state) => state.addProduct);
+  const addCategory = useStore((state) => state.addCategory);
   const updateVariant = useStore((state) => state.updateVariant);
   const importProducts = useStore((state) => state.importProducts);
   const adjustStock = useStore((state) => state.adjustStock);
@@ -913,6 +1214,7 @@ function Stock() {
   const [importText, setImportText] = useState("");
   const [importedCount, setImportedCount] = useState(0);
   const [productSaveStatus, setProductSaveStatus] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [newProductImageStatus, setNewProductImageStatus] = useState("");
   const [isUploadingNewProductImages, setIsUploadingNewProductImages] = useState(false);
   const [variantMode, setVariantMode] = useState<"editar" | "crear">("editar");
@@ -956,10 +1258,16 @@ function Stock() {
 
   const submitProduct = async () => {
     if (!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0) return;
+    const resolvedCategory = newProduct.category === "__new" ? newCategoryName.trim() : newProduct.category;
+    if (newProduct.category === "__new" && !resolvedCategory) {
+      setProductSaveStatus("Escribi el nombre de la nueva categoria.");
+      return;
+    }
+    if (resolvedCategory) addCategory(resolvedCategory);
     setProductSaveStatus("Guardando en la nube...");
     const savedProduct = await addProduct({
       name: newProduct.name,
-      category: newProduct.category || "Sin categoria",
+      category: resolvedCategory || "Sin categoria",
       supplier: newProduct.supplier || "Sin proveedor",
       description: newProduct.description,
       publishable: newProduct.publishable,
@@ -983,6 +1291,7 @@ function Stock() {
       return;
     }
     setProductSaveStatus("Producto guardado y sincronizado.");
+    setNewCategoryName("");
     setNewProduct({
       name: "",
       category: "",
@@ -1116,8 +1425,15 @@ function Stock() {
                     {categories.map((category) => (
                       <option key={category} value={category}>{category}</option>
                     ))}
+                    <option value="__new">Agregar nueva categoria</option>
                   </select>
                 </label>
+                {newProduct.category === "__new" && (
+                  <label>
+                    Nueva categoria
+                    <input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="Ej: Marroquineria" />
+                  </label>
+                )}
                 {canSeeSupplier && <label>
                   Proveedor
                   <input value={newProduct.supplier} onChange={(event) => setNewProduct({ ...newProduct, supplier: event.target.value })} placeholder="Proveedor" />
@@ -1646,9 +1962,15 @@ function Customers() {
   const customers = useStore((state) => state.customers);
   const addCustomer = useStore((state) => state.addCustomer);
   const updateCustomer = useStore((state) => state.updateCustomer);
+  const deleteCustomer = useStore((state) => state.deleteCustomer);
+  const restoreCustomer = useStore((state) => state.restoreCustomer);
+  const activeRole = useStore((state) => state.activeRole);
+  const isOwner = activeRole === "dueno";
   const [contactPage, setContactPage] = useState<ContactPage>("lista");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: "", phone: "", email: "", note: "" });
+  const activeCustomers = customers.filter((customer) => !customer.deletedAt);
+  const deletedCustomers = customers.filter((customer) => customer.deletedAt);
 
   const submit = () => {
     if (editingId) updateCustomer(editingId, draft);
@@ -1670,7 +1992,8 @@ function Customers() {
   const tabs: { id: ContactPage; label: string; icon: typeof Users }[] = [
     { id: "lista", label: "Clientes", icon: Users },
     { id: "nuevo", label: "Nuevo cliente", icon: PlusCircle },
-    { id: "editar", label: "Editar cliente", icon: PencilSimple }
+    { id: "editar", label: "Editar cliente", icon: PencilSimple },
+    ...(isOwner ? [{ id: "eliminados" as const, label: "Eliminados", icon: Trash }] : [])
   ];
 
   return (
@@ -1690,7 +2013,7 @@ function Customers() {
         </div>
         {contactPage === "lista" && (
         <Panel title="Clientes">
-          <ContactList contacts={customers} empty="Sin clientes cargados." onEdit={edit} />
+          <ContactList contacts={activeCustomers} empty="Sin clientes cargados." onEdit={edit} onDelete={isOwner ? (customer) => deleteCustomer(customer.id, activeRole) : undefined} />
         </Panel>
         )}
         {contactPage === "nuevo" && (
@@ -1701,6 +2024,11 @@ function Customers() {
         {contactPage === "editar" && (
         <Panel title="Editar cliente">
           {editingId ? <ContactForm draft={draft} setDraft={setDraft} primaryLabel="Guardar cliente" onSubmit={submit} /> : <div className="empty-lines">Selecciona un cliente desde la lista para editarlo.</div>}
+        </Panel>
+        )}
+        {contactPage === "eliminados" && isOwner && (
+        <Panel title="Clientes eliminados">
+          <ContactList contacts={deletedCustomers} empty="No hay clientes eliminados." onEdit={edit} restoreLabel="Restaurar" onRestore={(customer) => restoreCustomer(customer.id, activeRole)} />
         </Panel>
         )}
       </div>
@@ -1787,16 +2115,22 @@ function Quotes() {
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
   const [quantity, setQuantity] = useState(1);
   const [lines, setLines] = useState<SaleLine[]>([]);
+  const activeCustomers = customers.filter((customer) => !customer.deletedAt);
   const selected = findProductVariant(products, variantId);
+  useEffect(() => {
+    if (customerChoice !== "nuevo" && !activeCustomers.some((customer) => customer.id === customerChoice)) {
+      setCustomerChoice(activeCustomers[0]?.id ?? "nuevo");
+    }
+  }, [activeCustomers, customerChoice]);
   const addLine = () => {
     if (!selected || quantity < 1) return;
     setLines((current) => mergeLine(current, buildUiSaleLine(selected.product, selected.variant, quantity)));
   };
   const submitQuote = () => {
-    const customerName = resolveCustomerName(customers, customerChoice, newCustomerName);
+    const customerName = resolveCustomerName(activeCustomers, customerChoice, newCustomerName);
     const quote = addQuote({ customerName, lines, internalNote: quoteNote });
     if (quote) {
-      setCustomerChoice(customers[0]?.id ?? "nuevo");
+      setCustomerChoice(activeCustomers[0]?.id ?? "nuevo");
       setNewCustomerName("");
       setQuoteNote("");
       setLines([]);
@@ -1828,7 +2162,7 @@ function Quotes() {
             <label>
               Cliente
               <select value={customerChoice} onChange={(event) => setCustomerChoice(event.target.value)}>
-                {customers.map((customer) => (
+                {activeCustomers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name}
                   </option>
@@ -1868,7 +2202,7 @@ function Quotes() {
               <span>Total presupuestado</span>
               <strong>{formatMoney(saleLineTotal(lines))}</strong>
             </div>
-            <button className="primary-action" onClick={submitQuote} disabled={!resolveCustomerName(customers, customerChoice, newCustomerName).trim() || !lines.length}>
+            <button className="primary-action" onClick={submitQuote} disabled={!resolveCustomerName(activeCustomers, customerChoice, newCustomerName).trim() || !lines.length}>
               <FileText size={19} /> Crear presupuesto
             </button>
           </div>
@@ -2433,10 +2767,10 @@ function System() {
           </div>
           <div className="brand-concepts-panel">
             <div>
-              <strong>Propuestas de marca</strong>
-              <span>Cinco caminos visuales. La opción 1, cinta formando una R, queda como dirección provisional.</span>
+              <strong>Marca elegida</strong>
+              <span>Fuente maestra: public/brand/regaleria-shop-logo_NEW.af. Exportacion web: public/brand/regaleria-shop-logo.svg.</span>
             </div>
-            <img src="/brand/logo-concepts.png" alt="Cinco propuestas de logo para Regaleria Shop" />
+            <img src="/brand/regaleria-shop-logo.svg" alt="Logo Regaleria Shop" />
           </div>
         </Panel>
         )}
@@ -2581,7 +2915,7 @@ function PublicShop() {
           setSelectedProductId(null);
           setSelectedCategory("Todos");
         }}>
-          <span className="store-brand-mark">R</span>
+          <BrandMark className="store-brand-mark" />
           <span><strong>Regaleria</strong><small>Shop</small></span>
         </button>
         <label className="store-search">
@@ -2769,7 +3103,7 @@ function PublicShop() {
         </section>
       )}
       <footer className="store-footer">
-        <div className="store-brand"><span className="store-brand-mark">R</span><span><strong>Regaleria</strong><small>Shop</small></span></div>
+        <div className="store-brand"><BrandMark className="store-brand-mark" /><span><strong>Regaleria</strong><small>Shop</small></span></div>
         <p>Regalos, deco y accesorios seleccionados con cariño.</p>
         <span><EnvelopeSimple size={17} /> Atención por email y WhatsApp</span>
       </footer>
@@ -2841,6 +3175,8 @@ function SeoGuidance({
 function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Product; onEdit: () => void; viewMode: "grid" | "list"; showSupplier: boolean }) {
   const [imageIndex, setImageIndex] = useState(0);
   const totalStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
+  const prices = product.variants.map((variant) => variant.price).filter((price) => price > 0);
+  const priceFrom = prices.length ? Math.min(...prices) : 0;
   const gallery = product.imageUrls?.length ? product.imageUrls : [product.imageUrl];
 
   return (
@@ -2859,6 +3195,7 @@ function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Pro
         <div className="catalog-title-row">
           <div>
             <strong>{product.name}</strong>
+            <span className="catalog-price">{priceFrom ? formatMoney(priceFrom) : "Sin precio"}</span>
             <p>{product.description}</p>
           </div>
           <button className="secondary-action compact-button" onClick={onEdit}>
@@ -3173,7 +3510,21 @@ function ContactForm({
   );
 }
 
-function ContactList<T extends Customer | Supplier>({ contacts, empty, onEdit }: { contacts: T[]; empty: string; onEdit: (contact: T) => void }) {
+function ContactList<T extends Customer | Supplier>({
+  contacts,
+  empty,
+  onEdit,
+  onDelete,
+  onRestore,
+  restoreLabel = "Restaurar"
+}: {
+  contacts: T[];
+  empty: string;
+  onEdit: (contact: T) => void;
+  onDelete?: (contact: T) => void;
+  onRestore?: (contact: T) => void;
+  restoreLabel?: string;
+}) {
   if (!contacts.length) return <div className="empty-lines">{empty}</div>;
   return (
     <div className="table contact-list">
@@ -3184,9 +3535,22 @@ function ContactList<T extends Customer | Supplier>({ contacts, empty, onEdit }:
             <span>{[contact.phone, contact.email, contact.note].filter(Boolean).join(" · ") || "Sin datos extra"}</span>
           </div>
           <Status status={contact.syncStatus} />
-          <button className="secondary-action" onClick={() => onEdit(contact)}>
-            Editar
-          </button>
+          <div className="contact-actions">
+            {onRestore ? (
+              <button className="secondary-action" onClick={() => onRestore(contact)}>
+                <ArrowClockwise size={17} /> {restoreLabel}
+              </button>
+            ) : (
+              <button className="secondary-action" onClick={() => onEdit(contact)}>
+                <PencilSimple size={17} /> Editar
+              </button>
+            )}
+            {onDelete && (
+              <button className="secondary-action danger" onClick={() => onDelete(contact)}>
+                <Trash size={17} /> Borrar
+              </button>
+            )}
+          </div>
         </div>
       ))}
     </div>
