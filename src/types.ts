@@ -187,8 +187,12 @@ export interface Expense {
   vendor: string;
   note: string;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: Role;
   syncStatus: SyncStatus;
 }
+
+export type ExpenseDraftInput = Pick<Expense, "category" | "amount" | "vendor" | "note">;
 
 export type PurchaseDocumentType = "factura" | "remito" | "ticket" | "otro";
 
@@ -251,6 +255,8 @@ export interface Supplier {
   email: string;
   note: string;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: Role;
   syncStatus: SyncStatus;
 }
 
@@ -358,6 +364,22 @@ export interface SalesAuditEntry {
   performedBy: Role;
   before?: Sale | CashShift;
   after?: Sale | CashShift;
+}
+
+export type OperationAuditEntity = "gasto" | "proveedor";
+export type OperationAuditAction = "creacion" | "correccion" | "eliminacion" | "restauracion";
+
+export interface OperationAuditEntry {
+  id: string;
+  entityType: OperationAuditEntity;
+  entityId: string;
+  entityName: string;
+  action: OperationAuditAction;
+  reason: string;
+  createdAt: string;
+  performedBy: Role;
+  before?: Expense | Supplier;
+  after?: Expense | Supplier;
 }
 
 export interface SupplierPayment {

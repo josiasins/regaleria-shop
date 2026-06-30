@@ -434,6 +434,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Fecha: 2026-06-06.
 - Decision: configurar directamente en Render CSP, `X-Frame-Options`, HSTS, `X-Content-Type-Options`, `Permissions-Policy` y `Referrer-Policy`.
 - Motivo: Render no aplico todas las reglas declaradas en `_headers`; la configuracion del hosting permite verificar que las cabeceras lleguen realmente al navegador.
+
+### Baja logica e historial para gastos y proveedores
+- Fecha: 2026-06-30.
+- Decision: permitir editar gastos recientes, borrar/restaurar gastos y borrar/restaurar proveedores con historial operativo.
+- Motivo: en la operacion real puede haber errores de carga o proveedores que dejan de usarse, pero esos cambios no deben desaparecer sin trazabilidad.
+- Alcance: gastos y proveedores no se eliminan fisicamente; quedan marcados como eliminados, pendientes de sincronizacion y visibles en una vista de eliminados/historial.
+- Permisos: gastos pueden ser gestionados por roles operativos autorizados; baja/restauracion de proveedores queda limitada a dueño y administrador.
+- Alternativas descartadas: borrado definitivo desde la lista principal, porque impediria auditar correcciones y restaurar datos cargados por error.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

@@ -11,10 +11,12 @@ import type {
   Customer,
   CustomerDraftInput,
   Expense,
+  ExpenseDraftInput,
   ImportProductRow,
   NewProductInput,
   OnlineOrder,
   OnlineOrderDraftInput,
+  OperationAuditEntry,
   PaymentMethod,
   Product,
   ProductUpdateInput,
@@ -58,6 +60,7 @@ interface AppState {
   supplierPayments: SupplierPayment[];
   emailMessages: EmailMessage[];
   salesAuditEntries: SalesAuditEntry[];
+  operationAuditEntries: OperationAuditEntry[];
   businessProfile: BusinessProfile;
   categories: string[];
   rolePermissions: RolePermissions;
@@ -78,11 +81,16 @@ interface AppState {
   restoreCustomer: (id: string, requestedBy: Role) => boolean;
   addSupplier: (input: SupplierDraftInput) => Supplier | null;
   updateSupplier: (id: string, input: SupplierDraftInput) => void;
+  deleteSupplier: (id: string, requestedBy: Role) => boolean;
+  restoreSupplier: (id: string, requestedBy: Role) => boolean;
   adjustStock: (input: StockAdjustmentInput) => StockMovement | null;
   addQuickSale: (variantId: string, quantity: number, paymentMethod: PaymentMethod, shiftId: string, discount?: number) => Sale | null;
   addDetailedSale: (input: SaleDraftInput & { shiftId: string }) => Sale | null;
   addQuote: (input: QuoteDraftInput) => Quote | null;
-  addExpense: (expense: Pick<Expense, "category" | "amount" | "vendor" | "note">) => void;
+  addExpense: (expense: ExpenseDraftInput) => void;
+  updateExpense: (id: string, expense: ExpenseDraftInput, requestedBy: Role) => boolean;
+  deleteExpense: (id: string, requestedBy: Role) => boolean;
+  restoreExpense: (id: string, requestedBy: Role) => boolean;
   addPurchaseReceipt: (input: PurchaseReceiptDraftInput) => PurchaseReceipt | null;
   closeCashDay: (note: string) => CashClosure;
   openCashShift: (initialCash: number, openedBy: Role, note: string) => CashShift | null;
@@ -207,6 +215,23 @@ function makeAuditEntry(input: Omit<SalesAuditEntry, "id" | "createdAt">): Sales
   };
 }
 
+function makeOperationAuditEntry(input: Omit<OperationAuditEntry, "id" | "createdAt">): OperationAuditEntry {
+  return {
+    id: `local_opaudit_${crypto.randomUUID()}`,
+    createdAt: new Date().toISOString(),
+    ...input,
+    reason: input.reason.trim()
+  };
+}
+
+function canManageOperationalRecords(requestedBy: Role) {
+  return requestedBy === "dueno" || requestedBy === "administrador" || requestedBy === "encargado";
+}
+
+function canDeleteSupplier(requestedBy: Role) {
+  return requestedBy === "dueno" || requestedBy === "administrador";
+}
+
 function initialDataState() {
   return {
     products: structuredClone(products),
@@ -224,6 +249,7 @@ function initialDataState() {
     supplierPayments: structuredClone(supplierPayments),
     emailMessages: [],
     salesAuditEntries: [],
+    operationAuditEntries: [],
     businessProfile: structuredClone(businessProfile),
     categories: structuredClone(categories),
     rolePermissions: structuredClone(rolePermissions),
@@ -537,25 +563,88 @@ export const useStore = create<AppState>((set, get) => ({
   addSupplier: (input) => {
     const supplier = makeSupplier(input);
     if (!supplier) return null;
-    set((state) => ({ suppliers: [supplier, ...state.suppliers] }));
+    const entry = makeOperationAuditEntry({
+      entityType: "proveedor",
+      entityId: supplier.id,
+      entityName: supplier.name,
+      action: "creacion",
+      reason: "Alta manual de proveedor",
+      performedBy: get().activeRole,
+      after: supplier
+    });
+    set((state) => ({ suppliers: [supplier, ...state.suppliers], operationAuditEntries: [entry, ...state.operationAuditEntries] }));
     return supplier;
   },
   updateSupplier: (id, input) => {
     if (!input.name.trim()) return;
+    const current = get().suppliers.find((supplier) => supplier.id === id);
+    if (!current) return;
+    const updatedSupplier: Supplier = {
+      ...current,
+      name: input.name.trim(),
+      phone: input.phone.trim(),
+      email: input.email.trim(),
+      note: input.note.trim(),
+      syncStatus: "pendiente"
+    };
+    const entry = makeOperationAuditEntry({
+      entityType: "proveedor",
+      entityId: id,
+      entityName: updatedSupplier.name,
+      action: "correccion",
+      reason: "Edicion de proveedor",
+      performedBy: get().activeRole,
+      before: current,
+      after: updatedSupplier
+    });
     set((state) => ({
       suppliers: state.suppliers.map((supplier) =>
-        supplier.id === id
-          ? {
-              ...supplier,
-              name: input.name.trim(),
-              phone: input.phone.trim(),
-              email: input.email.trim(),
-              note: input.note.trim(),
-              syncStatus: "pendiente"
-            }
-          : supplier
-      )
+        supplier.id === id ? updatedSupplier : supplier
+      ),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
+  },
+  deleteSupplier: (id, requestedBy) => {
+    if (!canDeleteSupplier(requestedBy)) return false;
+    const supplier = get().suppliers.find((item) => item.id === id && !item.deletedAt);
+    if (!supplier) return false;
+    const deletedSupplier: Supplier = { ...supplier, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" };
+    const entry = makeOperationAuditEntry({
+      entityType: "proveedor",
+      entityId: supplier.id,
+      entityName: supplier.name,
+      action: "eliminacion",
+      reason: "Baja de proveedor",
+      performedBy: requestedBy,
+      before: supplier,
+      after: deletedSupplier
+    });
+    set((state) => ({
+      suppliers: state.suppliers.map((item) => (item.id === id ? deletedSupplier : item)),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    return true;
+  },
+  restoreSupplier: (id, requestedBy) => {
+    if (!canDeleteSupplier(requestedBy)) return false;
+    const supplier = get().suppliers.find((item) => item.id === id && item.deletedAt);
+    if (!supplier) return false;
+    const restoredSupplier: Supplier = { ...supplier, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
+    const entry = makeOperationAuditEntry({
+      entityType: "proveedor",
+      entityId: supplier.id,
+      entityName: supplier.name,
+      action: "restauracion",
+      reason: "Restauracion de proveedor",
+      performedBy: requestedBy,
+      before: supplier,
+      after: restoredSupplier
+    });
+    set((state) => ({
+      suppliers: state.suppliers.map((item) => (item.id === id ? restoredSupplier : item)),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    return true;
   },
   adjustStock: (input) => {
     const found = findVariant(get().products, input.variantId);
@@ -696,13 +785,96 @@ export const useStore = create<AppState>((set, get) => ({
     return quote;
   },
   addExpense: (expense) => {
+    if (expense.amount <= 0) return;
     const newExpense: Expense = {
       id: `local_exp_${crypto.randomUUID()}`,
-      ...expense,
+      category: expense.category.trim() || "Otro",
+      amount: money(expense.amount),
+      vendor: expense.vendor.trim(),
+      note: expense.note.trim(),
       createdAt: new Date().toISOString(),
       syncStatus: "pendiente"
     };
-    set((state) => ({ expenses: [newExpense, ...state.expenses] }));
+    const entry = makeOperationAuditEntry({
+      entityType: "gasto",
+      entityId: newExpense.id,
+      entityName: newExpense.category,
+      action: "creacion",
+      reason: "Carga manual de gasto",
+      performedBy: get().activeRole,
+      after: newExpense
+    });
+    set((state) => ({ expenses: [newExpense, ...state.expenses], operationAuditEntries: [entry, ...state.operationAuditEntries] }));
+  },
+  updateExpense: (id, expense, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy) || expense.amount <= 0) return false;
+    const current = get().expenses.find((item) => item.id === id && !item.deletedAt);
+    if (!current) return false;
+    const updatedExpense: Expense = {
+      ...current,
+      category: expense.category.trim() || "Otro",
+      amount: money(expense.amount),
+      vendor: expense.vendor.trim(),
+      note: expense.note.trim(),
+      syncStatus: "pendiente"
+    };
+    const entry = makeOperationAuditEntry({
+      entityType: "gasto",
+      entityId: current.id,
+      entityName: updatedExpense.category,
+      action: "correccion",
+      reason: "Edicion de gasto",
+      performedBy: requestedBy,
+      before: current,
+      after: updatedExpense
+    });
+    set((state) => ({
+      expenses: state.expenses.map((item) => (item.id === id ? updatedExpense : item)),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    return true;
+  },
+  deleteExpense: (id, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy)) return false;
+    const expense = get().expenses.find((item) => item.id === id && !item.deletedAt);
+    if (!expense) return false;
+    const deletedExpense: Expense = { ...expense, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" };
+    const entry = makeOperationAuditEntry({
+      entityType: "gasto",
+      entityId: expense.id,
+      entityName: expense.category,
+      action: "eliminacion",
+      reason: "Baja de gasto",
+      performedBy: requestedBy,
+      before: expense,
+      after: deletedExpense
+    });
+    set((state) => ({
+      expenses: state.expenses.map((item) => (item.id === id ? deletedExpense : item)),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    return true;
+  },
+  restoreExpense: (id, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy)) return false;
+    const expense = get().expenses.find((item) => item.id === id && item.deletedAt);
+    if (!expense) return false;
+    const restoredExpense: Expense = { ...expense, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
+    const entry = makeOperationAuditEntry({
+      entityType: "gasto",
+      entityId: expense.id,
+      entityName: expense.category,
+      action: "restauracion",
+      reason: "Restauracion de gasto",
+      performedBy: requestedBy,
+      before: expense,
+      after: restoredExpense
+    });
+    set((state) => ({
+      expenses: state.expenses.map((item) => (item.id === id ? restoredExpense : item)),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    return true;
   },
   addPurchaseReceipt: (input) => {
     const cleanLines = input.lines.filter((line) => line.quantity > 0 && line.unitCost >= 0);
@@ -765,7 +937,7 @@ export const useStore = create<AppState>((set, get) => ({
   closeCashDay: (note) => {
     const today = new Date().toISOString().slice(0, 10);
     const todaySales = get().sales.filter((sale) => sale.createdAt.slice(0, 10) === today);
-    const todayExpenses = get().expenses.filter((expense) => expense.createdAt.slice(0, 10) === today);
+    const todayExpenses = get().expenses.filter((expense) => !expense.deletedAt && expense.createdAt.slice(0, 10) === today);
     const totalByPayment = (method: PaymentMethod) => money(todaySales.filter((sale) => sale.paymentMethod === method).reduce((sum, sale) => sum + sale.total, 0));
     const closure: CashClosure = {
       id: `local_close_${crypto.randomUUID()}`,

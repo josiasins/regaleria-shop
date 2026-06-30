@@ -184,6 +184,22 @@
 3. Compras muestra total comprado, total pagado y saldo.
 4. Cada pago queda pendiente de sincronizacion.
 
+## Correccion y baja de gastos
+
+1. Gastos recientes muestra los registros activos.
+2. Un usuario autorizado puede editar monto, categoria, proveedor o nota.
+3. Cada edicion queda registrada en Historial con fecha, rol y motivo.
+4. Al borrar un gasto, el registro pasa a Eliminados y deja de afectar paneles, reportes y cierre de caja.
+5. Desde Eliminados se puede restaurar el gasto y la restauracion queda auditada.
+
+## Baja y restauracion de proveedores
+
+1. Proveedores muestra solo proveedores activos.
+2. Dueño y administrador pueden borrar un proveedor.
+3. El proveedor borrado pasa a Eliminados y deja de aparecer como opcion activa en compras y catalogo.
+4. Desde Eliminados se puede restaurar.
+5. Cada baja y restauracion queda registrada en Historial.
+
 ## Reportes
 
 1. Se elige periodo: 7, 30 o 90 dias.

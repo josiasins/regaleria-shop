@@ -201,7 +201,8 @@ describe("Regaleria app", () => {
     expect(screen.getAllByText(/Mayorista regalos/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /Stock/i }));
-    await user.click(screen.getByRole("button", { name: "Historial" }));
+    const stockHistoryButtons = screen.getAllByRole("button", { name: "Historial" });
+    await user.click(stockHistoryButtons[stockHistoryButtons.length - 1]);
     expect(screen.getByText(/COM-000001/i)).toBeInTheDocument();
   });
 
@@ -243,6 +244,29 @@ describe("Regaleria app", () => {
     expect(screen.getByText("Cliente a restaurar")).toBeInTheDocument();
   });
 
+  it("lets administrators delete and restore suppliers with history", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.click(screen.getByRole("button", { name: /Proveedores/i }));
+    await user.click(screen.getByRole("button", { name: "Nuevo proveedor" }));
+    await user.type(screen.getByLabelText("Nombre"), "Proveedor a borrar");
+    await user.click(screen.getByRole("button", { name: /Crear proveedor/i }));
+
+    await user.click(screen.getAllByRole("button", { name: /Borrar/i })[0]);
+    expect(screen.queryByText("Proveedor a borrar")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Eliminados" }));
+    expect(screen.getByText("Proveedor a borrar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Restaurar/i }));
+    expect(screen.getByText("No hay proveedores eliminados.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Historial" }));
+    expect(screen.getByText(/Baja de proveedor/i)).toBeInTheDocument();
+    expect(screen.getByText(/Restauracion de proveedor/i)).toBeInTheDocument();
+  });
+
   it("can edit catalog product details", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -252,7 +276,7 @@ describe("Regaleria app", () => {
     expect(screen.getByRole("button", { name: /Lista/i })).toBeInTheDocument();
     expect(screen.queryByLabelText("Producto")).not.toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
     expect(screen.getByText("Editar producto")).toBeInTheDocument();
     const productInputs = screen.getAllByLabelText("Producto");
     await user.clear(productInputs[0]);
@@ -269,7 +293,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Catalogo/i }));
-    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
 
     expect(screen.getByRole("button", { name: "Eliminar" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Eliminar" }));
@@ -286,7 +310,7 @@ describe("Regaleria app", () => {
     const { unmount } = render(<App />);
     await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
     await user.click(screen.getByRole("button", { name: /Catalogo/i }));
-    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
     expect(screen.getByRole("button", { name: "Eliminar" })).toBeInTheDocument();
 
     unmount();
@@ -294,7 +318,7 @@ describe("Regaleria app", () => {
     render(<App />);
     await user.selectOptions(screen.getByLabelText("Rol activo"), "encargado");
     await user.click(screen.getByRole("button", { name: /Catalogo/i }));
-    await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
     expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
   });
 
@@ -378,6 +402,41 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/elemento\(s\) en cola/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Sincronizar demo/i }));
     expect(screen.getByText("0 elemento(s) en cola.")).toBeInTheDocument();
+  });
+
+  it("can edit, delete and restore recent expenses with history", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Gastos/i }));
+    await user.clear(screen.getByLabelText("Monto"));
+    await user.type(screen.getByLabelText("Monto"), "4200");
+    await user.type(screen.getByLabelText("Proveedor"), "Flete moto");
+    await user.type(screen.getByLabelText("Nota"), "Envio centro");
+    await user.click(screen.getByRole("button", { name: /Guardar gasto/i }));
+
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
+    await user.clear(screen.getByLabelText("Monto"));
+    await user.type(screen.getByLabelText("Monto"), "4500");
+    await user.clear(screen.getByLabelText("Nota"));
+    await user.type(screen.getByLabelText("Nota"), "Envio centro corregido");
+    await user.click(screen.getByRole("button", { name: /Guardar gasto/i }));
+
+    expect(screen.getByText(/4\.500/)).toBeInTheDocument();
+    expect(screen.getByText(/Envio centro corregido/i)).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: /Borrar/i })[0]);
+    expect(screen.queryByText(/Envio centro corregido/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Eliminados" }));
+    expect(screen.getByText(/Envio centro corregido/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Restaurar/i }));
+
+    const expenseHistoryButtons = screen.getAllByRole("button", { name: "Historial" });
+    await user.click(expenseHistoryButtons[expenseHistoryButtons.length - 1]);
+    expect(screen.getByText(/Edicion de gasto/i)).toBeInTheDocument();
+    expect(screen.getByText(/Baja de gasto/i)).toBeInTheDocument();
+    expect(screen.getByText(/Restauracion de gasto/i)).toBeInTheDocument();
   });
 
   it("shows configuration for roles and operational settings", async () => {

@@ -41,7 +41,7 @@ import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import type { CashShiftAuditUpdateInput, Customer, ImportProductRow, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
+import type { CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
 
 const sections = [
@@ -64,10 +64,10 @@ type Section = (typeof sections)[number]["id"];
 type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" | "historial";
 type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
 type PurchasePage = "factura" | "precarga" | "recientes" | "cuentas" | "pago";
-type ContactPage = "lista" | "nuevo" | "editar" | "eliminados";
+type ContactPage = "lista" | "nuevo" | "editar" | "eliminados" | "historial";
 type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
-type ExpensePage = "cargar" | "recientes" | "resumen" | "cierre";
+type ExpensePage = "cargar" | "recientes" | "editar" | "eliminados" | "historial" | "resumen" | "cierre";
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
 
 const internalOwnerEmails = ["josias.insfran66@gmail.com", "iris.traghetti66@gmail.com"];
@@ -425,12 +425,12 @@ function Header({ section, onNavigate, allowedSections }: { section: Section; on
       ...state.sales,
       ...state.quotes,
       ...state.transfers,
-      ...state.expenses,
+      ...state.expenses.filter((expense) => !expense.deletedAt),
       ...state.movements,
       ...state.onlineOrders,
       ...state.purchaseReceipts,
       ...state.customers,
-      ...state.suppliers,
+      ...state.suppliers.filter((supplier) => !supplier.deletedAt),
       ...state.cashShifts
     ].filter((item) => item.syncStatus !== "sincronizado").length
   );
@@ -444,7 +444,7 @@ function Header({ section, onNavigate, allowedSections }: { section: Section; on
     ? [
         ...products.map((product) => ({ label: product.name, meta: `${product.category} · ${product.supplier}`, section: "catalogo" as Section })),
         ...customers.map((customer) => ({ label: customer.name, meta: "Cliente", section: "clientes" as Section })),
-        ...suppliers.map((supplier) => ({ label: supplier.name, meta: "Proveedor", section: "proveedores" as Section })),
+        ...suppliers.filter((supplier) => !supplier.deletedAt).map((supplier) => ({ label: supplier.name, meta: "Proveedor", section: "proveedores" as Section })),
         ...sales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section }))
       ]
         .filter((item) => allowedSections.includes(item.section))
@@ -488,7 +488,7 @@ function Dashboard() {
   const { sales, expenses, products, transfers, onlineOrders, activeRole } = useStore();
   const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalMargin = sales.reduce((sum, sale) => sum + sale.margin, 0);
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalExpenses = expenses.filter((expense) => !expense.deletedAt).reduce((sum, expense) => sum + expense.amount, 0);
   const lowStock = products.flatMap((product) => product.variants.filter((variant) => variant.stock <= variant.lowStockAt).map((variant) => `${product.name} (${variant.name})`));
   const pendingTransfers = transfers.filter((transfer) => transfer.status === "pendiente");
 
@@ -1672,7 +1672,7 @@ function Stock() {
 
 function Purchases() {
   const products = useStore((state) => state.products);
-  const suppliers = useStore((state) => state.suppliers);
+  const suppliers = useStore((state) => state.suppliers).filter((supplier) => !supplier.deletedAt);
   const purchaseReceipts = useStore((state) => state.purchaseReceipts);
   const supplierPayments = useStore((state) => state.supplierPayments);
   const addPurchaseReceipt = useStore((state) => state.addPurchaseReceipt);
@@ -2046,9 +2046,17 @@ function Suppliers() {
   const suppliers = useStore((state) => state.suppliers);
   const addSupplier = useStore((state) => state.addSupplier);
   const updateSupplier = useStore((state) => state.updateSupplier);
+  const deleteSupplier = useStore((state) => state.deleteSupplier);
+  const restoreSupplier = useStore((state) => state.restoreSupplier);
+  const operationAuditEntries = useStore((state) => state.operationAuditEntries);
+  const activeRole = useStore((state) => state.activeRole);
+  const canDelete = activeRole === "dueno" || activeRole === "administrador";
   const [contactPage, setContactPage] = useState<ContactPage>("lista");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: "", phone: "", email: "", note: "" });
+  const activeSuppliers = suppliers.filter((supplier) => !supplier.deletedAt);
+  const deletedSuppliers = suppliers.filter((supplier) => supplier.deletedAt);
+  const supplierHistory = operationAuditEntries.filter((entry) => entry.entityType === "proveedor");
 
   const submit = () => {
     if (editingId) updateSupplier(editingId, draft);
@@ -2070,7 +2078,9 @@ function Suppliers() {
   const tabs: { id: ContactPage; label: string; icon: typeof Users }[] = [
     { id: "lista", label: "Proveedores", icon: Truck },
     { id: "nuevo", label: "Nuevo proveedor", icon: PlusCircle },
-    { id: "editar", label: "Editar proveedor", icon: PencilSimple }
+    { id: "editar", label: "Editar proveedor", icon: PencilSimple },
+    ...(canDelete ? [{ id: "eliminados" as const, label: "Eliminados", icon: Trash }] : []),
+    { id: "historial", label: "Historial", icon: ClockCounterClockwise }
   ];
 
   return (
@@ -2090,7 +2100,7 @@ function Suppliers() {
         </div>
         {contactPage === "lista" && (
         <Panel title="Proveedores">
-          <ContactList contacts={suppliers} empty="Sin proveedores cargados." onEdit={edit} />
+          <ContactList contacts={activeSuppliers} empty="Sin proveedores cargados." onEdit={edit} onDelete={canDelete ? (supplier) => deleteSupplier(supplier.id, activeRole) : undefined} />
         </Panel>
         )}
         {contactPage === "nuevo" && (
@@ -2101,6 +2111,16 @@ function Suppliers() {
         {contactPage === "editar" && (
         <Panel title="Editar proveedor">
           {editingId ? <ContactForm draft={draft} setDraft={setDraft} primaryLabel="Guardar proveedor" onSubmit={submit} /> : <div className="empty-lines">Selecciona un proveedor desde la lista para editarlo.</div>}
+        </Panel>
+        )}
+        {contactPage === "eliminados" && canDelete && (
+        <Panel title="Proveedores eliminados">
+          <ContactList contacts={deletedSuppliers} empty="No hay proveedores eliminados." onEdit={edit} restoreLabel="Restaurar" onRestore={(supplier) => restoreSupplier(supplier.id, activeRole)} />
+        </Panel>
+        )}
+        {contactPage === "historial" && (
+        <Panel title="Historial de proveedores">
+          <OperationAuditList entries={supplierHistory} />
         </Panel>
         )}
       </div>
@@ -2357,8 +2377,16 @@ function Expenses() {
   const expenses = useStore((state) => state.expenses);
   const cashClosures = useStore((state) => state.cashClosures);
   const addExpense = useStore((state) => state.addExpense);
+  const updateExpense = useStore((state) => state.updateExpense);
+  const deleteExpense = useStore((state) => state.deleteExpense);
+  const restoreExpense = useStore((state) => state.restoreExpense);
   const closeCashDay = useStore((state) => state.closeCashDay);
-  const grouped = expenses.reduce<Record<string, number>>((acc, expense) => {
+  const operationAuditEntries = useStore((state) => state.operationAuditEntries);
+  const activeRole = useStore((state) => state.activeRole);
+  const activeExpenses = expenses.filter((expense) => !expense.deletedAt);
+  const deletedExpenses = expenses.filter((expense) => expense.deletedAt);
+  const expenseHistory = operationAuditEntries.filter((entry) => entry.entityType === "gasto");
+  const grouped = activeExpenses.reduce<Record<string, number>>((acc, expense) => {
     acc[expense.category] = (acc[expense.category] ?? 0) + expense.amount;
     return acc;
   }, {});
@@ -2368,12 +2396,35 @@ function Expenses() {
   const [note, setNote] = useState("");
   const [closureNote, setClosureNote] = useState("");
   const [expensePage, setExpensePage] = useState<ExpensePage>("cargar");
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const submitExpense = () => {
-    addExpense({ amount, category, vendor, note });
+    if (editingExpenseId) {
+      updateExpense(editingExpenseId, { amount, category, vendor, note }, activeRole);
+    } else {
+      addExpense({ amount, category, vendor, note });
+    }
+    setEditingExpenseId(null);
     setAmount(0);
+    setCategory("Reposicion");
     setVendor("");
     setNote("");
     setExpensePage("recientes");
+  };
+  const editExpense = (expense: Expense) => {
+    setEditingExpenseId(expense.id);
+    setAmount(expense.amount);
+    setCategory(expense.category);
+    setVendor(expense.vendor);
+    setNote(expense.note);
+    setExpensePage("editar");
+  };
+  const startNewExpense = () => {
+    setEditingExpenseId(null);
+    setAmount(0);
+    setCategory("Reposicion");
+    setVendor("");
+    setNote("");
+    setExpensePage("cargar");
   };
   const submitClosure = () => {
     closeCashDay(closureNote);
@@ -2383,6 +2434,9 @@ function Expenses() {
   const tabs: { id: ExpensePage; label: string; icon: typeof Wallet }[] = [
     { id: "cargar", label: "Cargar gasto", icon: PlusCircle },
     { id: "recientes", label: "Gastos recientes", icon: Wallet },
+    { id: "editar", label: "Editar gasto", icon: PencilSimple },
+    { id: "eliminados", label: "Eliminados", icon: Trash },
+    { id: "historial", label: "Historial", icon: ClockCounterClockwise },
     { id: "resumen", label: "Resumen", icon: ChartLineUp },
     { id: "cierre", label: "Cierre diario", icon: Receipt }
   ];
@@ -2393,8 +2447,9 @@ function Expenses() {
         <div className="module-topbar" aria-label="Secciones de gastos">
           {tabs.map((tab) => {
             const Icon = tab.icon;
+            const disabled = tab.id === "editar" && !editingExpenseId;
             return (
-              <button key={tab.id} className={clsx("module-tab", expensePage === tab.id && "active")} onClick={() => setExpensePage(tab.id)}>
+              <button key={tab.id} className={clsx("module-tab", expensePage === tab.id && "active")} onClick={() => (tab.id === "cargar" ? startNewExpense() : setExpensePage(tab.id))} disabled={disabled}>
                 <Icon size={18} weight="duotone" />
                 <span>{tab.label}</span>
               </button>
@@ -2432,9 +2487,28 @@ function Expenses() {
           </div>
         </Panel>
         )}
+        {expensePage === "editar" && (
+        <Panel title="Editar gasto">
+          {editingExpenseId ? (
+            <ExpenseForm amount={amount} setAmount={setAmount} category={category} setCategory={setCategory} vendor={vendor} setVendor={setVendor} note={note} setNote={setNote} onSubmit={submitExpense} primaryLabel="Guardar gasto" />
+          ) : (
+            <div className="empty-lines">Selecciona un gasto desde recientes para editarlo.</div>
+          )}
+        </Panel>
+        )}
         {expensePage === "recientes" && (
         <Panel title="Gastos recientes">
-          <DataList items={expenses.map((expense) => ({ title: expense.category, meta: `${expense.vendor} · ${expense.note}`, value: formatMoney(expense.amount) }))} />
+          <ExpenseList expenses={activeExpenses} empty="No hay gastos recientes." onEdit={editExpense} onDelete={(expense) => deleteExpense(expense.id, activeRole)} />
+        </Panel>
+        )}
+        {expensePage === "eliminados" && (
+        <Panel title="Gastos eliminados">
+          <ExpenseList expenses={deletedExpenses} empty="No hay gastos eliminados." onRestore={(expense) => restoreExpense(expense.id, activeRole)} />
+        </Panel>
+        )}
+        {expensePage === "historial" && (
+        <Panel title="Historial de gastos">
+          <OperationAuditList entries={expenseHistory} />
         </Panel>
         )}
         {expensePage === "resumen" && (
@@ -2476,7 +2550,7 @@ function Expenses() {
 
 function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId: string | null; onEditProduct: (productId: string) => void; onBack: () => void }) {
   const products = useStore((state) => state.products);
-  const suppliers = useStore((state) => state.suppliers);
+  const suppliers = useStore((state) => state.suppliers).filter((supplier) => !supplier.deletedAt);
   const categories = useStore((state) => state.categories);
   const activeRole = useStore((state) => state.activeRole);
   const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
@@ -2574,7 +2648,7 @@ function Reports() {
   since.setDate(since.getDate() - days);
   const inPeriod = (date: string) => new Date(date) >= since;
   const periodSales = sales.filter((sale) => inPeriod(sale.createdAt));
-  const periodExpenses = expenses.filter((expense) => inPeriod(expense.createdAt));
+  const periodExpenses = expenses.filter((expense) => !expense.deletedAt && inPeriod(expense.createdAt));
   const periodPurchases = purchaseReceipts.filter((receipt) => inPeriod(receipt.createdAt));
   const soldByVariant = new Map<string, { name: string; quantity: number; total: number }>();
   for (const sale of periodSales) {
@@ -3557,6 +3631,128 @@ function ContactList<T extends Customer | Supplier>({
               </button>
             )}
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExpenseForm({
+  amount,
+  setAmount,
+  category,
+  setCategory,
+  vendor,
+  setVendor,
+  note,
+  setNote,
+  onSubmit,
+  primaryLabel
+}: {
+  amount: number;
+  setAmount: (value: number) => void;
+  category: string;
+  setCategory: (value: string) => void;
+  vendor: string;
+  setVendor: (value: string) => void;
+  note: string;
+  setNote: (value: string) => void;
+  onSubmit: () => void;
+  primaryLabel: string;
+}) {
+  return (
+    <div className="form-grid one">
+      <label>
+        Categoria
+        <select value={category} onChange={(event) => setCategory(event.target.value)}>
+          <option>Reposicion</option>
+          <option>Servicios</option>
+          <option>Alquiler</option>
+          <option>Sueldos</option>
+          <option>Otro</option>
+        </select>
+      </label>
+      <label>
+        Monto
+        <input type="number" min={0} value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
+      </label>
+      <label>
+        Proveedor
+        <input value={vendor} onChange={(event) => setVendor(event.target.value)} placeholder="Nombre o comercio" />
+      </label>
+      <label>
+        Nota
+        <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Detalle corto" />
+      </label>
+      <button className="primary-action" onClick={onSubmit} disabled={amount <= 0}>
+        <Wallet size={19} /> {primaryLabel}
+      </button>
+    </div>
+  );
+}
+
+function ExpenseList({
+  expenses,
+  empty,
+  onEdit,
+  onDelete,
+  onRestore
+}: {
+  expenses: Expense[];
+  empty: string;
+  onEdit?: (expense: Expense) => void;
+  onDelete?: (expense: Expense) => void;
+  onRestore?: (expense: Expense) => void;
+}) {
+  if (!expenses.length) return <div className="empty-lines">{empty}</div>;
+  return (
+    <div className="table contact-list">
+      {expenses.map((expense) => (
+        <div className="table-row" key={expense.id}>
+          <div>
+            <strong>{expense.category}</strong>
+            <span>{[expense.vendor, expense.note, new Date(expense.createdAt).toLocaleString("es-AR")].filter(Boolean).join(" · ")}</span>
+          </div>
+          <strong>{formatMoney(expense.amount)}</strong>
+          <Status status={expense.syncStatus} />
+          <div className="contact-actions">
+            {onRestore ? (
+              <button className="secondary-action" onClick={() => onRestore(expense)}>
+                <ArrowClockwise size={17} /> Restaurar
+              </button>
+            ) : (
+              <>
+                {onEdit && (
+                  <button className="secondary-action" onClick={() => onEdit(expense)}>
+                    <PencilSimple size={17} /> Editar
+                  </button>
+                )}
+                {onDelete && (
+                  <button className="secondary-action danger" onClick={() => onDelete(expense)}>
+                    <Trash size={17} /> Borrar
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OperationAuditList({ entries }: { entries: OperationAuditEntry[] }) {
+  if (!entries.length) return <div className="empty-lines">Sin movimientos de auditoria.</div>;
+  return (
+    <div className="table audit-table">
+      {entries.map((entry) => (
+        <div className="table-row audit-row" key={entry.id}>
+          <div>
+            <strong>{entry.entityName}</strong>
+            <span>{new Date(entry.createdAt).toLocaleString("es-AR")} · {roleLabels[entry.performedBy]} · {entry.reason}</span>
+          </div>
+          <span className="chip">{entry.entityType}</span>
+          <span className="chip">{entry.action}</span>
         </div>
       ))}
     </div>
