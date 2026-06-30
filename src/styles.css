@@ -882,7 +882,18 @@ label {
   grid-template-columns: minmax(0, 1fr) auto minmax(132px, auto);
 }
 
+.operational-list .table-row {
+  grid-template-columns: minmax(0, 1fr) minmax(100px, auto) minmax(220px, auto);
+}
+
 .contact-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;

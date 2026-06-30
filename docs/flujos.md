@@ -195,6 +195,18 @@
 6. El estado operativo completo se guarda automaticamente en Supabase.
 7. Al refrescar la app, Compras recientes debe reconstruirse desde `operational_state` y conservar el comprobante.
 
+## Correccion y anulacion de compras
+
+1. Compras recientes muestra solo compras activas.
+2. Editar carga la compra en el formulario de factura/remito.
+3. Al guardar, el sistema calcula la diferencia entre lineas anteriores y nuevas.
+4. La diferencia ajusta stock, costo cuando corresponde, gasto de reposicion y cuenta del proveedor.
+5. Anular revierte el stock ingresado por esa compra y mueve el comprobante a Eliminadas.
+6. El gasto de reposicion asociado queda marcado como eliminado para no afectar reportes ni cierre.
+7. Eliminadas permite restaurar la compra, sumando nuevamente el stock y reactivando el gasto.
+8. Cada correccion, anulacion o restauracion queda en Historial.
+9. Si la anulacion o correccion dejaria stock negativo, no se aplica.
+
 ## Correccion y baja de gastos
 
 1. Gastos recientes muestra los registros activos.

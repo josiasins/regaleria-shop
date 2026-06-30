@@ -217,6 +217,8 @@ export interface PurchaseReceipt {
   shippingNote: string;
   total: number;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: Role;
   syncStatus: SyncStatus;
 }
 
@@ -366,7 +368,7 @@ export interface SalesAuditEntry {
   after?: Sale | CashShift;
 }
 
-export type OperationAuditEntity = "gasto" | "proveedor";
+export type OperationAuditEntity = "gasto" | "proveedor" | "compra";
 export type OperationAuditAction = "creacion" | "correccion" | "eliminacion" | "restauracion";
 
 export interface OperationAuditEntry {
@@ -378,8 +380,8 @@ export interface OperationAuditEntry {
   reason: string;
   createdAt: string;
   performedBy: Role;
-  before?: Expense | Supplier;
-  after?: Expense | Supplier;
+  before?: Expense | Supplier | PurchaseReceipt;
+  after?: Expense | Supplier | PurchaseReceipt;
 }
 
 export interface SupplierPayment {

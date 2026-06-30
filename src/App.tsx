@@ -43,7 +43,7 @@ import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import type { CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
+import type { CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
 
 const sections = [
@@ -65,7 +65,7 @@ const sections = [
 type Section = (typeof sections)[number]["id"];
 type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" | "historial";
 type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
-type PurchasePage = "factura" | "precarga" | "recientes" | "cuentas" | "pago";
+type PurchasePage = "factura" | "precarga" | "recientes" | "editar" | "eliminadas" | "historial" | "cuentas" | "pago";
 type ContactPage = "lista" | "nuevo" | "editar" | "eliminados" | "historial";
 type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
@@ -1716,9 +1716,15 @@ function Purchases() {
   const suppliers = useStore((state) => state.suppliers).filter((supplier) => !supplier.deletedAt);
   const purchaseReceipts = useStore((state) => state.purchaseReceipts);
   const supplierPayments = useStore((state) => state.supplierPayments);
+  const operationAuditEntries = useStore((state) => state.operationAuditEntries);
+  const activeRole = useStore((state) => state.activeRole);
   const addPurchaseReceipt = useStore((state) => state.addPurchaseReceipt);
+  const updatePurchaseReceipt = useStore((state) => state.updatePurchaseReceipt);
+  const deletePurchaseReceipt = useStore((state) => state.deletePurchaseReceipt);
+  const restorePurchaseReceipt = useStore((state) => state.restorePurchaseReceipt);
   const addSupplierPayment = useStore((state) => state.addSupplierPayment);
   const [purchasePage, setPurchasePage] = useState<PurchasePage>("factura");
+  const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
   const [documentType, setDocumentType] = useState<PurchaseDocumentType>("factura");
   const [documentNumber, setDocumentNumber] = useState("");
   const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id ?? "nuevo");
@@ -1739,6 +1745,9 @@ function Purchases() {
   const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>([]);
   const [aiStatus, setAiStatus] = useState("Esperando comprobante.");
   const selected = findProductVariant(products, variantId);
+  const activePurchaseReceipts = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
+  const deletedPurchaseReceipts = purchaseReceipts.filter((receipt) => receipt.deletedAt);
+  const purchaseHistory = operationAuditEntries.filter((entry) => entry.entityType === "compra");
   useEffect(() => {
     if (!selected) return;
     setUnitCost(selected.variant.cost);
@@ -1747,11 +1756,34 @@ function Purchases() {
     return () => window.clearTimeout(timer);
   }, [selected?.variant.id]);
   const supplierBalances = suppliers.map((supplier) => {
-    const purchasesTotal = purchaseReceipts.filter((receipt) => receipt.supplier === supplier.name).reduce((sum, receipt) => sum + receipt.total, 0);
+    const purchasesTotal = activePurchaseReceipts.filter((receipt) => receipt.supplier === supplier.name).reduce((sum, receipt) => sum + receipt.total, 0);
     const paymentsTotal = supplierPayments.filter((payment) => payment.supplier === supplier.name).reduce((sum, payment) => sum + payment.amount, 0);
     return { supplier: supplier.name, balance: purchasesTotal - paymentsTotal, purchasesTotal, paymentsTotal };
   });
 
+  const resetPurchaseForm = () => {
+    setEditingReceipt(null);
+    setDocumentNumber("");
+    setSupplierChoice(suppliers[0]?.id ?? "nuevo");
+    setNewSupplierName("");
+    setQuantity(1);
+    setUnitCost(0);
+    setShippingCost(0);
+    setShippingNote("");
+    setLines([]);
+  };
+  const editReceipt = (receipt: PurchaseReceipt) => {
+    const supplier = suppliers.find((item) => item.name.toLowerCase() === receipt.supplier.toLowerCase());
+    setEditingReceipt(receipt);
+    setDocumentType(receipt.documentType);
+    setDocumentNumber(receipt.documentNumber);
+    setSupplierChoice(supplier?.id ?? "nuevo");
+    setNewSupplierName(supplier ? "" : receipt.supplier);
+    setShippingCost(receipt.shippingCost);
+    setShippingNote(receipt.shippingNote);
+    setLines(receipt.lines);
+    setPurchasePage("editar");
+  };
   const addLine = () => {
     if (!selected || quantity < 1 || unitCost < 0) return;
     const next = buildPurchaseLine(selected.product, selected.variant, quantity, unitCost);
@@ -1759,18 +1791,16 @@ function Purchases() {
   };
   const submitReceipt = () => {
     const supplier = resolveSupplierName(suppliers, supplierChoice, newSupplierName);
-    const receipt = addPurchaseReceipt({ documentType, documentNumber, supplier, lines, shippingCost, shippingNote });
-    if (receipt) {
-      setDocumentNumber("");
-      setSupplierChoice(suppliers[0]?.id ?? "nuevo");
-      setNewSupplierName("");
-      setQuantity(1);
-      setUnitCost(0);
-      setShippingCost(0);
-      setShippingNote("");
-      setLines([]);
+    const input = { documentType, documentNumber, supplier, lines, shippingCost, shippingNote };
+    const saved = editingReceipt ? updatePurchaseReceipt(editingReceipt.id, input, activeRole) : addPurchaseReceipt(input);
+    if (saved) {
+      resetPurchaseForm();
       setPurchasePage("recientes");
     }
+  };
+  const removeReceipt = (receipt: PurchaseReceipt) => {
+    const ok = window.confirm(`Anular ${receipt.number}? Se revierte el stock ingresado por esta compra y queda en historial.`);
+    if (ok) deletePurchaseReceipt(receipt.id, activeRole);
   };
   const submitSupplierPayment = () => {
     const payment = addSupplierPayment(paymentSupplier, paymentAmount, paymentNote);
@@ -1820,6 +1850,8 @@ function Purchases() {
     { id: "factura", label: "Factura o remito", icon: Truck },
     { id: "precarga", label: "Precarga", icon: FileText },
     { id: "recientes", label: "Compras recientes", icon: ClockCounterClockwise },
+    { id: "eliminadas", label: "Eliminadas", icon: Trash },
+    { id: "historial", label: "Historial", icon: ListBullets },
     { id: "cuentas", label: "Cuenta de proveedores", icon: Users },
     { id: "pago", label: "Registrar pago", icon: Wallet }
   ];
@@ -1831,7 +1863,10 @@ function Purchases() {
           {purchaseTabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <button key={tab.id} className={clsx("module-tab", purchasePage === tab.id && "active")} onClick={() => setPurchasePage(tab.id)}>
+              <button key={tab.id} className={clsx("module-tab", purchasePage === tab.id && "active")} onClick={() => {
+                if (tab.id === "factura") resetPurchaseForm();
+                setPurchasePage(tab.id);
+              }}>
                 <Icon size={18} weight="duotone" />
                 <span>{tab.label}</span>
               </button>
@@ -1874,8 +1909,8 @@ function Purchases() {
           </div>
         </Panel>
       )}
-      {purchasePage === "factura" && (
-        <Panel title="Factura o remito de compra">
+      {(purchasePage === "factura" || purchasePage === "editar") && (
+        <Panel title={editingReceipt ? `Editar ${editingReceipt.number}` : "Factura o remito de compra"}>
           <div className="form-grid two">
             <label>
               Proveedor
@@ -1948,20 +1983,33 @@ function Purchases() {
               <strong>{formatMoney(purchaseLineTotal(lines) + shippingCost)}</strong>
             </div>
             <button className="primary-action" onClick={submitReceipt} disabled={!resolveSupplierName(suppliers, supplierChoice, newSupplierName).trim() || !documentNumber.trim() || !lines.length}>
-              <Truck size={19} /> Registrar compra
+              {editingReceipt ? <CheckCircle size={19} /> : <Truck size={19} />}
+              {editingReceipt ? "Guardar cambios" : "Registrar compra"}
             </button>
           </div>
+          {editingReceipt && (
+            <button className="secondary-action full" onClick={() => {
+              resetPurchaseForm();
+              setPurchasePage("recientes");
+            }}>
+              <ArrowLeft size={18} /> Cancelar edición
+            </button>
+          )}
         </Panel>
       )}
       {purchasePage === "recientes" && (
         <Panel title="Compras recientes">
-          <DataList
-            items={purchaseReceipts.map((receipt) => ({
-              title: `${receipt.number} · ${receipt.documentType}`,
-              meta: `${receipt.supplier} · ${receipt.documentNumber} · ${receipt.lines.length} linea(s)${receipt.shippingCost ? ` · Envío ${formatMoney(receipt.shippingCost)}` : ""}`,
-              value: formatMoney(receipt.total)
-            }))}
-          />
+          <PurchaseReceiptList receipts={activePurchaseReceipts} onEdit={editReceipt} onDelete={removeReceipt} />
+        </Panel>
+      )}
+      {purchasePage === "eliminadas" && (
+        <Panel title="Compras eliminadas">
+          <PurchaseReceiptList receipts={deletedPurchaseReceipts} onRestore={(receipt) => restorePurchaseReceipt(receipt.id, activeRole)} />
+        </Panel>
+      )}
+      {purchasePage === "historial" && (
+        <Panel title="Historial de compras">
+          <OperationAuditList entries={purchaseHistory} />
         </Panel>
       )}
       {purchasePage === "cuentas" && (
@@ -2690,7 +2738,7 @@ function Reports() {
   const inPeriod = (date: string) => new Date(date) >= since;
   const periodSales = sales.filter((sale) => inPeriod(sale.createdAt));
   const periodExpenses = expenses.filter((expense) => !expense.deletedAt && inPeriod(expense.createdAt));
-  const periodPurchases = purchaseReceipts.filter((receipt) => inPeriod(receipt.createdAt));
+  const periodPurchases = purchaseReceipts.filter((receipt) => !receipt.deletedAt && inPeriod(receipt.createdAt));
   const soldByVariant = new Map<string, { name: string; quantity: number; total: number }>();
   for (const sale of periodSales) {
     for (const line of sale.lines) {
@@ -3794,6 +3842,58 @@ function OperationAuditList({ entries }: { entries: OperationAuditEntry[] }) {
           </div>
           <span className="chip">{entry.entityType}</span>
           <span className="chip">{entry.action}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PurchaseReceiptList({
+  receipts,
+  onEdit,
+  onDelete,
+  onRestore
+}: {
+  receipts: PurchaseReceipt[];
+  onEdit?: (receipt: PurchaseReceipt) => void;
+  onDelete?: (receipt: PurchaseReceipt) => void;
+  onRestore?: (receipt: PurchaseReceipt) => void;
+}) {
+  if (!receipts.length) return <div className="empty-lines">Sin compras para mostrar.</div>;
+  return (
+    <div className="table operational-list">
+      {receipts.map((receipt) => (
+        <div className="table-row operational-row" key={receipt.id}>
+          <div>
+            <strong>{receipt.number} · {receipt.documentType}</strong>
+            <span>
+              {receipt.supplier} · {receipt.documentNumber} · {receipt.lines.length} linea(s)
+              {receipt.shippingCost ? ` · Envio ${formatMoney(receipt.shippingCost)}` : ""}
+              {receipt.deletedAt ? ` · Anulada ${new Date(receipt.deletedAt).toLocaleDateString("es-AR")}` : ""}
+            </span>
+            <span>{receipt.lines.map((line) => `${line.name} x${line.quantity}`).join(" · ")}</span>
+          </div>
+          <strong>{formatMoney(receipt.total)}</strong>
+          <div className="row-actions">
+            {onRestore ? (
+              <button className="secondary-action" onClick={() => onRestore(receipt)}>
+                <ArrowClockwise size={17} /> Restaurar
+              </button>
+            ) : (
+              <>
+                {onEdit && (
+                  <button className="secondary-action" onClick={() => onEdit(receipt)}>
+                    <PencilSimple size={17} /> Editar
+                  </button>
+                )}
+                {onDelete && (
+                  <button className="secondary-action danger" onClick={() => onDelete(receipt)}>
+                    <Trash size={17} /> Anular
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       ))}
     </div>

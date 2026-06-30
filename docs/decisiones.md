@@ -464,6 +464,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: registrar una compra solo actualizaba la pantalla actual y el catalogo/stock, pero no persistia `purchaseReceipts` en `operational_state`; al refrescar, Compras recientes volvia al ultimo estado online.
 - Alcance: el guardado se agrupa con una espera corta para evitar enviar demasiadas escrituras seguidas y se serializa para que el ultimo cambio no sea pisado por una sincronizacion anterior.
 - Alternativas descartadas: depender del boton manual de sincronizacion, porque en mostrador y compras la informacion debe quedar guardada sin pasos extra.
+
+### Edicion y anulacion de compras
+- Fecha: 2026-06-30.
+- Decision: permitir editar, anular y restaurar compras desde Compras recientes, dejando historial operativo.
+- Motivo: una compra mal cargada afecta stock, costo, gasto de reposicion y cuenta del proveedor; corregirla debe ser posible sin borrar trazabilidad.
+- Alcance: editar recalcula diferencias de stock; anular revierte el stock ingresado y marca como eliminado el gasto de reposicion asociado; restaurar vuelve a sumar stock y reactiva el gasto.
+- Control: si anular o corregir dejaria stock negativo, la operacion se rechaza.
+- Alternativas descartadas: borrar la compra fisicamente, porque impediria reconstruir errores de carga y movimientos de stock.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

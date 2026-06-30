@@ -23,6 +23,7 @@ import type {
   Product,
   ProductUpdateInput,
   RolePermissions,
+  PurchaseLine,
   PurchaseReceipt,
   PurchaseReceiptDraftInput,
   PublishUpdateInput,
@@ -94,6 +95,9 @@ interface AppState {
   deleteExpense: (id: string, requestedBy: Role) => boolean;
   restoreExpense: (id: string, requestedBy: Role) => boolean;
   addPurchaseReceipt: (input: PurchaseReceiptDraftInput) => PurchaseReceipt | null;
+  updatePurchaseReceipt: (id: string, input: PurchaseReceiptDraftInput, requestedBy: Role) => boolean;
+  deletePurchaseReceipt: (id: string, requestedBy: Role) => boolean;
+  restorePurchaseReceipt: (id: string, requestedBy: Role) => boolean;
   closeCashDay: (note: string) => CashClosure;
   openCashShift: (initialCash: number, openedBy: Role, note: string) => CashShift | null;
   closeCashShift: (id: string, declaredClosingCash: number, closedBy: Role, note: string) => CashShift | null;
@@ -394,6 +398,80 @@ function shouldCreateContact(name: string) {
 function syncProductsToCloud(products: Product[], productIds?: string[]) {
   const selected = productIds ? products.filter((product) => productIds.includes(product.id)) : products;
   for (const product of selected) void saveCloudProduct(product);
+}
+
+function purchaseLineDeltas(before: PurchaseLine[], after: PurchaseLine[]) {
+  const deltas = new Map<string, PurchaseLine & { quantity: number }>();
+  const addDelta = (line: PurchaseLine, quantity: number) => {
+    const current = deltas.get(line.variantId);
+    deltas.set(line.variantId, {
+      ...line,
+      quantity: (current?.quantity ?? 0) + quantity
+    });
+  };
+  before.forEach((line) => addDelta(line, -line.quantity));
+  after.forEach((line) => addDelta(line, line.quantity));
+  return Array.from(deltas.values()).filter((line) => line.quantity !== 0);
+}
+
+function canApplyPurchaseDeltas(products: Product[], deltas: (PurchaseLine & { quantity: number })[]) {
+  return deltas.every((delta) => {
+    const found = findVariant(products, delta.variantId);
+    return found && found.variant.stock + delta.quantity >= 0;
+  });
+}
+
+function applyPurchaseDeltas(products: Product[], deltas: (PurchaseLine & { quantity: number })[]) {
+  return products.map((product) => ({
+    ...product,
+    syncStatus: deltas.some((delta) => delta.productId === product.id) ? "pendiente" : product.syncStatus,
+    variants: product.variants.map((variant) => {
+      const delta = deltas.find((item) => item.variantId === variant.id);
+      return delta ? { ...variant, stock: variant.stock + delta.quantity, cost: delta.quantity > 0 ? delta.unitCost : variant.cost } : variant;
+    })
+  }));
+}
+
+function stockMovementsForPurchaseDelta(deltas: (PurchaseLine & { quantity: number })[], reason: string, createdAt = new Date().toISOString()): StockMovement[] {
+  return deltas.map((line) => ({
+    id: `local_mov_${crypto.randomUUID()}`,
+    productId: line.productId,
+    variantId: line.variantId,
+    type: "ajuste",
+    quantity: line.quantity,
+    reason,
+    createdAt,
+    syncStatus: "pendiente"
+  }));
+}
+
+function makePurchaseReceiptFromInput(input: PurchaseReceiptDraftInput, existing?: PurchaseReceipt): PurchaseReceipt | null {
+  const cleanLines = input.lines.filter((line) => line.quantity > 0 && line.unitCost >= 0);
+  if (!input.supplier.trim() || !input.documentNumber.trim() || !cleanLines.length) return null;
+  const total = cleanLines.reduce((sum, line) => sum + line.subtotal, 0) + Math.max(input.shippingCost, 0);
+  return {
+    id: existing?.id ?? `local_purchase_${crypto.randomUUID()}`,
+    number: existing?.number ?? nextNumber("COM", useStore.getState().purchaseReceipts.length),
+    documentType: input.documentType,
+    documentNumber: input.documentNumber.trim(),
+    supplier: input.supplier.trim(),
+    lines: cleanLines,
+    shippingCost: money(Math.max(input.shippingCost, 0)),
+    shippingNote: input.shippingNote.trim(),
+    total: money(total),
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    deletedAt: existing?.deletedAt,
+    deletedBy: existing?.deletedBy,
+    syncStatus: "pendiente"
+  };
+}
+
+function purchaseExpenseNote(receipt: PurchaseReceipt) {
+  return `${receipt.documentType} ${receipt.documentNumber}${receipt.shippingCost ? ` · Envío ${money(receipt.shippingCost)}` : ""}`;
+}
+
+function isExpenseForPurchase(expense: Expense, receipt: PurchaseReceipt) {
+  return expense.category === "Reposicion" && expense.vendor === receipt.supplier && expense.createdAt === receipt.createdAt;
 }
 
 const operationalStateKeys: (keyof OperationalStateFields)[] = [
@@ -1057,29 +1135,17 @@ export const useStore = create<AppState>((set, get) => ({
     return true;
   },
   addPurchaseReceipt: (input) => {
-    const cleanLines = input.lines.filter((line) => line.quantity > 0 && line.unitCost >= 0);
-    if (!input.supplier.trim() || !input.documentNumber.trim() || !cleanLines.length) return null;
+    const receipt = makePurchaseReceiptFromInput(input);
+    if (!receipt) return null;
+    const cleanLines = receipt.lines;
     const createdAt = new Date().toISOString();
-    const total = cleanLines.reduce((sum, line) => sum + line.subtotal, 0) + Math.max(input.shippingCost, 0);
-    const receipt: PurchaseReceipt = {
-      id: `local_purchase_${crypto.randomUUID()}`,
-      number: nextNumber("COM", get().purchaseReceipts.length),
-      documentType: input.documentType,
-      documentNumber: input.documentNumber.trim(),
-      supplier: input.supplier.trim(),
-      lines: cleanLines,
-      shippingCost: money(Math.max(input.shippingCost, 0)),
-      shippingNote: input.shippingNote.trim(),
-      total: money(total),
-      createdAt,
-      syncStatus: "pendiente"
-    };
+    receipt.createdAt = createdAt;
     const expense: Expense = {
       id: `local_exp_${crypto.randomUUID()}`,
       category: "Reposicion",
       amount: receipt.total,
       vendor: receipt.supplier,
-      note: `${receipt.documentType} ${receipt.documentNumber}${receipt.shippingCost ? ` · Envío ${money(receipt.shippingCost)}` : ""}`,
+      note: purchaseExpenseNote(receipt),
       createdAt,
       syncStatus: "pendiente"
     };
@@ -1097,11 +1163,21 @@ export const useStore = create<AppState>((set, get) => ({
       !get().suppliers.some((supplier) => supplier.name.toLowerCase() === receipt.supplier.toLowerCase())
         ? makeSupplier({ name: receipt.supplier, phone: "", email: "", note: "Creado desde compra." })
         : null;
+    const entry = makeOperationAuditEntry({
+      entityType: "compra",
+      entityId: receipt.id,
+      entityName: receipt.number,
+      action: "creacion",
+      reason: "Registro de compra",
+      performedBy: get().activeRole,
+      after: receipt
+    });
     set((state) => ({
       purchaseReceipts: [receipt, ...state.purchaseReceipts],
       expenses: [expense, ...state.expenses],
       movements: [...receiptMovements, ...state.movements],
       suppliers: newSupplier ? [newSupplier, ...state.suppliers] : state.suppliers,
+      operationAuditEntries: [entry, ...state.operationAuditEntries],
       products: state.products.map((product) => ({
         ...product,
         syncStatus: cleanLines.some((line) => line.productId === product.id) ? "pendiente" : product.syncStatus,
@@ -1113,6 +1189,104 @@ export const useStore = create<AppState>((set, get) => ({
     }));
     syncProductsToCloud(get().products, cleanLines.map((line) => line.productId));
     return receipt;
+  },
+  updatePurchaseReceipt: (id, input, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy)) return false;
+    const current = get().purchaseReceipts.find((receipt) => receipt.id === id && !receipt.deletedAt);
+    if (!current) return false;
+    const updated = makePurchaseReceiptFromInput(input, current);
+    if (!updated) return false;
+    const deltas = purchaseLineDeltas(current.lines, updated.lines);
+    if (!canApplyPurchaseDeltas(get().products, deltas)) return false;
+    const entry = makeOperationAuditEntry({
+      entityType: "compra",
+      entityId: current.id,
+      entityName: current.number,
+      action: "correccion",
+      reason: "Edicion de compra",
+      performedBy: requestedBy,
+      before: current,
+      after: updated
+    });
+    const newSupplier =
+      !get().suppliers.some((supplier) => supplier.name.toLowerCase() === updated.supplier.toLowerCase())
+        ? makeSupplier({ name: updated.supplier, phone: "", email: "", note: "Creado desde edicion de compra." })
+        : null;
+    set((state) => ({
+      purchaseReceipts: state.purchaseReceipts.map((receipt) => (receipt.id === id ? updated : receipt)),
+      expenses: state.expenses.map((expense) =>
+        isExpenseForPurchase(expense, current)
+          ? { ...expense, amount: updated.total, vendor: updated.supplier, note: purchaseExpenseNote(updated), syncStatus: "pendiente" }
+          : expense
+      ),
+      movements: [...stockMovementsForPurchaseDelta(deltas, `Correccion ${current.number}`), ...state.movements],
+      suppliers: newSupplier ? [newSupplier, ...state.suppliers] : state.suppliers,
+      products: applyPurchaseDeltas(state.products, deltas),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    syncProductsToCloud(get().products, Array.from(new Set([...current.lines, ...updated.lines].map((line) => line.productId))));
+    return true;
+  },
+  deletePurchaseReceipt: (id, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy)) return false;
+    const current = get().purchaseReceipts.find((receipt) => receipt.id === id && !receipt.deletedAt);
+    if (!current) return false;
+    const deltas = purchaseLineDeltas(current.lines, []);
+    if (!canApplyPurchaseDeltas(get().products, deltas)) return false;
+    const deleted: PurchaseReceipt = { ...current, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" };
+    const entry = makeOperationAuditEntry({
+      entityType: "compra",
+      entityId: current.id,
+      entityName: current.number,
+      action: "eliminacion",
+      reason: "Anulacion de compra",
+      performedBy: requestedBy,
+      before: current,
+      after: deleted
+    });
+    set((state) => ({
+      purchaseReceipts: state.purchaseReceipts.map((receipt) => (receipt.id === id ? deleted : receipt)),
+      expenses: state.expenses.map((expense) =>
+        isExpenseForPurchase(expense, current)
+          ? { ...expense, deletedAt: deleted.deletedAt, deletedBy: requestedBy, syncStatus: "pendiente" }
+          : expense
+      ),
+      movements: [...stockMovementsForPurchaseDelta(deltas, `Anulacion ${current.number}`), ...state.movements],
+      products: applyPurchaseDeltas(state.products, deltas),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    syncProductsToCloud(get().products, current.lines.map((line) => line.productId));
+    return true;
+  },
+  restorePurchaseReceipt: (id, requestedBy) => {
+    if (!canManageOperationalRecords(requestedBy)) return false;
+    const current = get().purchaseReceipts.find((receipt) => receipt.id === id && receipt.deletedAt);
+    if (!current) return false;
+    const restored: PurchaseReceipt = { ...current, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
+    const deltas = purchaseLineDeltas([], restored.lines);
+    const entry = makeOperationAuditEntry({
+      entityType: "compra",
+      entityId: current.id,
+      entityName: current.number,
+      action: "restauracion",
+      reason: "Restauracion de compra",
+      performedBy: requestedBy,
+      before: current,
+      after: restored
+    });
+    set((state) => ({
+      purchaseReceipts: state.purchaseReceipts.map((receipt) => (receipt.id === id ? restored : receipt)),
+      expenses: state.expenses.map((expense) =>
+        isExpenseForPurchase(expense, current)
+          ? { ...expense, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" }
+          : expense
+      ),
+      movements: [...stockMovementsForPurchaseDelta(deltas, `Restauracion ${current.number}`), ...state.movements],
+      products: applyPurchaseDeltas(state.products, deltas),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    syncProductsToCloud(get().products, restored.lines.map((line) => line.productId));
+    return true;
   },
   closeCashDay: (note) => {
     const today = new Date().toISOString().slice(0, 10);
