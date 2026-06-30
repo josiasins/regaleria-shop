@@ -83,10 +83,10 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: permite probar catalogo y carrito sin mezclar facturacion, AFIP o pagos online.
 - Alternativas descartadas: ecommerce con pago online inmediato, porque requiere pasarela, conciliacion y reglas de entrega.
 
-### Sincronizacion demo visible
-- Decision: mostrar cola local y accion de sincronizacion demo.
-- Motivo: hace visible la base del futuro offline parcial sin implementar aun almacenamiento local completo.
-- Alternativas descartadas: ocultar la sincronizacion hasta V2, porque dificultaria validar el modelo de estados pendientes.
+### Sincronizacion operativa visible
+- Decision: mostrar cola de cambios pendientes y accion de sincronizacion real contra Supabase.
+- Motivo: ventas, turnos, compras, gastos, clientes, proveedores, stock, configuracion y auditorias no deben depender de memoria local al publicar una nueva version.
+- Alternativas descartadas: mantener sincronizacion demo, porque hacia que las operaciones pudieran cambiar o perderse al recargar/desplegar.
 
 ### Compras separadas de gastos
 - Decision: crear un modulo de Compras para facturas/remitos de proveedor.
@@ -449,6 +449,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: el sistema se usa muchas horas en mostrador y administracion; una variante oscura reduce fatiga visual en ambientes de baja luz.
 - Alcance: solo cambia la interfaz del sistema interno; no toca base de datos, Supabase, productos, ventas ni configuraciones del negocio.
 - Alternativas descartadas: guardar el tema en PostgreSQL o Supabase, porque seria una preferencia del dispositivo y no un dato operativo.
+
+### Estado operativo persistente en Supabase
+- Fecha: 2026-06-30.
+- Decision: guardar el estado interno completo en `operational_state` como snapshot JSONB protegido por la misma regla de dueños autorizados.
+- Motivo: habia modulos operativos que seguian naciendo desde datos locales/demo; publicar o recargar podia volver a una version distinta del estado.
+- Alcance: ventas, turnos, presupuestos, transferencias, gastos, compras, clientes, proveedores, movimientos, permisos, categorias, cierres y auditorias.
+- Relacion con catalogo: productos/stock siguen sincronizados tambien con `public_catalog_products`, porque la web publica necesita leerlos y los pedidos web descuentan stock desde ahi.
+- Alternativas descartadas: normalizar todas las tablas en este paso, porque llevaria mas tiempo y bloquearia la proteccion inmediata de datos; queda como mejora posterior.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

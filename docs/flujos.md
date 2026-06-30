@@ -155,8 +155,9 @@
 2. Roles y permisos permiten activar o quitar modulos y permiso de descuentos por rol.
 3. Categorias permite agregar o quitar categorias reutilizables.
 4. Configuracion operativa agrupa perfil del negocio, catalogo, caja/ventas y stock.
-5. La cola de sincronizacion sigue visible para preparar offline parcial.
-6. En etapas futuras, estos bloques pasaran de memoria local a persistencia real.
+5. La cola de sincronizacion muestra cambios operativos pendientes.
+6. Al sincronizar, el estado interno se guarda en Supabase en `operational_state`.
+7. En etapas futuras, este snapshot puede normalizarse en tablas especificas por modulo sin cambiar los flujos de usuario.
 
 ## Cierre de caja
 

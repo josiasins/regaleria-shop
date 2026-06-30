@@ -29,6 +29,8 @@ Estado del proyecto PostgreSQL:
 - Estado: Healthy.
 - Base PostgreSQL sincronizada con `prisma/schema.prisma`.
 - Buckets/politicas de Storage ejecutados desde `supabase/storage.sql`.
+- Catalogo/pedidos ejecutados desde `supabase/catalog.sql` y `supabase/commerce.sql`.
+- Estado operativo interno ejecutado desde `supabase/operations.sql`.
 - Auth configurado con Site URL `https://sistema.regaleriashop.com`.
 - Redirect URLs productivas configuradas: `https://sistema.regaleriashop.com/**` y `https://regaleriashop.com/**`.
 
@@ -88,6 +90,17 @@ Variables clave:
 - `DATABASE_URL`: conexion PostgreSQL Supabase.
 - `VITE_SUPABASE_URL`: URL publica del proyecto Supabase.
 - `VITE_SUPABASE_ANON_KEY`: clave publica anon de Supabase.
+
+## Persistencia operativa
+
+El sistema interno carga y guarda el estado del negocio en Supabase:
+
+- `public_catalog_products`: productos, variantes, stock visible y datos publicables para la web.
+- `store_orders`: pedidos hechos desde la web publica.
+- `store_email_queue`: correos pendientes de ecommerce.
+- `operational_state`: snapshot interno con ventas, turnos, compras, gastos, clientes, proveedores, presupuestos, transferencias, categorias, permisos y auditorias.
+
+El modo local sin sesion autorizada puede mostrar datos iniciales para desarrollo, pero la operacion real debe usarse desde `sistema.regaleriashop.com` con Google/Auth para persistir cambios.
 - `VITE_PUBLIC_DOMAIN`: `regaleriashop.com`.
 - `VITE_INTERNAL_DOMAIN`: `sistema.regaleriashop.com`.
 - `VITE_INTERNAL_ALLOWED_EMAILS`: correos autorizados para entrar al sistema interno.

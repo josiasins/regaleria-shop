@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
+import { loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
   BusinessProfile,
   BusinessProfileInput,
@@ -16,6 +17,7 @@ import type {
   NewProductInput,
   OnlineOrder,
   OnlineOrderDraftInput,
+  OperationalSnapshot,
   OperationAuditEntry,
   PaymentMethod,
   Product,
@@ -112,6 +114,29 @@ interface AppState {
   convertQuote: (id: string) => Sale | null;
   markAllSynced: () => void;
 }
+
+type OperationalStateFields = Pick<
+  AppState,
+  | "products"
+  | "sales"
+  | "quotes"
+  | "transfers"
+  | "expenses"
+  | "movements"
+  | "onlineOrders"
+  | "purchaseReceipts"
+  | "customers"
+  | "suppliers"
+  | "cashClosures"
+  | "cashShifts"
+  | "supplierPayments"
+  | "emailMessages"
+  | "salesAuditEntries"
+  | "operationAuditEntries"
+  | "businessProfile"
+  | "categories"
+  | "rolePermissions"
+>;
 
 const money = (value: number) => Math.round(value * 100) / 100;
 const nextNumber = (prefix: string, count: number) => `${prefix}-${String(count + 1).padStart(6, "0")}`;
@@ -257,6 +282,84 @@ function initialDataState() {
   };
 }
 
+function operationalSnapshotFromState(state: OperationalStateFields): OperationalSnapshot {
+  return {
+    products: state.products,
+    sales: state.sales,
+    quotes: state.quotes,
+    transfers: state.transfers,
+    expenses: state.expenses,
+    movements: state.movements,
+    onlineOrders: state.onlineOrders,
+    purchaseReceipts: state.purchaseReceipts,
+    customers: state.customers,
+    suppliers: state.suppliers,
+    cashClosures: state.cashClosures,
+    cashShifts: state.cashShifts,
+    supplierPayments: state.supplierPayments,
+    emailMessages: state.emailMessages,
+    salesAuditEntries: state.salesAuditEntries,
+    operationAuditEntries: state.operationAuditEntries,
+    businessProfile: state.businessProfile,
+    categories: state.categories,
+    rolePermissions: state.rolePermissions,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function stateFromOperationalSnapshot(snapshot: OperationalSnapshot): OperationalStateFields {
+  return {
+    products: snapshot.products,
+    sales: snapshot.sales,
+    quotes: snapshot.quotes,
+    transfers: snapshot.transfers,
+    expenses: snapshot.expenses,
+    movements: snapshot.movements,
+    onlineOrders: snapshot.onlineOrders,
+    purchaseReceipts: snapshot.purchaseReceipts,
+    customers: snapshot.customers,
+    suppliers: snapshot.suppliers,
+    cashClosures: snapshot.cashClosures,
+    cashShifts: snapshot.cashShifts,
+    supplierPayments: snapshot.supplierPayments,
+    emailMessages: snapshot.emailMessages,
+    salesAuditEntries: snapshot.salesAuditEntries,
+    operationAuditEntries: snapshot.operationAuditEntries,
+    businessProfile: snapshot.businessProfile,
+    categories: snapshot.categories,
+    rolePermissions: snapshot.rolePermissions
+  };
+}
+
+function syncedOperationalState(state: OperationalStateFields): OperationalStateFields {
+  return {
+    ...state,
+    products: state.products.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    sales: state.sales.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    quotes: state.quotes.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    transfers: state.transfers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    expenses: state.expenses.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    movements: state.movements.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    onlineOrders: state.onlineOrders.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    purchaseReceipts: state.purchaseReceipts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    customers: state.customers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    suppliers: state.suppliers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    cashClosures: state.cashClosures.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    cashShifts: state.cashShifts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    supplierPayments: state.supplierPayments.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    salesAuditEntries: state.salesAuditEntries.map((entry) => ({
+      ...entry,
+      before: entry.before ? { ...entry.before, syncStatus: "sincronizado" } : undefined,
+      after: entry.after ? { ...entry.after, syncStatus: "sincronizado" } : undefined
+    })),
+    operationAuditEntries: state.operationAuditEntries.map((entry) => ({
+      ...entry,
+      before: entry.before ? { ...entry.before, syncStatus: "sincronizado" } : undefined,
+      after: entry.after ? { ...entry.after, syncStatus: "sincronizado" } : undefined
+    }))
+  };
+}
+
 function makeCustomer(input: CustomerDraftInput): Customer | null {
   if (!input.name.trim()) return null;
   return {
@@ -298,11 +401,24 @@ export const useStore = create<AppState>((set, get) => ({
   activeRole: "dueno",
   catalogStatus: "cargando",
   initializeCatalog: async () => {
-    const [cloudProducts, commerce] = await Promise.all([loadCloudCatalog(), loadCloudCommerce()]);
+    const [cloudProducts, commerce, operations] = await Promise.all([loadCloudCatalog(), loadCloudCommerce(), loadCloudOperations()]);
+    if (operations) {
+      const operationalState = stateFromOperationalSnapshot(operations);
+      set({
+        ...operationalState,
+        products: cloudProducts?.length ? cloudProducts : operationalState.products,
+        onlineOrders: commerce.orders.length ? commerce.orders : operationalState.onlineOrders,
+        emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
+        catalogStatus: cloudProducts === null ? "error" : "actualizado"
+      });
+      return;
+    }
+
     if (cloudProducts === null) {
       set({ catalogStatus: "error" });
       return;
     }
+
     if (cloudProducts.length) {
       set({
         products: cloudProducts,
@@ -310,9 +426,12 @@ export const useStore = create<AppState>((set, get) => ({
         emailMessages: commerce.emails.length ? commerce.emails : get().emailMessages,
         catalogStatus: "actualizado"
       });
+      void saveCloudOperations(operationalSnapshotFromState(get()));
       return;
     }
+
     const seeded = await seedCloudCatalog(get().products);
+    if (seeded) void saveCloudOperations(operationalSnapshotFromState(get()));
     set({ catalogStatus: seeded ? "actualizado" : "error" });
   },
   setRole: (role) => set({ activeRole: role }),
@@ -1288,26 +1407,10 @@ export const useStore = create<AppState>((set, get) => ({
     return sale;
   },
   markAllSynced: () => {
-    set((state) => ({
-      products: state.products.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      sales: state.sales.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      quotes: state.quotes.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      transfers: state.transfers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      expenses: state.expenses.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      movements: state.movements.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      onlineOrders: state.onlineOrders.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      purchaseReceipts: state.purchaseReceipts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      customers: state.customers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      suppliers: state.suppliers.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      cashClosures: state.cashClosures.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      cashShifts: state.cashShifts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      supplierPayments: state.supplierPayments.map((item) => ({ ...item, syncStatus: "sincronizado" })),
-      salesAuditEntries: state.salesAuditEntries.map((entry) => ({
-        ...entry,
-        before: entry.before ? { ...entry.before, syncStatus: "sincronizado" } : undefined,
-        after: entry.after ? { ...entry.after, syncStatus: "sincronizado" } : undefined
-      }))
-    }));
+    const nextState = syncedOperationalState(get());
+    void saveCloudOperations(operationalSnapshotFromState(nextState)).then((saved) => {
+      if (saved) set(nextState);
+    });
   }
 }));
 

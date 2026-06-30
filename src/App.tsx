@@ -2947,7 +2947,7 @@ function System() {
           <div className="checkout-row">
             <span>{pendingItems.length} elemento(s) en cola.</span>
             <button className="primary-action" onClick={markAllSynced} disabled={!pendingItems.length}>
-              <ArrowClockwise size={19} /> Sincronizar demo
+              <ArrowClockwise size={19} /> Sincronizar ahora
             </button>
           </div>
         </Panel>

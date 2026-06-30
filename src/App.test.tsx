@@ -400,7 +400,7 @@ describe("Regaleria app", () => {
     await user.click(screen.getByRole("button", { name: /Configuracion/i }));
     await user.click(screen.getByRole("button", { name: "Sincronizacion" }));
     expect(screen.getByText(/elemento\(s\) en cola/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Sincronizar demo/i }));
+    await user.click(screen.getByRole("button", { name: /Sincronizar ahora/i }));
     expect(screen.getByText("0 elemento(s) en cola.")).toBeInTheDocument();
   });
 

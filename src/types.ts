@@ -404,6 +404,29 @@ export interface BusinessProfile {
 
 export type BusinessProfileInput = BusinessProfile;
 
+export interface OperationalSnapshot {
+  products: Product[];
+  sales: Sale[];
+  quotes: Quote[];
+  transfers: Transfer[];
+  expenses: Expense[];
+  movements: StockMovement[];
+  onlineOrders: OnlineOrder[];
+  purchaseReceipts: PurchaseReceipt[];
+  customers: Customer[];
+  suppliers: Supplier[];
+  cashClosures: CashClosure[];
+  cashShifts: CashShift[];
+  supplierPayments: SupplierPayment[];
+  emailMessages: EmailMessage[];
+  salesAuditEntries: SalesAuditEntry[];
+  operationAuditEntries: OperationAuditEntry[];
+  businessProfile: BusinessProfile;
+  categories: string[];
+  rolePermissions: RolePermissions;
+  updatedAt: string;
+}
+
 export interface ImportProductRow {
   name: string;
   category: string;
