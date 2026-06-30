@@ -1722,6 +1722,323 @@ label {
 .store-footer { min-height: 180px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; padding: 34px max(24px, calc((100vw - 1180px) / 2)); background: oklch(25% 0.045 155); color: oklch(93% 0.012 95); }
 .store-footer > span { display: flex; align-items: center; gap: 7px; }
 
+.theme-toggle {
+  min-height: 40px;
+  border: 1px solid oklch(82% 0.026 150);
+  border-radius: 8px;
+  background: oklch(98% 0.008 150);
+  color: oklch(31% 0.038 160);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  border-color: oklch(68% 0.052 158);
+  background: oklch(95% 0.016 150);
+}
+
+.theme-toggle:focus-visible,
+.nav-item:focus-visible,
+.nav-group-toggle:focus-visible,
+.sales-tab:focus-visible,
+.stock-tab:focus-visible,
+.module-tab:focus-visible,
+.primary-action:focus-visible,
+.secondary-action:focus-visible,
+.icon-button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid oklch(75% 0.09 154 / 0.55);
+  outline-offset: 2px;
+}
+
+.theme-night {
+  color: oklch(91% 0.012 154);
+  background: oklch(18% 0.026 158);
+}
+
+.theme-night .sidebar {
+  background: linear-gradient(180deg, oklch(21% 0.035 160), oklch(16% 0.028 164));
+  color: oklch(93% 0.012 154);
+  border-right: 1px solid oklch(31% 0.034 160);
+}
+
+.theme-night .sidebar .brand-lockup span,
+.theme-night .role-box label,
+.theme-night .role-box > span {
+  color: oklch(76% 0.024 154);
+}
+
+.theme-night .nav-group-toggle {
+  color: oklch(70% 0.022 154);
+}
+
+.theme-night .nav-group-toggle:hover {
+  background: oklch(27% 0.035 160);
+  color: oklch(91% 0.012 154);
+}
+
+.theme-night .nav-item {
+  color: oklch(83% 0.016 154);
+}
+
+.theme-night .nav-item.active,
+.theme-night .nav-item:hover {
+  background: oklch(34% 0.055 158);
+  color: oklch(97% 0.006 150);
+}
+
+.theme-night main {
+  background:
+    linear-gradient(180deg, oklch(20% 0.026 158), oklch(15% 0.02 160)),
+    oklch(16% 0.022 158);
+}
+
+.theme-night .topbar {
+  border-bottom-color: oklch(31% 0.028 158);
+  background: oklch(20% 0.024 158);
+}
+
+.theme-night .topbar p,
+.theme-night .metric p,
+.theme-night .data-list span,
+.theme-night .table-row span,
+.theme-night .stock-item span,
+.theme-night .catalog-item span,
+.theme-night .catalog-item p,
+.theme-night .muted-text,
+.theme-night .global-results span,
+.theme-night .decision p,
+.theme-night .checkout-row span,
+.theme-night .cart-lines span,
+.theme-night .movement-list span,
+.theme-night .catalog-toolbar span,
+.theme-night .editor-header span,
+.theme-night .editor-main-image span,
+.theme-night .shift-strip span {
+  color: oklch(72% 0.018 154);
+}
+
+.theme-night h1,
+.theme-night h2,
+.theme-night strong {
+  color: oklch(94% 0.01 154);
+}
+
+.theme-night .metric,
+.theme-night .panel,
+.theme-night .catalog-item,
+.theme-night .editor-media,
+.theme-night .editor-details,
+.theme-night .auth-card {
+  background: oklch(23% 0.023 158);
+  border-color: oklch(34% 0.028 158);
+  box-shadow: 0 14px 38px oklch(9% 0.02 160 / 0.24);
+}
+
+.theme-night .metric > span,
+.theme-night .search-field svg,
+.theme-night .global-search svg {
+  color: oklch(73% 0.07 156);
+}
+
+.theme-night input,
+.theme-night select,
+.theme-night textarea,
+.theme-night .role-box select {
+  border-color: oklch(38% 0.028 158);
+  background: oklch(18% 0.02 158);
+  color: oklch(91% 0.01 154);
+}
+
+.theme-night input::placeholder,
+.theme-night textarea::placeholder {
+  color: oklch(64% 0.018 154);
+}
+
+.theme-night label {
+  color: oklch(79% 0.018 154);
+}
+
+.theme-night .global-results,
+.theme-night .segmented-control,
+.theme-night .cart-lines,
+.theme-night .audit-status,
+.theme-night .audit-readonly,
+.theme-night .editor-main-image,
+.theme-night .image-tile {
+  background: oklch(19% 0.021 158);
+  border-color: oklch(36% 0.028 158);
+}
+
+.theme-night .global-results button,
+.theme-night .decision,
+.theme-night .data-list > div,
+.theme-night .table-row,
+.theme-night .cart-lines > div,
+.theme-night .movement-list > div,
+.theme-night .stock-item,
+.theme-night .catalog-edit-panel,
+.theme-night .store-cart-total {
+  border-top-color: oklch(34% 0.026 158);
+}
+
+.theme-night .global-results button {
+  color: oklch(90% 0.01 154);
+}
+
+.theme-night .global-results button:hover {
+  background: oklch(25% 0.026 158);
+}
+
+.theme-night .sync-pill.syncing {
+  background: oklch(53% 0.085 83);
+  color: oklch(95% 0.018 88);
+}
+
+.theme-night .sync-pill.synced {
+  background: oklch(31% 0.07 154);
+  color: oklch(88% 0.056 150);
+}
+
+.theme-night .theme-toggle,
+.theme-night .sales-tab,
+.theme-night .stock-tab,
+.theme-night .module-tab {
+  border-color: oklch(37% 0.03 158);
+  background: oklch(23% 0.024 158);
+  color: oklch(86% 0.014 154);
+}
+
+.theme-night .theme-toggle:hover,
+.theme-night .sales-tab:hover,
+.theme-night .stock-tab:hover,
+.theme-night .module-tab:hover {
+  border-color: oklch(52% 0.065 158);
+  background: oklch(28% 0.03 158);
+}
+
+.theme-night .sales-tab.active,
+.theme-night .stock-tab.active,
+.theme-night .module-tab.active {
+  background: oklch(49% 0.095 158);
+  border-color: oklch(49% 0.095 158);
+  color: oklch(97% 0.006 150);
+}
+
+.theme-night .primary-action {
+  background: oklch(54% 0.105 158);
+  color: oklch(98% 0.006 150);
+}
+
+.theme-night .primary-action:hover {
+  background: oklch(58% 0.11 158);
+}
+
+.theme-night .secondary-action,
+.theme-night .icon-button,
+.theme-night .segmented-control button.active {
+  background: oklch(30% 0.033 158);
+  color: oklch(90% 0.012 154);
+}
+
+.theme-night .secondary-action:hover,
+.theme-night .icon-button:hover {
+  background: oklch(35% 0.038 158);
+}
+
+.theme-night .secondary-action.danger {
+  background: oklch(32% 0.07 28);
+  color: oklch(86% 0.07 30);
+}
+
+.theme-night .danger-action {
+  border-color: oklch(55% 0.15 28);
+  background: oklch(45% 0.14 28);
+}
+
+.theme-night .empty-lines {
+  border-color: oklch(43% 0.03 158);
+  color: oklch(72% 0.018 154);
+}
+
+.theme-night .shift-summary span,
+.theme-night .shift-summary strong,
+.theme-night .chip,
+.theme-night .status {
+  background: oklch(29% 0.026 158);
+  color: oklch(80% 0.018 154);
+}
+
+.theme-night .chip.success,
+.theme-night .status.confirmado,
+.theme-night .sync-pill.synced {
+  background: oklch(30% 0.07 150);
+  color: oklch(86% 0.064 148);
+}
+
+.theme-night .chip.warning,
+.theme-night .status.pendiente {
+  background: oklch(34% 0.075 70);
+  color: oklch(88% 0.08 76);
+}
+
+.theme-night .positive {
+  color: oklch(78% 0.09 145);
+}
+
+.theme-night .negative,
+.theme-night .error-text,
+.theme-night .audit-inline-message {
+  color: oklch(76% 0.11 32) !important;
+}
+
+.theme-night .catalog-price {
+  color: oklch(83% 0.08 150) !important;
+}
+
+.theme-night .catalog-item img,
+.theme-night .stock-item img,
+.theme-night .ai-preview,
+.theme-night .editor-main-image,
+.theme-night .image-tile {
+  background: oklch(15% 0.018 158);
+}
+
+.theme-night .gallery-dots button {
+  background: oklch(82% 0.01 150 / 0.45);
+}
+
+.theme-night .gallery-dots button.active {
+  background: oklch(73% 0.13 78);
+}
+
+.theme-night .ai-assistant,
+.theme-night .ai-product-tools {
+  background: oklch(22% 0.028 166);
+  border-color: oklch(38% 0.042 166);
+}
+
+.theme-night .ai-assistant > div:first-child span,
+.theme-night .ai-product-tools > div:first-child span {
+  color: oklch(72% 0.025 164);
+}
+
+.theme-night .delete-product-zone {
+  background: oklch(24% 0.032 28);
+  border-color: oklch(40% 0.07 28);
+}
+
+.theme-night .delete-product-zone span {
+  color: oklch(75% 0.065 28);
+}
+
 @media (min-width: 1041px) and (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 224px minmax(0, 1fr);

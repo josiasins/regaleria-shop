@@ -8,12 +8,15 @@ Interfaz de producto interno. El diseño sirve a tareas repetidas de mostrador y
 
 Uso esperado: negocio fisico, monitor de mostrador o notebook, luz diurna/interior, usuarios alternando entre venta rapida y administracion. Tema claro, sobrio, con contraste suficiente y baja decoracion.
 
+El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de baja luz. Es una preferencia local del navegador, no un dato del negocio ni una configuracion de base de datos. La tienda publica conserva su identidad visual propia.
+
 ## Color
 
 - Neutros verdosos en OKLCH para dar continuidad sin dominar la interfaz.
 - Acento principal verde para acciones y estado positivo.
 - Amarillo suave para sincronizacion o advertencia.
 - Rojo moderado para bajas, perdidas o negativos.
+- Modo noche usa fondo bosque profundo, paneles verdosos oscuros, texto marfil suave y los mismos acentos semanticos atenuados.
 - Evitar paletas saturadas o monocromaticas fuertes.
 
 ## Tipografia
@@ -55,6 +58,7 @@ Uso esperado: negocio fisico, monitor de mostrador o notebook, luz diurna/interi
 - Mantener botones y campos con radio de 7 u 8 px.
 - Usar controles familiares: selects para categorias/proveedores, checkboxes para permisos, botones segmentados para vistas.
 - La busqueda global debe estar disponible arriba y ser enfocable con Ctrl/Cmd + K.
+- El selector Dia/Noche vive en la barra superior y debe recordar la preferencia con `localStorage`.
 - Atajos de mostrador deben ser pocos y memorables.
 - Las funciones de IA deben mostrar claramente cuando algo es sugerido y cuando ya fue aplicado al formulario.
 - La carga de imagenes debe ser visual; evitar textarea de URLs como mecanismo principal.

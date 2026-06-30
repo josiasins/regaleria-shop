@@ -16,6 +16,7 @@ import {
   ListBullets,
   MagnifyingGlass,
   MinusCircle,
+  Moon,
   Package,
   PencilSimple,
   PlusCircle,
@@ -24,6 +25,7 @@ import {
   ShoppingCartSimple,
   SquaresFour,
   Storefront,
+  Sun,
   Trash,
   Truck,
   TrendUp,
@@ -69,6 +71,7 @@ type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
 type ExpensePage = "cargar" | "recientes" | "editar" | "eliminados" | "historial" | "resumen" | "cierre";
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
+type InterfaceTheme = "dia" | "noche";
 
 const internalOwnerEmails = ["josias.insfran66@gmail.com", "iris.traghetti66@gmail.com"];
 const internalAllowedEmails = Array.from(
@@ -115,6 +118,16 @@ function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "
 }
 
 const allSectionIds = sections.map((section) => section.id);
+const themeStorageKey = "regaleria-interface-theme";
+
+function getInitialInterfaceTheme(): InterfaceTheme {
+  if (typeof window === "undefined") return "dia";
+  try {
+    return window.localStorage.getItem(themeStorageKey) === "noche" ? "noche" : "dia";
+  } catch {
+    return "dia";
+  }
+}
 
 export function App() {
   if (isPublicWebsite()) return <PublicSite />;
@@ -301,6 +314,7 @@ function InternalApp() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [interfaceTheme, setInterfaceTheme] = useState<InterfaceTheme>(getInitialInterfaceTheme);
   const role = useStore((state) => state.activeRole);
   const setRole = useStore((state) => state.setRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
@@ -313,6 +327,9 @@ function InternalApp() {
   };
   const toggleGroup = (title: string) => {
     setCollapsedGroups((current) => ({ ...current, [title]: !current[title] }));
+  };
+  const toggleInterfaceTheme = () => {
+    setInterfaceTheme((current) => (current === "noche" ? "dia" : "noche"));
   };
 
   useEffect(() => {
@@ -334,8 +351,16 @@ function InternalApp() {
     if (!allowedSections.includes(section)) setSection("panel");
   }, [allowedSections, section]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(themeStorageKey, interfaceTheme);
+    } catch {
+      // La preferencia visual es local; si el navegador la bloquea, la app sigue funcionando.
+    }
+  }, [interfaceTheme]);
+
   return (
-    <div className="app-shell">
+    <div className={clsx("app-shell", interfaceTheme === "noche" && "theme-night")}>
       <button className="mobile-menu-button" onClick={() => setIsMobileNavOpen(true)} aria-label="Abrir menu">
         <ListBullets size={22} />
         <span>Menu</span>
@@ -396,7 +421,7 @@ function InternalApp() {
         </div>
       </aside>
       <main>
-        <Header section={section} onNavigate={navigate} allowedSections={allowedSections} />
+        <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} />
         {section === "panel" && <Dashboard />}
         {section === "ventas" && <Sales />}
         {section === "stock" && <Stock />}
@@ -415,7 +440,19 @@ function InternalApp() {
   );
 }
 
-function Header({ section, onNavigate, allowedSections }: { section: Section; onNavigate: (section: Section) => void; allowedSections: Section[] }) {
+function Header({
+  section,
+  onNavigate,
+  allowedSections,
+  interfaceTheme,
+  onToggleTheme
+}: {
+  section: Section;
+  onNavigate: (section: Section) => void;
+  allowedSections: Section[];
+  interfaceTheme: InterfaceTheme;
+  onToggleTheme: () => void;
+}) {
   const markAllSynced = useStore((state) => state.markAllSynced);
   const { products, customers, suppliers, sales } = useStore();
   const [search, setSearch] = useState("");
@@ -475,6 +512,10 @@ function Header({ section, onNavigate, allowedSections }: { section: Section; on
             </div>
           )}
         </label>
+        <button className="theme-toggle" type="button" onClick={onToggleTheme} aria-label={interfaceTheme === "noche" ? "Activar modo dia" : "Activar modo noche"} title={interfaceTheme === "noche" ? "Modo dia" : "Modo noche"}>
+          {interfaceTheme === "noche" ? <Sun size={18} weight="duotone" /> : <Moon size={18} weight="duotone" />}
+          <span>{interfaceTheme === "noche" ? "Dia" : "Noche"}</span>
+        </button>
         <div className={clsx("sync-pill", pending ? "syncing" : "synced")}>
           <ArrowClockwise size={18} />
           {pending ? `Sincronizando ${pending} cambio${pending === 1 ? "" : "s"}` : "Todo actualizado"}

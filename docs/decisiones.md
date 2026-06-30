@@ -442,6 +442,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: gastos y proveedores no se eliminan fisicamente; quedan marcados como eliminados, pendientes de sincronizacion y visibles en una vista de eliminados/historial.
 - Permisos: gastos pueden ser gestionados por roles operativos autorizados; baja/restauracion de proveedores queda limitada a dueño y administrador.
 - Alternativas descartadas: borrado definitivo desde la lista principal, porque impediria auditar correcciones y restaurar datos cargados por error.
+
+### Modo noche local del sistema interno
+- Fecha: 2026-06-30.
+- Decision: agregar modo Dia/Noche como preferencia local del navegador en la interfaz interna.
+- Motivo: el sistema se usa muchas horas en mostrador y administracion; una variante oscura reduce fatiga visual en ambientes de baja luz.
+- Alcance: solo cambia la interfaz del sistema interno; no toca base de datos, Supabase, productos, ventas ni configuraciones del negocio.
+- Alternativas descartadas: guardar el tema en PostgreSQL o Supabase, porque seria una preferencia del dispositivo y no un dato operativo.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
