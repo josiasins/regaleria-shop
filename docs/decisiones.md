@@ -405,6 +405,12 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: Supabase Auth confirma identidad, pero la app tambien necesita decidir quien pertenece al negocio. Sin esta regla, cualquier usuario autenticado que lograra una sesion valida podria ver el panel.
 - Alternativas descartadas: confiar solo en que el registro publico esta desactivado, porque OAuth y usuarios creados por error pueden ampliar el acceso si no existe una allowlist.
 
+### Segundo correo dueño
+- Fecha: 2026-06-30.
+- Decision: habilitar `iris.traghetti66@gmail.com` como correo dueño base del sistema interno y de las politicas de catalogo/archivos.
+- Motivo: debe poder ingresar con Google y operar con los mismos permisos de dueño aunque Render conserve una allowlist anterior en variables de entorno.
+- Alternativas descartadas: depender solo de actualizar `VITE_INTERNAL_ALLOWED_EMAILS`, porque una variable vieja en hosting podria bloquear el acceso.
+
 ### Endurecimiento inicial de seguridad
 - Fecha: 2026-06-06.
 - Decision: restringir escritura y lectura privada de Storage al correo autorizado, limitar cargas de IA a 15 MB y agregar cabeceras contra MIME sniffing, iframes y permisos innecesarios.

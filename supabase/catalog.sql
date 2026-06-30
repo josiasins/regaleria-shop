@@ -18,7 +18,7 @@ as $$
     select 1
     from auth.users
     where id = auth.uid()
-      and lower(email) = 'josias.insfran66@gmail.com'
+      and lower(email) in ('josias.insfran66@gmail.com', 'iris.traghetti66@gmail.com')
   );
 $$;
 

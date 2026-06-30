@@ -70,10 +70,16 @@ type TransferPage = "cargar" | "comprobantes";
 type ExpensePage = "cargar" | "recientes" | "resumen" | "cierre";
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
 
-const internalAllowedEmails = String(import.meta.env.VITE_INTERNAL_ALLOWED_EMAILS || "josias.insfran66@gmail.com")
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
+const internalOwnerEmails = ["josias.insfran66@gmail.com", "iris.traghetti66@gmail.com"];
+const internalAllowedEmails = Array.from(
+  new Set([
+    ...internalOwnerEmails,
+    ...String(import.meta.env.VITE_INTERNAL_ALLOWED_EMAILS || "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  ])
+);
 
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
