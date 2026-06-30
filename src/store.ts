@@ -396,6 +396,67 @@ function syncProductsToCloud(products: Product[], productIds?: string[]) {
   for (const product of selected) void saveCloudProduct(product);
 }
 
+const operationalStateKeys: (keyof OperationalStateFields)[] = [
+  "products",
+  "sales",
+  "quotes",
+  "transfers",
+  "expenses",
+  "movements",
+  "onlineOrders",
+  "purchaseReceipts",
+  "customers",
+  "suppliers",
+  "cashClosures",
+  "cashShifts",
+  "supplierPayments",
+  "emailMessages",
+  "salesAuditEntries",
+  "operationAuditEntries",
+  "businessProfile",
+  "categories",
+  "rolePermissions"
+];
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let saveInFlight = false;
+let saveQueued = false;
+let applyingSyncedState = false;
+
+function hasOperationalChange(state: AppState, previous: AppState) {
+  return operationalStateKeys.some((key) => state[key] !== previous[key]);
+}
+
+async function flushOperationalState() {
+  if (import.meta.env.MODE === "test") return;
+  if (saveInFlight) {
+    saveQueued = true;
+    return;
+  }
+
+  saveInFlight = true;
+  do {
+    saveQueued = false;
+    const nextState = syncedOperationalState(useStore.getState());
+    const saved = await saveCloudOperations(operationalSnapshotFromState(nextState));
+    if (saved && !saveQueued) {
+      applyingSyncedState = true;
+      useStore.setState(nextState);
+      applyingSyncedState = false;
+    }
+  } while (saveQueued);
+  saveInFlight = false;
+}
+
+function scheduleOperationalSave() {
+  if (import.meta.env.MODE === "test") return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void flushOperationalState();
+  }, 350);
+}
+
 export const useStore = create<AppState>((set, get) => ({
   ...initialDataState(),
   activeRole: "dueno",
@@ -1413,6 +1474,11 @@ export const useStore = create<AppState>((set, get) => ({
     });
   }
 }));
+
+useStore.subscribe((state, previous) => {
+  if (applyingSyncedState) return;
+  if (hasOperationalChange(state, previous)) scheduleOperationalSave();
+});
 
 export const resetStore = () => {
   useStore.setState(initialDataState());

@@ -457,6 +457,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: ventas, turnos, presupuestos, transferencias, gastos, compras, clientes, proveedores, movimientos, permisos, categorias, cierres y auditorias.
 - Relacion con catalogo: productos/stock siguen sincronizados tambien con `public_catalog_products`, porque la web publica necesita leerlos y los pedidos web descuentan stock desde ahi.
 - Alternativas descartadas: normalizar todas las tablas en este paso, porque llevaria mas tiempo y bloquearia la proteccion inmediata de datos; queda como mejora posterior.
+
+### Guardado automatico de operaciones internas
+- Fecha: 2026-06-30.
+- Decision: guardar automaticamente en Supabase el snapshot operativo despues de cualquier cambio en ventas, compras, stock, gastos, clientes, proveedores, turnos, categorias, permisos o auditorias.
+- Motivo: registrar una compra solo actualizaba la pantalla actual y el catalogo/stock, pero no persistia `purchaseReceipts` en `operational_state`; al refrescar, Compras recientes volvia al ultimo estado online.
+- Alcance: el guardado se agrupa con una espera corta para evitar enviar demasiadas escrituras seguidas y se serializa para que el ultimo cambio no sea pisado por una sincronizacion anterior.
+- Alternativas descartadas: depender del boton manual de sincronizacion, porque en mostrador y compras la informacion debe quedar guardada sin pasos extra.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

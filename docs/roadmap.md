@@ -195,5 +195,6 @@
 - [x] Restringir archivos privados de Storage al correo autorizado.
 - [ ] Rotar contraseña PostgreSQL expuesta en una configuracion OAuth incorrecta.
 - [x] Conectar catalogo y stock publicable a datos reales en Supabase.
+- [x] Guardado automatico del estado operativo interno en Supabase despues de compras, ventas, gastos y cambios criticos.
 - [ ] Migrar ventas, compras, clientes, proveedores y finanzas desde el estado local a tablas reales de Supabase.
 - [x] Configurar DNS interno en Porkbun.

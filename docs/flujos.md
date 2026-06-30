@@ -185,6 +185,16 @@
 3. Compras muestra total comprado, total pagado y saldo.
 4. Cada pago queda pendiente de sincronizacion.
 
+## Registro de compra persistente
+
+1. La persona carga proveedor, tipo de comprobante, numero, productos, cantidades, costos y envio.
+2. Al registrar, el sistema crea el comprobante de compra.
+3. Tambien crea un gasto de reposicion asociado al proveedor.
+4. Se generan movimientos de ingreso y se actualiza el stock/costo de cada variante.
+5. Si el proveedor se cargo como rapido y no existia, queda guardado en Proveedores.
+6. El estado operativo completo se guarda automaticamente en Supabase.
+7. Al refrescar la app, Compras recientes debe reconstruirse desde `operational_state` y conservar el comprobante.
+
 ## Correccion y baja de gastos
 
 1. Gastos recientes muestra los registros activos.
