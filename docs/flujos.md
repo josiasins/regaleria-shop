@@ -233,6 +233,17 @@
 6. Se calcula compras por proveedor.
 7. Se calcula gastos por categoria y tendencia.
 
+## Capital y prestamos
+
+1. Solo el rol dueño ve el modulo Capital.
+2. El dueño registra capital propio, capital prestado, prestamo recibido, pago de prestamo, retiro o ajuste.
+3. Cada movimiento requiere monto y origen/persona; puede incluir vencimiento y nota.
+4. El panel separa dinero propio de deuda pendiente.
+5. Capital total registrado muestra capital propio mas deuda que todavia esta dentro del negocio.
+6. Balance neto muestra capital propio menos deuda pendiente.
+7. Proximo vencimiento ayuda a recordar prestamos con fecha cargada.
+8. Los movimientos anulados dejan de afectar el panel, pero permanecen en el estado operativo sincronizado.
+
 ## Busqueda global y atajos
 
 1. La busqueda superior encuentra productos, clientes, proveedores y ventas.

@@ -393,6 +393,31 @@ export interface SupplierPayment {
   syncStatus: SyncStatus;
 }
 
+export type CapitalEntryType = "capital_propio" | "capital_prestado" | "prestamo_recibido" | "pago_prestamo" | "retiro_dueno" | "ajuste";
+export type CapitalEntryStatus = "activo" | "cerrado";
+
+export interface CapitalEntry {
+  id: string;
+  type: CapitalEntryType;
+  source: string;
+  amount: number;
+  note: string;
+  createdAt: string;
+  dueDate?: string;
+  status: CapitalEntryStatus;
+  deletedAt?: string;
+  deletedBy?: Role;
+  syncStatus: SyncStatus;
+}
+
+export interface CapitalEntryDraftInput {
+  type: CapitalEntryType;
+  source: string;
+  amount: number;
+  note: string;
+  dueDate?: string;
+}
+
 export interface BusinessProfile {
   businessName: string;
   publicDomain: string;
@@ -420,6 +445,7 @@ export interface OperationalSnapshot {
   cashClosures: CashClosure[];
   cashShifts: CashShift[];
   supplierPayments: SupplierPayment[];
+  capitalEntries: CapitalEntry[];
   emailMessages: EmailMessage[];
   salesAuditEntries: SalesAuditEntry[];
   operationAuditEntries: OperationAuditEntry[];
@@ -449,6 +475,7 @@ export type PermissionKey =
   | "presupuestos"
   | "pagos"
   | "gastos"
+  | "capital"
   | "catalogo"
   | "web"
   | "reportes"

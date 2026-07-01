@@ -139,6 +139,7 @@
 - [x] Presupuestos separados en Nuevo presupuesto y Presupuestos.
 - [x] Transferencias separadas en Cargar transferencia y Comprobantes.
 - [x] Gastos separados en Cargar, Recientes, Resumen y Cierre diario.
+- [x] Capital y prestamos privados visibles solo para dueño, con panel visual y movimientos.
 - [x] Configuracion separada en Roles, Operativa, Categorias, Sincronizacion y Atajos.
 - [x] Buscador de producto dentro de ventas.
 - [x] Optimizacion responsive para tablet y celular.

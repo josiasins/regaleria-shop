@@ -1,4 +1,4 @@
-import type { BusinessProfile, CashClosure, CashShift, Customer, Expense, OnlineOrder, Product, PurchaseReceipt, Quote, RolePermissions, Sale, StockMovement, Supplier, SupplierPayment, Transfer } from "./types";
+import type { BusinessProfile, CapitalEntry, CashClosure, CashShift, Customer, Expense, OnlineOrder, Product, PurchaseReceipt, Quote, RolePermissions, Sale, StockMovement, Supplier, SupplierPayment, Transfer } from "./types";
 
 export const products: Product[] = [
   {
@@ -119,6 +119,8 @@ export const cashShifts: CashShift[] = [];
 
 export const supplierPayments: SupplierPayment[] = [];
 
+export const capitalEntries: CapitalEntry[] = [];
+
 export const businessProfile: BusinessProfile = {
   businessName: "Regaleria Shop",
   publicDomain: "regaleriashop.com",
@@ -133,7 +135,7 @@ export const businessProfile: BusinessProfile = {
 export const categories = ["Mates y termos", "Deco", "Bazar", "Regalos personalizados", "Libreria", "Accesorios", "Sin categoria"];
 
 export const rolePermissions: RolePermissions = {
-  dueno: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
+  dueno: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "capital", "catalogo", "web", "reportes", "sistema", "descuentos"],
   administrador: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
   encargado: ["panel", "ventas", "stock", "compras", "clientes", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "descuentos"],
   cajero: ["panel", "ventas", "clientes", "presupuestos", "pagos"]

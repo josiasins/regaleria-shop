@@ -43,7 +43,7 @@ import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import type { CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
+import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
 
 const sections = [
@@ -56,6 +56,7 @@ const sections = [
   { id: "presupuestos", label: "Presupuestos", icon: FileText },
   { id: "pagos", label: "Transferencias", icon: CreditCard },
   { id: "gastos", label: "Gastos", icon: Wallet },
+  { id: "capital", label: "Capital", icon: TrendUp },
   { id: "catalogo", label: "Catalogo", icon: Storefront },
   { id: "web", label: "Web publica", icon: GlobeHemisphereWest },
   { id: "reportes", label: "Reportes", icon: ChartLineUp },
@@ -87,7 +88,7 @@ const internalAllowedEmails = Array.from(
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
   { title: "Personas", ids: ["clientes", "proveedores"] },
-  { title: "Finanzas", ids: ["presupuestos", "pagos", "gastos"] },
+  { title: "Finanzas", ids: ["presupuestos", "pagos", "gastos", "capital"] },
   { title: "Catalogo y web", ids: ["catalogo", "web"] },
   { title: "Analisis", ids: ["reportes"] },
   { title: "Configuracion", ids: ["sistema"] }
@@ -318,7 +319,7 @@ function InternalApp() {
   const role = useStore((state) => state.activeRole);
   const setRole = useStore((state) => state.setRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
-  const allowedSections = rolePermissions[role].filter((id): id is Section => allSectionIds.includes(id as Section));
+  const allowedSections = rolePermissions[role].filter((id): id is Section => allSectionIds.includes(id as Section) && (id !== "capital" || role === "dueno"));
 
   const navigate = (nextSection: Section) => {
     setSection(nextSection);
@@ -431,6 +432,7 @@ function InternalApp() {
         {section === "presupuestos" && <Quotes />}
         {section === "pagos" && <Transfers />}
         {section === "gastos" && <Expenses />}
+        {section === "capital" && <Capital />}
         {section === "catalogo" && <Catalog editingProductId={editingProductId} onEditProduct={setEditingProductId} onBack={() => setEditingProductId(null)} />}
         {section === "web" && <PublicShop />}
         {section === "reportes" && <Reports />}
@@ -466,6 +468,7 @@ function Header({
       ...state.movements,
       ...state.onlineOrders,
       ...state.purchaseReceipts,
+      ...state.capitalEntries.filter((entry) => !entry.deletedAt),
       ...state.customers,
       ...state.suppliers.filter((supplier) => !supplier.deletedAt),
       ...state.cashShifts
@@ -2810,8 +2813,155 @@ function Reports() {
   );
 }
 
+function Capital() {
+  const activeRole = useStore((state) => state.activeRole);
+  const capitalEntries = useStore((state) => state.capitalEntries);
+  const addCapitalEntry = useStore((state) => state.addCapitalEntry);
+  const deleteCapitalEntry = useStore((state) => state.deleteCapitalEntry);
+  const [type, setType] = useState<CapitalEntryType>("capital_propio");
+  const [source, setSource] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [dueDate, setDueDate] = useState("");
+  const [note, setNote] = useState("");
+
+  if (activeRole !== "dueno") {
+    return (
+      <section className="workspace">
+        <Panel title="Capital restringido">
+          <div className="empty-lines">Solo el dueño puede ver o cargar capital, préstamos y movimientos financieros privados.</div>
+        </Panel>
+      </section>
+    );
+  }
+
+  const activeEntries = capitalEntries.filter((entry) => !entry.deletedAt);
+  const ownIn = activeEntries.filter((entry) => entry.type === "capital_propio").reduce((sum, entry) => sum + entry.amount, 0);
+  const adjustments = activeEntries.filter((entry) => entry.type === "ajuste").reduce((sum, entry) => sum + entry.amount, 0);
+  const ownerWithdrawals = activeEntries.filter((entry) => entry.type === "retiro_dueno").reduce((sum, entry) => sum + entry.amount, 0);
+  const borrowedIn = activeEntries.filter((entry) => entry.type === "capital_prestado" || entry.type === "prestamo_recibido").reduce((sum, entry) => sum + entry.amount, 0);
+  const loanPayments = activeEntries.filter((entry) => entry.type === "pago_prestamo").reduce((sum, entry) => sum + entry.amount, 0);
+  const ownCapital = ownIn + adjustments - ownerWithdrawals;
+  const debtBalance = Math.max(borrowedIn - loanPayments, 0);
+  const availableCapital = ownCapital + debtBalance;
+  const netPosition = ownCapital - debtBalance;
+  const totalReference = Math.max(ownCapital + debtBalance, 1);
+  const ownRatio = Math.max(0, Math.min(100, (ownCapital / totalReference) * 100));
+  const debtRatio = Math.max(0, Math.min(100, (debtBalance / totalReference) * 100));
+  const nextDue = activeEntries
+    .filter((entry) => (entry.type === "capital_prestado" || entry.type === "prestamo_recibido") && entry.dueDate)
+    .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
+  const capitalLabels: Record<CapitalEntryType, string> = {
+    capital_propio: "Capital propio",
+    capital_prestado: "Capital prestado",
+    prestamo_recibido: "Prestamo recibido",
+    pago_prestamo: "Pago de prestamo",
+    retiro_dueno: "Retiro del dueño",
+    ajuste: "Ajuste"
+  };
+  const submitCapital = (event: FormEvent) => {
+    event.preventDefault();
+    const saved = addCapitalEntry({ type, source, amount, dueDate, note }, activeRole);
+    if (!saved) return;
+    setSource("");
+    setAmount(0);
+    setDueDate("");
+    setNote("");
+  };
+
+  return (
+    <section className="workspace">
+      <div className="capital-hero">
+        <div>
+          <span>Lectura simple para dueño</span>
+          <h2>{formatMoney(availableCapital)}</h2>
+          <p>Capital total registrado: propio más dinero prestado que todavía está dentro del negocio.</p>
+        </div>
+        <div className="capital-balance">
+          <strong>{formatMoney(netPosition)}</strong>
+          <span>Balance neto: capital propio menos deuda pendiente.</span>
+        </div>
+      </div>
+
+      <div className="capital-grid">
+        <CapitalCard title="Capital propio" value={formatMoney(ownCapital)} note="Dinero del dueño o ajustes propios que no hay que devolver." percent={ownRatio} tone="own" />
+        <CapitalCard title="Deuda pendiente" value={formatMoney(debtBalance)} note="Capital prestado y préstamos recibidos menos pagos realizados." percent={debtRatio} tone="debt" />
+        <CapitalCard title="Pagos realizados" value={formatMoney(loanPayments)} note="Cuánto ya se devolvió de préstamos o capital prestado." percent={borrowedIn ? Math.min(100, (loanPayments / borrowedIn) * 100) : 0} tone="paid" />
+        <CapitalCard title="Próximo vencimiento" value={nextDue?.dueDate ? new Date(nextDue.dueDate).toLocaleDateString("es-AR") : "Sin fecha"} note={nextDue ? `${capitalLabels[nextDue.type]} · ${nextDue.source}` : "No hay préstamos con vencimiento cargado."} percent={nextDue ? 72 : 0} tone="due" />
+      </div>
+
+      <div className="split">
+        <Panel title="Ingresar movimiento de capital">
+          <form className="form-grid one compact" onSubmit={submitCapital}>
+            <label>
+              Tipo
+              <select value={type} onChange={(event) => setType(event.target.value as CapitalEntryType)}>
+                <option value="capital_propio">Capital propio</option>
+                <option value="capital_prestado">Capital prestado</option>
+                <option value="prestamo_recibido">Préstamo recibido</option>
+                <option value="pago_prestamo">Pago de préstamo</option>
+                <option value="retiro_dueno">Retiro del dueño</option>
+                <option value="ajuste">Ajuste</option>
+              </select>
+            </label>
+            <label>
+              Origen o persona
+              <input value={source} onChange={(event) => setSource(event.target.value)} placeholder="Ej: Josías, banco, familiar, socio" />
+            </label>
+            <label>
+              Monto
+              <input type="number" min={0} value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
+            </label>
+            <label>
+              Vencimiento opcional
+              <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            </label>
+            <label>
+              Nota
+              <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Detalle, cuotas, motivo o acuerdo" />
+            </label>
+            <button className="primary-action full" disabled={amount <= 0}>
+              <PlusCircle size={18} /> Guardar movimiento
+            </button>
+          </form>
+        </Panel>
+
+        <Panel title="Movimientos recientes">
+          <div className="table capital-table">
+            {activeEntries.length ? activeEntries.map((entry) => (
+              <div className="table-row" key={entry.id}>
+                <div>
+                  <strong>{capitalLabels[entry.type]}</strong>
+                  <span>{entry.source} · {new Date(entry.createdAt).toLocaleDateString("es-AR")}{entry.dueDate ? ` · vence ${new Date(entry.dueDate).toLocaleDateString("es-AR")}` : ""}</span>
+                  <span>{entry.note || "Sin nota"}</span>
+                </div>
+                <strong>{formatMoney(entry.amount)}</strong>
+                <button className="secondary-action danger" onClick={() => deleteCapitalEntry(entry.id, activeRole)}>
+                  <Trash size={17} /> Anular
+                </button>
+              </div>
+            )) : <div className="empty-lines">Sin movimientos de capital cargados.</div>}
+          </div>
+        </Panel>
+      </div>
+    </section>
+  );
+}
+
+function CapitalCard({ title, value, note, percent, tone }: { title: string; value: string; note: string; percent: number; tone: "own" | "debt" | "paid" | "due" }) {
+  return (
+    <div className={clsx("capital-card", tone)}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{note}</p>
+      <div className="capital-bar">
+        <i style={{ width: `${Math.max(4, Math.min(percent, 100))}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function System() {
-  const { products, sales, quotes, transfers, expenses, movements, onlineOrders, purchaseReceipts, customers, suppliers, cashClosures, cashShifts, supplierPayments, businessProfile, categories, rolePermissions, updateRolePermissions, updateBusinessProfile, addCategory, removeCategory, markAllSynced } = useStore();
+  const { products, sales, quotes, transfers, expenses, movements, onlineOrders, purchaseReceipts, customers, suppliers, cashClosures, cashShifts, supplierPayments, capitalEntries, businessProfile, categories, rolePermissions, updateRolePermissions, updateBusinessProfile, addCategory, removeCategory, markAllSynced } = useStore();
   const [newCategory, setNewCategory] = useState("");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("roles");
   const [profileDraft, setProfileDraft] = useState(businessProfile);
@@ -2828,7 +2978,8 @@ function System() {
     ...suppliers.map((item) => ({ id: item.id, type: "Proveedor", title: item.name, syncStatus: item.syncStatus })),
     ...cashClosures.map((item) => ({ id: item.id, type: "Cierre", title: item.number, syncStatus: item.syncStatus })),
     ...cashShifts.map((item) => ({ id: item.id, type: "Turno", title: item.number, syncStatus: item.syncStatus })),
-    ...supplierPayments.map((item) => ({ id: item.id, type: "Pago proveedor", title: item.supplier, syncStatus: item.syncStatus }))
+    ...supplierPayments.map((item) => ({ id: item.id, type: "Pago proveedor", title: item.supplier, syncStatus: item.syncStatus })),
+    ...capitalEntries.map((item) => ({ id: item.id, type: "Capital", title: item.source, syncStatus: item.syncStatus }))
   ].filter((item) => item.syncStatus !== "sincronizado");
   const permissionOptions = [
     ...sections.map((section) => ({ key: section.id, label: section.label })),
@@ -2859,10 +3010,12 @@ function System() {
         {settingsPage === "roles" && (
         <Panel title="Roles y permisos">
           <div className="settings-list">
-            {Object.entries(rolePermissions).map(([role, allowed]) => (
+            {Object.entries(rolePermissions).map(([role, allowed]) => {
+              const settingRole = role as Role;
+              return (
               <div key={role}>
                 <div>
-                  <strong>{roleLabels[role as Role]}</strong>
+                  <strong>{roleLabels[settingRole]}</strong>
                   <span>{allowed.length} modulo(s) visibles</span>
                 </div>
                 <div className="settings-chips">
@@ -2870,10 +3023,11 @@ function System() {
                     <label className="permission-chip" key={permission.key}>
                       <input
                         type="checkbox"
-                        checked={allowed.includes(permission.key)}
+                        checked={permission.key === "capital" && settingRole !== "dueno" ? false : allowed.includes(permission.key)}
+                        disabled={permission.key === "capital" && settingRole !== "dueno"}
                         onChange={(event) => {
                           const next = event.target.checked ? [...allowed, permission.key] : allowed.filter((item) => item !== permission.key);
-                          updateRolePermissions(role as Role, next);
+                          updateRolePermissions(settingRole, next);
                         }}
                       />
                       {permission.label}
@@ -2881,7 +3035,8 @@ function System() {
                   ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </Panel>
         )}

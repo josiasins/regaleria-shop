@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
-import { businessProfile, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
+import { businessProfile, capitalEntries, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
 import { loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
   BusinessProfile,
   BusinessProfileInput,
+  CapitalEntry,
+  CapitalEntryDraftInput,
   CashClosure,
   CashShift,
   CashShiftAuditUpdateInput,
@@ -61,6 +63,7 @@ interface AppState {
   cashClosures: CashClosure[];
   cashShifts: CashShift[];
   supplierPayments: SupplierPayment[];
+  capitalEntries: CapitalEntry[];
   emailMessages: EmailMessage[];
   salesAuditEntries: SalesAuditEntry[];
   operationAuditEntries: OperationAuditEntry[];
@@ -108,6 +111,8 @@ interface AppState {
   deleteShiftWithAudit: (shiftId: string, password: string, reason: string, requestedBy: Role) => boolean;
   restoreShiftWithAudit: (auditEntryId: string, password: string, reason: string, requestedBy: Role) => boolean;
   addSupplierPayment: (supplier: string, amount: number, note: string) => SupplierPayment | null;
+  addCapitalEntry: (input: CapitalEntryDraftInput, requestedBy: Role) => CapitalEntry | null;
+  deleteCapitalEntry: (id: string, requestedBy: Role) => boolean;
   updateBusinessProfile: (input: BusinessProfileInput) => void;
   addCategory: (category: string) => void;
   removeCategory: (category: string) => void;
@@ -134,6 +139,7 @@ type OperationalStateFields = Pick<
   | "cashClosures"
   | "cashShifts"
   | "supplierPayments"
+  | "capitalEntries"
   | "emailMessages"
   | "salesAuditEntries"
   | "operationAuditEntries"
@@ -276,6 +282,7 @@ function initialDataState() {
     cashClosures: structuredClone(cashClosures),
     cashShifts: structuredClone(cashShifts),
     supplierPayments: structuredClone(supplierPayments),
+    capitalEntries: structuredClone(capitalEntries),
     emailMessages: [],
     salesAuditEntries: [],
     operationAuditEntries: [],
@@ -301,6 +308,7 @@ function operationalSnapshotFromState(state: OperationalStateFields): Operationa
     cashClosures: state.cashClosures,
     cashShifts: state.cashShifts,
     supplierPayments: state.supplierPayments,
+    capitalEntries: state.capitalEntries,
     emailMessages: state.emailMessages,
     salesAuditEntries: state.salesAuditEntries,
     operationAuditEntries: state.operationAuditEntries,
@@ -326,12 +334,18 @@ function stateFromOperationalSnapshot(snapshot: OperationalSnapshot): Operationa
     cashClosures: snapshot.cashClosures,
     cashShifts: snapshot.cashShifts,
     supplierPayments: snapshot.supplierPayments,
+    capitalEntries: snapshot.capitalEntries ?? [],
     emailMessages: snapshot.emailMessages,
     salesAuditEntries: snapshot.salesAuditEntries,
     operationAuditEntries: snapshot.operationAuditEntries,
     businessProfile: snapshot.businessProfile,
     categories: snapshot.categories,
-    rolePermissions: snapshot.rolePermissions
+    rolePermissions: {
+      dueno: Array.from(new Set([...(snapshot.rolePermissions?.dueno ?? []), ...rolePermissions.dueno])),
+      administrador: Array.from(new Set([...(snapshot.rolePermissions?.administrador ?? []), ...rolePermissions.administrador])),
+      encargado: Array.from(new Set([...(snapshot.rolePermissions?.encargado ?? []), ...rolePermissions.encargado])),
+      cajero: Array.from(new Set([...(snapshot.rolePermissions?.cajero ?? []), ...rolePermissions.cajero]))
+    }
   };
 }
 
@@ -351,6 +365,7 @@ function syncedOperationalState(state: OperationalStateFields): OperationalState
     cashClosures: state.cashClosures.map((item) => ({ ...item, syncStatus: "sincronizado" })),
     cashShifts: state.cashShifts.map((item) => ({ ...item, syncStatus: "sincronizado" })),
     supplierPayments: state.supplierPayments.map((item) => ({ ...item, syncStatus: "sincronizado" })),
+    capitalEntries: state.capitalEntries.map((item) => ({ ...item, syncStatus: "sincronizado" })),
     salesAuditEntries: state.salesAuditEntries.map((entry) => ({
       ...entry,
       before: entry.before ? { ...entry.before, syncStatus: "sincronizado" } : undefined,
@@ -488,6 +503,7 @@ const operationalStateKeys: (keyof OperationalStateFields)[] = [
   "cashClosures",
   "cashShifts",
   "supplierPayments",
+  "capitalEntries",
   "emailMessages",
   "salesAuditEntries",
   "operationAuditEntries",
@@ -1500,6 +1516,33 @@ export const useStore = create<AppState>((set, get) => ({
     };
     set((state) => ({ supplierPayments: [payment, ...state.supplierPayments] }));
     return payment;
+  },
+  addCapitalEntry: (input, requestedBy) => {
+    if (requestedBy !== "dueno" || input.amount <= 0) return null;
+    const entry: CapitalEntry = {
+      id: `local_cap_${crypto.randomUUID()}`,
+      type: input.type,
+      source: input.source.trim() || "Sin detalle",
+      amount: money(input.amount),
+      note: input.note.trim(),
+      dueDate: input.dueDate,
+      status: "activo",
+      createdAt: new Date().toISOString(),
+      syncStatus: "pendiente"
+    };
+    set((state) => ({ capitalEntries: [entry, ...state.capitalEntries] }));
+    return entry;
+  },
+  deleteCapitalEntry: (id, requestedBy) => {
+    if (requestedBy !== "dueno") return false;
+    const current = get().capitalEntries.find((entry) => entry.id === id && !entry.deletedAt);
+    if (!current) return false;
+    set((state) => ({
+      capitalEntries: state.capitalEntries.map((entry) =>
+        entry.id === id ? { ...entry, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" } : entry
+      )
+    }));
+    return true;
   },
   updateBusinessProfile: (input) => {
     set({ businessProfile: { ...input } });

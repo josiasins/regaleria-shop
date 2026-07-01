@@ -472,6 +472,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: editar recalcula diferencias de stock; anular revierte el stock ingresado y marca como eliminado el gasto de reposicion asociado; restaurar vuelve a sumar stock y reactiva el gasto.
 - Control: si anular o corregir dejaria stock negativo, la operacion se rechaza.
 - Alternativas descartadas: borrar la compra fisicamente, porque impediria reconstruir errores de carga y movimientos de stock.
+
+### Panel de capital solo para dueño
+- Fecha: 2026-07-01.
+- Decision: agregar un modulo Capital dentro de Finanzas, visible solo para el rol dueño.
+- Motivo: el negocio necesita diferenciar dinero propio, capital prestado, prestamos recibidos, pagos de prestamos, retiros del dueño y ajustes, sin mezclarlos con ventas ni gastos operativos.
+- Alcance: el panel muestra capital total registrado, capital propio, deuda pendiente, pagos realizados, proximo vencimiento y movimientos recientes con animaciones simples de lectura.
+- Persistencia: los movimientos de capital se guardan dentro del snapshot operativo `operational_state`, junto al resto de operaciones internas.
+- Alternativas descartadas: cargar prestamos como gastos o ventas, porque distorsionaria margen, caja, reportes y decisiones de reposicion.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
