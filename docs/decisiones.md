@@ -403,12 +403,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Fecha: 2026-06-05.
 - Decision: limitar el ingreso interno a sesiones autenticadas cuyo email este en `VITE_INTERNAL_ALLOWED_EMAILS`; el correo inicial autorizado es `josias.insfran66@gmail.com`.
 - Motivo: Supabase Auth confirma identidad, pero la app tambien necesita decidir quien pertenece al negocio. Sin esta regla, cualquier usuario autenticado que lograra una sesion valida podria ver el panel.
+- Estado: reemplazada el 2026-07-02 por roles reales en `public.app_users`.
 - Alternativas descartadas: confiar solo en que el registro publico esta desactivado, porque OAuth y usuarios creados por error pueden ampliar el acceso si no existe una allowlist.
 
 ### Segundo correo dueño
 - Fecha: 2026-06-30.
 - Decision: habilitar `iris.traghetti66@gmail.com` como correo dueño base del sistema interno y de las politicas de catalogo/archivos.
 - Motivo: debe poder ingresar con Google y operar con los mismos permisos de dueño aunque Render conserve una allowlist anterior en variables de entorno.
+- Estado: migrado a `public.app_users` como rol `dueno`.
 - Alternativas descartadas: depender solo de actualizar `VITE_INTERNAL_ALLOWED_EMAILS`, porque una variable vieja en hosting podria bloquear el acceso.
 
 ### Endurecimiento inicial de seguridad
@@ -504,6 +506,22 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Auditoria: las ventas anuladas pasan a baja logica con `deletedAt/deletedBy`, quedan restaurables por dueño con contraseña y no suman en caja, reportes ni tesoreria.
 - Respaldo: antes de limpiar se guardo una copia local en `backups/operational-state-before-clean-20260701-233512.json`, fuera de Git.
 - Alternativas descartadas: seguir ocultando datos demo solo por filtros visuales, porque una copia local o una sincronizacion posterior podia volver a publicarlos como activos.
+
+### Endurecimiento de roles, auditoria y concurrencia
+- Fecha: 2026-07-02.
+- Decision: mover roles reales a `public.app_users`, cargar el rol activo desde Supabase y bloquear el selector de rol en produccion.
+- Motivo: los permisos no pueden depender de una lista duplicada en frontend ni de un selector local modificable.
+- Alcance: `current_app_role()` define dueño, administrador, encargado o cajero; las politicas RLS usan `is_internal_user()` y `is_catalog_owner()`.
+- Auditoria: las correcciones, anulaciones y restauraciones sensibles de ventas/turnos ya no dependen de una contraseña embebida; se validan con `audit_operational_state` en Supabase y solo pasan si la cuenta es dueña.
+- Concurrencia: el guardado de `operational_state` exige `expected_updated_at` para detectar cambios remotos y evitar pisar datos entre equipos.
+- Alternativas descartadas: mantener `VITE_OWNER_AUDIT_PASSWORD`, porque cualquier secreto `VITE_` queda publicado en el paquete del navegador.
+
+### Cache y ecommerce endurecidos
+- Fecha: 2026-07-02.
+- Decision: cambiar el service worker a network-first y endurecer pedidos/correos.
+- Motivo: cache-first podia mostrar versiones viejas despues de publicar; los pedidos publicos no deben confiar en precios ni totales enviados por el navegador.
+- Alcance: la funcion `create_store_order` recalcula total desde catalogo y limita pedidos por email/hora; `send-store-emails` requiere `EMAIL_CRON_SECRET`.
+- Alternativas descartadas: confiar en validaciones del frontend, porque el ecommerce publico puede recibir llamadas directas.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

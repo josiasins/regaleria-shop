@@ -140,7 +140,6 @@ describe("Regaleria app", () => {
     await user.click(screen.getByRole("button", { name: /Cobrar/i }));
 
     await user.click(screen.getByRole("button", { name: "Auditoria" }));
-    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
     await user.type(screen.getByLabelText("Motivo"), "Error de carga");
     await user.clear(screen.getByLabelText("Cliente"));
     await user.type(screen.getByLabelText("Cliente"), "Cliente auditado");
@@ -148,13 +147,11 @@ describe("Regaleria app", () => {
     expect(screen.getAllByText(/Venta corregida/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/correccion/i).length).toBeGreaterThan(0);
 
-    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
     await user.type(screen.getByLabelText("Motivo"), "Venta duplicada");
     await user.click(screen.getByRole("button", { name: /Anular venta/i }));
     expect(screen.getAllByText(/Venta anulada/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/eliminacion/i).length).toBeGreaterThan(0);
 
-    await user.type(screen.getByLabelText("Contraseña de dueño"), "regaleria-dueno");
     await user.type(screen.getByLabelText("Motivo"), "Restaurar venta");
     await user.click(screen.getAllByRole("button", { name: /Restaurar/i })[0]);
     expect(screen.getAllByText(/Venta restaurada/i).length).toBeGreaterThan(0);
@@ -164,7 +161,7 @@ describe("Regaleria app", () => {
   it("hides sales audit from non-owner roles", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "administrador");
     await user.click(screen.getByRole("button", { name: /Ventas/i }));
     expect(screen.queryByRole("button", { name: "Auditoria" })).not.toBeInTheDocument();
   });
@@ -248,7 +245,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "administrador");
     await user.click(screen.getByRole("button", { name: /Proveedores/i }));
     await user.click(screen.getByRole("button", { name: "Nuevo proveedor" }));
     await user.type(screen.getByLabelText("Nombre"), "Proveedor a borrar");
@@ -308,7 +305,7 @@ describe("Regaleria app", () => {
   it("shows product deletion only to owners and administrators", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<App />);
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "administrador");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "administrador");
     await user.click(screen.getByRole("button", { name: /Catalogo/i }));
     await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
     expect(screen.getByRole("button", { name: "Eliminar" })).toBeInTheDocument();
@@ -316,7 +313,7 @@ describe("Regaleria app", () => {
     unmount();
     resetStore();
     render(<App />);
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "encargado");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "encargado");
     await user.click(screen.getByRole("button", { name: /Catalogo/i }));
     await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
     expect(screen.queryByRole("button", { name: "Eliminar" })).not.toBeInTheDocument();
@@ -326,7 +323,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "cajero");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "cajero");
     expect(screen.getByRole("button", { name: /Ventas/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Clientes/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Compras/i })).not.toBeInTheDocument();
@@ -336,7 +333,7 @@ describe("Regaleria app", () => {
   it("hides suppliers from the employee role", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.selectOptions(screen.getByLabelText("Rol activo"), "encargado");
+    await user.selectOptions(screen.getByLabelText("Rol de la cuenta"), "encargado");
     expect(screen.queryByRole("button", { name: "Proveedores" })).not.toBeInTheDocument();
   });
 

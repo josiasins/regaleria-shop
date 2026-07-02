@@ -41,6 +41,7 @@ import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
+import { loadCurrentAppRole } from "./securityCloud";
 import { canSeeFinancials, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
@@ -74,17 +75,6 @@ type TransferPage = "cargar" | "comprobantes";
 type ExpensePage = "cargar" | "recientes" | "editar" | "eliminados" | "historial" | "resumen" | "cierre";
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
 type InterfaceTheme = "dia" | "noche";
-
-const internalOwnerEmails = ["josias.insfran66@gmail.com", "iris.traghetti66@gmail.com"];
-const internalAllowedEmails = Array.from(
-  new Set([
-    ...internalOwnerEmails,
-    ...String(import.meta.env.VITE_INTERNAL_ALLOWED_EMAILS || "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  ])
-);
 
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
@@ -164,19 +154,15 @@ function shouldRequireInternalLogin() {
   return hostname === internalDomain || hostname.endsWith(".onrender.com");
 }
 
-function isAuthorizedInternalSession(session: Session | null) {
-  if (!session) return false;
-  const sessionEmail = session.user.email?.toLowerCase();
-  return Boolean(sessionEmail && internalAllowedEmails.includes(sessionEmail));
-}
-
 function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [appRole, setAppRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(shouldRequireInternalLogin());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const requiresLogin = shouldRequireInternalLogin();
+  const setRole = useStore((state) => state.setRole);
 
   useEffect(() => {
     if (!requiresLogin || !supabase) {
@@ -188,9 +174,27 @@ function AuthGate({ children }: { children: ReactNode }) {
       setSession(data.session);
       setIsLoading(false);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAppRole(null);
+    });
     return () => data.subscription.unsubscribe();
   }, [requiresLogin]);
+
+  useEffect(() => {
+    if (!requiresLogin || !session) return;
+    let alive = true;
+    setIsLoading(true);
+    loadCurrentAppRole().then((role) => {
+      if (!alive) return;
+      setAppRole(role);
+      if (role) setRole(role);
+      setIsLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [requiresLogin, session, setRole]);
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
@@ -273,7 +277,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isAuthorizedInternalSession(session)) {
+  if (!appRole) {
     return (
       <main className="auth-screen">
         <section className="auth-card">
@@ -320,6 +324,7 @@ function InternalApp() {
   const role = useStore((state) => state.activeRole);
   const setRole = useStore((state) => state.setRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
+  const canSwitchRolesForTest = import.meta.env.MODE === "test";
   const allowedSections = rolePermissions[role].filter((id): id is Section => allSectionIds.includes(id as Section) && ((id !== "capital" && id !== "tesoreria") || role === "dueno"));
 
   const navigate = (nextSection: Section) => {
@@ -411,8 +416,8 @@ function InternalApp() {
         </nav>
         <div className="role-box">
           <label>
-            Rol activo
-            <select value={role} onChange={(event) => setRole(event.target.value as typeof role)}>
+            Rol de la cuenta
+            <select value={role} disabled={!canSwitchRolesForTest} onChange={(event) => setRole(event.target.value as typeof role)}>
               <option value="dueno">Dueño</option>
               <option value="administrador">Administrador</option>
               <option value="encargado">Encargado</option>
@@ -622,7 +627,6 @@ function Sales() {
     declaredClosingCash: 0,
     closingNote: ""
   });
-  const [auditPassword, setAuditPassword] = useState("");
   const [auditReason, setAuditReason] = useState("");
   const [auditMessage, setAuditMessage] = useState("");
 
@@ -673,19 +677,14 @@ function Sales() {
   }, [auditShift?.id]);
 
   const finishAuditAction = (ok: boolean, success: string) => {
-    setAuditMessage(ok ? success : "No se pudo completar. Revisa rol, contraseña, motivo y datos.");
+    setAuditMessage(ok ? success : "No se pudo completar. Revisa rol, motivo, sesion y datos.");
     if (ok) {
-      setAuditPassword("");
       setAuditReason("");
     }
   };
   const hasAuditFields = () => {
     if (activeRole !== "dueno") {
       setAuditMessage("Solo el dueño puede anular, corregir o restaurar.");
-      return false;
-    }
-    if (!auditPassword.trim()) {
-      setAuditMessage("Falta la contraseña de auditoria del dueño.");
       return false;
     }
     if (auditReason.trim().length < 5) {
@@ -745,53 +744,47 @@ function Sales() {
       setSalesPage("recientes");
     }
   };
-  const saveSaleAudit = () => {
+  const saveSaleAudit = async () => {
     if (!auditSale) return;
     if (!hasAuditFields()) return;
-    finishAuditAction(
-      updateSaleWithAudit(
+    const ok = await updateSaleWithAudit(
         auditSale.id,
         { ...saleAuditDraft, createdAt: fromDateTimeLocal(saleAuditDraft.createdAt, auditSale.createdAt) },
-        auditPassword,
         auditReason,
         activeRole
-      ),
-      "Venta corregida y registrada en auditoria."
-    );
+      );
+    finishAuditAction(ok, "Venta corregida y registrada en auditoria.");
   };
-  const removeSaleAudit = () => {
+  const removeSaleAudit = async () => {
     if (!auditSale) return;
     if (!hasAuditFields()) return;
-    finishAuditAction(deleteSaleWithAudit(auditSale.id, auditPassword, auditReason, activeRole), "Venta anulada, stock devuelto e historial guardado.");
+    finishAuditAction(await deleteSaleWithAudit(auditSale.id, auditReason, activeRole), "Venta anulada, stock devuelto e historial guardado.");
   };
-  const saveShiftAudit = () => {
+  const saveShiftAudit = async () => {
     if (!auditShift) return;
     if (!hasAuditFields()) return;
-    finishAuditAction(
-      updateShiftWithAudit(
+    const ok = await updateShiftWithAudit(
         auditShift.id,
         {
           ...shiftAuditDraft,
           openedAt: fromDateTimeLocal(shiftAuditDraft.openedAt, auditShift.openedAt),
           closedAt: shiftAuditDraft.closedAt ? fromDateTimeLocal(shiftAuditDraft.closedAt, auditShift.closedAt ?? auditShift.openedAt) : undefined
         },
-        auditPassword,
         auditReason,
         activeRole
-      ),
-      "Turno corregido y registrado en auditoria."
-    );
+      );
+    finishAuditAction(ok, "Turno corregido y registrado en auditoria.");
   };
-  const removeShiftAudit = () => {
+  const removeShiftAudit = async () => {
     if (!auditShift) return;
     if (!hasAuditFields()) return;
-    finishAuditAction(deleteShiftWithAudit(auditShift.id, auditPassword, auditReason, activeRole), "Turno quitado del listado operativo e historial guardado.");
+    finishAuditAction(await deleteShiftWithAudit(auditShift.id, auditReason, activeRole), "Turno quitado del listado operativo e historial guardado.");
   };
-  const restoreAuditEntry = (entryId: string, entityType: "venta" | "turno") => {
+  const restoreAuditEntry = async (entryId: string, entityType: "venta" | "turno") => {
     if (!hasAuditFields()) return;
     const ok = entityType === "venta"
-      ? restoreSaleWithAudit(entryId, auditPassword, auditReason, activeRole)
-      : restoreShiftWithAudit(entryId, auditPassword, auditReason, activeRole);
+      ? await restoreSaleWithAudit(entryId, auditReason, activeRole)
+      : await restoreShiftWithAudit(entryId, auditReason, activeRole);
     finishAuditAction(ok, entityType === "venta" ? "Venta restaurada y stock aplicado nuevamente." : "Turno restaurado.");
   };
   const salesTabs: { id: SalesPage; label: string; icon: typeof Receipt }[] = [
@@ -988,12 +981,8 @@ function Sales() {
       )}
       {salesPage === "auditoria" && isOwner && (
         <div className="audit-workspace">
-          <Panel title="Clave y motivo de auditoria">
-            <div className="form-grid three">
-              <label>
-                Contraseña de dueño
-                <input type="password" value={auditPassword} onChange={(event) => setAuditPassword(event.target.value)} placeholder="Requerida para corregir o restaurar" />
-              </label>
+          <Panel title="Motivo de auditoria">
+            <div className="form-grid two">
               <label>
                 Motivo
                 <input value={auditReason} onChange={(event) => setAuditReason(event.target.value)} placeholder="Ej: error de carga, control de caja" />

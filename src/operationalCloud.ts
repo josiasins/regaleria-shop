@@ -7,6 +7,15 @@ interface OperationalStateRow {
   updated_at: string;
 }
 
+export interface CloudOperationalState {
+  snapshot: OperationalSnapshot;
+  updatedAt: string;
+}
+
+export type SaveOperationalResult =
+  | { ok: true; updatedAt: string }
+  | { ok: false; reason: "unauthorized" | "conflict" | "error"; message: string };
+
 export function isCloudOperationsEnabled() {
   if (import.meta.env.MODE === "test") return false;
   if (!supabase) return false;
@@ -32,22 +41,49 @@ export async function loadCloudOperations() {
   }
 
   const row = data as OperationalStateRow | null;
-  return row?.data ?? null;
+  return row ? { snapshot: row.data, updatedAt: row.updated_at } satisfies CloudOperationalState : null;
 }
 
-export async function saveCloudOperations(snapshot: OperationalSnapshot) {
-  if (!isCloudOperationsEnabled() || !supabase) return true;
+export async function saveCloudOperations(snapshot: OperationalSnapshot, expectedUpdatedAt?: string | null): Promise<SaveOperationalResult> {
+  if (!isCloudOperationsEnabled() || !supabase) return { ok: true, updatedAt: new Date().toISOString() };
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return false;
+  if (!sessionData.session) return { ok: false, reason: "unauthorized", message: "No hay sesion autorizada." };
 
-  const { error } = await supabase.rpc("save_operational_state", {
-    state_data: snapshot
+  const { data, error } = await supabase.rpc("save_operational_state", {
+    state_data: snapshot,
+    expected_updated_at: expectedUpdatedAt ?? null
   });
 
   if (error) {
     console.error("No se pudo sincronizar el estado operativo.", error.message);
-    return false;
+    return {
+      ok: false,
+      reason: error.message.toLowerCase().includes("changed remotely") ? "conflict" : "error",
+      message: error.message
+    };
   }
 
-  return true;
+  return { ok: true, updatedAt: String(data) };
+}
+
+export async function auditCloudOperations(snapshot: OperationalSnapshot, reason: string, expectedUpdatedAt?: string | null): Promise<SaveOperationalResult> {
+  if (!isCloudOperationsEnabled() || !supabase) return { ok: true, updatedAt: new Date().toISOString() };
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return { ok: false, reason: "unauthorized", message: "No hay sesion autorizada." };
+
+  const { data, error } = await supabase.rpc("audit_operational_state", {
+    state_data: { ...snapshot, auditReason: reason },
+    expected_updated_at: expectedUpdatedAt ?? null
+  });
+
+  if (error) {
+    console.error("No se pudo auditar el estado operativo.", error.message);
+    return {
+      ok: false,
+      reason: error.message.toLowerCase().includes("changed remotely") ? "conflict" : "error",
+      message: error.message
+    };
+  }
+
+  return { ok: true, updatedAt: String(data) };
 }

@@ -17,7 +17,7 @@ La V1 implementada es un prototipo funcional online con datos iniciales y estruc
 - Asistentes IA conectables a OpenAI para compras y fotos de producto.
 - Estados de sincronizacion para preparar offline parcial.
 - PWA instalable en Chrome.
-- Base preparada para Supabase: PostgreSQL, Auth, Storage, backups y dominios.
+- Base conectada a Supabase: PostgreSQL, Auth, roles reales, Storage, backups y dominios.
 - Documentacion de decisiones, roadmap, modelo de datos y flujos.
 
 ## Ejecutar
@@ -67,7 +67,7 @@ Mas detalle en `docs/online-local-produccion.md`.
 
 ## Chrome
 
-La app incluye manifest y service worker para instalarse desde Chrome como app. El offline operativo real todavia requiere conectar cola local + Supabase; por ahora se cachea la carcasa de la app.
+La app incluye manifest y service worker para instalarse desde Chrome como app. El service worker prioriza red antes que cache para evitar versiones viejas. El offline operativo real todavia requiere conectar cola local + Supabase.
 
 ## Backups
 
@@ -94,3 +94,4 @@ La carpeta `docs/` contiene:
 - `modelo-datos.md`: entidades principales.
 - `flujos.md`: flujos operativos clave.
 - `prompts-ia.md`: prompts actuales y criterios de optimizacion.
+- `auditoria-seguridad.md`: estado de seguridad, roles, RLS, auditoria y verificaciones.

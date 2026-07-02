@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, capitalEntries, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
-import { isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
+import { auditCloudOperations, isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
   BusinessProfile,
   BusinessProfileInput,
@@ -104,12 +104,12 @@ interface AppState {
   closeCashDay: (note: string) => CashClosure;
   openCashShift: (initialCash: number, openedBy: Role, note: string) => CashShift | null;
   closeCashShift: (id: string, declaredClosingCash: number, closedBy: Role, note: string) => CashShift | null;
-  updateSaleWithAudit: (saleId: string, input: SaleAuditUpdateInput, password: string, reason: string, requestedBy: Role) => boolean;
-  deleteSaleWithAudit: (saleId: string, password: string, reason: string, requestedBy: Role) => boolean;
-  restoreSaleWithAudit: (auditEntryId: string, password: string, reason: string, requestedBy: Role) => boolean;
-  updateShiftWithAudit: (shiftId: string, input: CashShiftAuditUpdateInput, password: string, reason: string, requestedBy: Role) => boolean;
-  deleteShiftWithAudit: (shiftId: string, password: string, reason: string, requestedBy: Role) => boolean;
-  restoreShiftWithAudit: (auditEntryId: string, password: string, reason: string, requestedBy: Role) => boolean;
+  updateSaleWithAudit: (saleId: string, input: SaleAuditUpdateInput, reason: string, requestedBy: Role) => Promise<boolean>;
+  deleteSaleWithAudit: (saleId: string, reason: string, requestedBy: Role) => Promise<boolean>;
+  restoreSaleWithAudit: (auditEntryId: string, reason: string, requestedBy: Role) => Promise<boolean>;
+  updateShiftWithAudit: (shiftId: string, input: CashShiftAuditUpdateInput, reason: string, requestedBy: Role) => Promise<boolean>;
+  deleteShiftWithAudit: (shiftId: string, reason: string, requestedBy: Role) => Promise<boolean>;
+  restoreShiftWithAudit: (auditEntryId: string, reason: string, requestedBy: Role) => Promise<boolean>;
   addSupplierPayment: (supplier: string, amount: number, note: string) => SupplierPayment | null;
   addCapitalEntry: (input: CapitalEntryDraftInput, requestedBy: Role) => CapitalEntry | null;
   deleteCapitalEntry: (id: string, requestedBy: Role) => boolean;
@@ -150,7 +150,6 @@ type OperationalStateFields = Pick<
 
 const money = (value: number) => Math.round(value * 100) / 100;
 const nextNumber = (prefix: string, count: number) => `${prefix}-${String(count + 1).padStart(6, "0")}`;
-const ownerAuditPassword = String(import.meta.env.VITE_OWNER_AUDIT_PASSWORD || "regaleria-dueno");
 
 function findVariant(products: Product[], variantId: string) {
   for (const product of products) {
@@ -237,8 +236,8 @@ function restoreSaleStock(products: Product[], sale: Sale) {
   }));
 }
 
-function canRunAudit(requestedBy: Role, password: string, reason: string) {
-  return requestedBy === "dueno" && password === ownerAuditPassword && reason.trim().length >= 5;
+function canRunAudit(requestedBy: Role, reason: string) {
+  return requestedBy === "dueno" && reason.trim().length >= 5;
 }
 
 function makeAuditEntry(input: Omit<SalesAuditEntry, "id" | "createdAt">): SalesAuditEntry {
@@ -544,6 +543,7 @@ let saveInFlight = false;
 let saveQueued = false;
 let applyingSyncedState = false;
 let hasAppliedCloudOperations = false;
+let cloudOperationsUpdatedAt: string | null = null;
 const operationalSafetyBackupKey = "regaleria-operational-safety-backup";
 
 function hasOperationalChange(state: AppState, previous: AppState) {
@@ -615,11 +615,21 @@ async function flushOperationalState() {
     const nextState = syncedOperationalState(useStore.getState());
     const snapshot = operationalSnapshotFromState(nextState);
     saveSafetyBackup(snapshot);
-    const saved = await saveCloudOperations(snapshot);
-    if (saved && !saveQueued) {
+    const saved = await saveCloudOperations(snapshot, cloudOperationsUpdatedAt);
+    if (saved.ok && !saveQueued) {
+      cloudOperationsUpdatedAt = saved.updatedAt;
       clearSafetyBackup();
       applyingSyncedState = true;
       useStore.setState(nextState);
+      applyingSyncedState = false;
+    } else if (!saved.ok && saved.reason === "conflict") {
+      applyingSyncedState = true;
+      useStore.setState((state) => ({
+        ...state,
+        products: state.products.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item)),
+        sales: state.sales.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item)),
+        expenses: state.expenses.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item))
+      }));
       applyingSyncedState = false;
     }
   } while (saveQueued);
@@ -635,6 +645,20 @@ function scheduleOperationalSave() {
   }, 350);
 }
 
+async function commitAuditedState(nextState: OperationalStateFields, reason: string) {
+  const syncedState = syncedOperationalState(nextState);
+  const snapshot = operationalSnapshotFromState(syncedState);
+  saveSafetyBackup(snapshot);
+  const saved = await auditCloudOperations(snapshot, reason, cloudOperationsUpdatedAt);
+  if (!saved.ok) return false;
+  cloudOperationsUpdatedAt = saved.updatedAt;
+  clearSafetyBackup();
+  applyingSyncedState = true;
+  useStore.setState(syncedState);
+  applyingSyncedState = false;
+  return true;
+}
+
 export const useStore = create<AppState>((set, get) => ({
   ...initialDataState(),
   activeRole: "dueno",
@@ -646,10 +670,12 @@ export const useStore = create<AppState>((set, get) => ({
     }
     const [cloudProducts, commerce, operations] = await Promise.all([loadCloudCatalog(), loadCloudCommerce(), loadCloudOperations()]);
     const backup = loadSafetyBackup();
-    const selectedOperations = backup && snapshotTimestamp(backup) > snapshotTimestamp(operations) ? backup : operations;
+    const cloudSnapshot = operations?.snapshot ?? null;
+    const selectedOperations = backup && snapshotTimestamp(backup) > snapshotTimestamp(cloudSnapshot) ? backup : cloudSnapshot;
     if (selectedOperations) {
       const cleanOperations = sanitizeOperationalSnapshot(selectedOperations);
       const operationalState = stateFromOperationalSnapshot(cleanOperations);
+      cloudOperationsUpdatedAt = operations?.updatedAt ?? selectedOperations.updatedAt ?? null;
       hasAppliedCloudOperations = true;
       set({
         ...operationalState,
@@ -658,8 +684,11 @@ export const useStore = create<AppState>((set, get) => ({
         emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
         catalogStatus: cloudProducts === null ? "error" : "actualizado"
       });
-      if (selectedOperations === backup || cleanOperations !== selectedOperations) void saveCloudOperations(cleanOperations).then((saved) => {
-        if (saved) clearSafetyBackup();
+      if (selectedOperations === backup || cleanOperations !== selectedOperations) void saveCloudOperations(cleanOperations, cloudOperationsUpdatedAt).then((saved) => {
+        if (saved.ok) {
+          cloudOperationsUpdatedAt = saved.updatedAt;
+          clearSafetyBackup();
+        }
       });
       return;
     }
@@ -676,19 +705,25 @@ export const useStore = create<AppState>((set, get) => ({
         emailMessages: commerce.emails.length ? commerce.emails : get().emailMessages,
         catalogStatus: "actualizado"
       });
-      void saveCloudOperations(operationalSnapshotFromState(get()));
+      void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
+        if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
+      });
       return;
     }
 
     if (isCloudOperationsEnabled()) {
       set({ catalogStatus: "actualizado" });
-      void saveCloudOperations(operationalSnapshotFromState(get()));
+      void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
+        if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
+      });
       hasAppliedCloudOperations = true;
       return;
     }
 
     const seeded = await seedCloudCatalog(get().products);
-    if (seeded) void saveCloudOperations(operationalSnapshotFromState(get()));
+    if (seeded) void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
+      if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
+    });
     hasAppliedCloudOperations = true;
     set({ catalogStatus: seeded ? "actualizado" : "error" });
   },
@@ -1461,9 +1496,9 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ cashShifts: state.cashShifts.map((item) => (item.id === id ? closedShift : item)) }));
     return closedShift;
   },
-  updateSaleWithAudit: (saleId, input, password, reason, requestedBy) => {
+  updateSaleWithAudit: async (saleId, input, reason, requestedBy) => {
     const sale = get().sales.find((item) => item.id === saleId && !item.deletedAt);
-    if (!sale || !canRunAudit(requestedBy, password, reason) || input.discount < 0) return false;
+    if (!sale || !canRunAudit(requestedBy, reason) || input.discount < 0) return false;
     const totals = saleTotals(sale.lines, input.discount);
     const updatedSale: Sale = {
       ...sale,
@@ -1486,15 +1521,16 @@ export const useStore = create<AppState>((set, get) => ({
       before: sale,
       after: updatedSale
     });
-    set((state) => ({
-      sales: state.sales.map((item) => (item.id === saleId ? updatedSale : item)),
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    return true;
+    const current = get();
+    return commitAuditedState({
+      ...current,
+      sales: current.sales.map((item) => (item.id === saleId ? updatedSale : item)),
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
   },
-  deleteSaleWithAudit: (saleId, password, reason, requestedBy) => {
+  deleteSaleWithAudit: async (saleId, reason, requestedBy) => {
     const sale = get().sales.find((item) => item.id === saleId && !item.deletedAt);
-    if (!sale || !canRunAudit(requestedBy, password, reason)) return false;
+    if (!sale || !canRunAudit(requestedBy, reason)) return false;
     const deletedSale: Sale = { ...sale, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
       entityType: "venta",
@@ -1506,20 +1542,23 @@ export const useStore = create<AppState>((set, get) => ({
       before: sale,
       after: deletedSale
     });
-    set((state) => ({
-      sales: state.sales.map((item) => (item.id === saleId ? deletedSale : item)),
-      products: restoreSaleStock(state.products, sale),
-      movements: [...reversalStockMovementsForSale(sale, reason), ...state.movements],
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
-    return true;
+    const current = get();
+    const nextProducts = restoreSaleStock(current.products, sale);
+    const ok = await commitAuditedState({
+      ...current,
+      sales: current.sales.map((item) => (item.id === saleId ? deletedSale : item)),
+      products: nextProducts,
+      movements: [...reversalStockMovementsForSale(sale, reason), ...current.movements],
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
+    if (ok) syncProductsToCloud(nextProducts, sale.lines.map((line) => line.productId));
+    return ok;
   },
-  restoreSaleWithAudit: (auditEntryId, password, reason, requestedBy) => {
+  restoreSaleWithAudit: async (auditEntryId, reason, requestedBy) => {
     const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "venta" && entry.action === "eliminacion");
     const sale = source?.before && "receiptNumber" in source.before ? source.before : null;
     const existingDeletedSale = sale ? get().sales.find((item) => item.id === sale.id && item.deletedAt) : null;
-    if (!sale || get().sales.some((item) => item.id === sale.id && !item.deletedAt) || !canRunAudit(requestedBy, password, reason)) return false;
+    if (!sale || get().sales.some((item) => item.id === sale.id && !item.deletedAt) || !canRunAudit(requestedBy, reason)) return false;
     if (!hasAvailableStock(get().products, sale.lines)) return false;
     const restoredSale: Sale = { ...(existingDeletedSale ?? sale), deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
@@ -1531,18 +1570,21 @@ export const useStore = create<AppState>((set, get) => ({
       performedBy: requestedBy,
       after: restoredSale
     });
-    set((state) => ({
-      sales: existingDeletedSale ? state.sales.map((item) => (item.id === restoredSale.id ? restoredSale : item)) : [restoredSale, ...state.sales],
-      products: applySaleStock(state.products, restoredSale),
-      movements: [...stockMovementsForSale(restoredSale), ...state.movements],
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    syncProductsToCloud(get().products, restoredSale.lines.map((line) => line.productId));
-    return true;
+    const current = get();
+    const nextProducts = applySaleStock(current.products, restoredSale);
+    const ok = await commitAuditedState({
+      ...current,
+      sales: existingDeletedSale ? current.sales.map((item) => (item.id === restoredSale.id ? restoredSale : item)) : [restoredSale, ...current.sales],
+      products: nextProducts,
+      movements: [...stockMovementsForSale(restoredSale), ...current.movements],
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
+    if (ok) syncProductsToCloud(nextProducts, restoredSale.lines.map((line) => line.productId));
+    return ok;
   },
-  updateShiftWithAudit: (shiftId, input, password, reason, requestedBy) => {
+  updateShiftWithAudit: async (shiftId, input, reason, requestedBy) => {
     const shift = get().cashShifts.find((item) => item.id === shiftId);
-    if (!shift || !canRunAudit(requestedBy, password, reason) || input.initialCash < 0 || (input.declaredClosingCash ?? 0) < 0) return false;
+    if (!shift || !canRunAudit(requestedBy, reason) || input.initialCash < 0 || (input.declaredClosingCash ?? 0) < 0) return false;
     const shiftSales = get().sales.filter((sale) => !sale.deletedAt && sale.shiftId === shiftId);
     const cashTotal = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
     const updatedShift: CashShift = {
@@ -1566,15 +1608,16 @@ export const useStore = create<AppState>((set, get) => ({
       before: shift,
       after: updatedShift
     });
-    set((state) => ({
-      cashShifts: state.cashShifts.map((item) => (item.id === shiftId ? updatedShift : item)),
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    return true;
+    const current = get();
+    return commitAuditedState({
+      ...current,
+      cashShifts: current.cashShifts.map((item) => (item.id === shiftId ? updatedShift : item)),
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
   },
-  deleteShiftWithAudit: (shiftId, password, reason, requestedBy) => {
+  deleteShiftWithAudit: async (shiftId, reason, requestedBy) => {
     const shift = get().cashShifts.find((item) => item.id === shiftId);
-    if (!shift || !canRunAudit(requestedBy, password, reason)) return false;
+    if (!shift || !canRunAudit(requestedBy, reason)) return false;
     const entry = makeAuditEntry({
       entityType: "turno",
       entityId: shift.id,
@@ -1584,16 +1627,17 @@ export const useStore = create<AppState>((set, get) => ({
       performedBy: requestedBy,
       before: shift
     });
-    set((state) => ({
-      cashShifts: state.cashShifts.filter((item) => item.id !== shiftId),
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    return true;
+    const current = get();
+    return commitAuditedState({
+      ...current,
+      cashShifts: current.cashShifts.filter((item) => item.id !== shiftId),
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
   },
-  restoreShiftWithAudit: (auditEntryId, password, reason, requestedBy) => {
+  restoreShiftWithAudit: async (auditEntryId, reason, requestedBy) => {
     const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "turno" && entry.action === "eliminacion");
     const shift = source?.before && "number" in source.before && "openedAt" in source.before ? source.before : null;
-    if (!shift || get().cashShifts.some((item) => item.id === shift.id) || !canRunAudit(requestedBy, password, reason)) return false;
+    if (!shift || get().cashShifts.some((item) => item.id === shift.id) || !canRunAudit(requestedBy, reason)) return false;
     const restoredShift: CashShift = { ...shift, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
       entityType: "turno",
@@ -1604,11 +1648,12 @@ export const useStore = create<AppState>((set, get) => ({
       performedBy: requestedBy,
       after: restoredShift
     });
-    set((state) => ({
-      cashShifts: [restoredShift, ...state.cashShifts],
-      salesAuditEntries: [entry, ...state.salesAuditEntries]
-    }));
-    return true;
+    const current = get();
+    return commitAuditedState({
+      ...current,
+      cashShifts: [restoredShift, ...current.cashShifts],
+      salesAuditEntries: [entry, ...current.salesAuditEntries]
+    }, reason);
   },
   addSupplierPayment: (supplier, amount, note) => {
     if (!supplier.trim() || amount <= 0) return null;
@@ -1792,8 +1837,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
   markAllSynced: () => {
     const nextState = syncedOperationalState(get());
-    void saveCloudOperations(operationalSnapshotFromState(nextState)).then((saved) => {
-      if (saved) set(nextState);
+    void saveCloudOperations(operationalSnapshotFromState(nextState), cloudOperationsUpdatedAt).then((saved) => {
+      if (saved.ok) {
+        cloudOperationsUpdatedAt = saved.updatedAt;
+        set(nextState);
+      }
     });
   }
 }));

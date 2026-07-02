@@ -100,10 +100,9 @@ El sistema interno carga y guarda el estado del negocio en Supabase:
 - `store_email_queue`: correos pendientes de ecommerce.
 - `operational_state`: snapshot interno con ventas, turnos, compras, gastos, clientes, proveedores, presupuestos, transferencias, categorias, permisos y auditorias.
 
-El modo local sin sesion autorizada puede mostrar datos iniciales para desarrollo, pero la operacion real debe usarse desde `sistema.regaleriashop.com` con Google/Auth para persistir cambios.
+La operacion real debe usarse desde `sistema.regaleriashop.com` con Google/Auth. El rol efectivo se carga desde `public.app_users`; el selector de rol queda bloqueado en produccion.
 - `VITE_PUBLIC_DOMAIN`: `regaleriashop.com`.
 - `VITE_INTERNAL_DOMAIN`: `sistema.regaleriashop.com`.
-- `VITE_INTERNAL_ALLOWED_EMAILS`: correos autorizados para entrar al sistema interno.
 - `OPENAI_API_KEY`: solo servidor/local, nunca expuesta al navegador.
 
 ## Acceso al sistema interno
@@ -112,7 +111,7 @@ El modo local sin sesion autorizada puede mostrar datos iniciales para desarroll
 
 La web publica `regaleriashop.com` no muestra el menu interno ni requiere login; solo muestra la tienda inicial/ecommerce.
 
-Correos internos autorizados como dueño:
+Correos internos autorizados como dueño en `public.app_users`:
 
 - `josias.insfran66@gmail.com`.
 - `iris.traghetti66@gmail.com`.
@@ -136,8 +135,8 @@ Estado actual:
 - Google OAuth habilitado con cliente web exclusivo `Regaleria Shop`.
 - `josias.insfran66@gmail.com` agregado como usuario de prueba y acceso Google verificado de punta a punta contra `sistema.regaleriashop.com`.
 - `iris.traghetti66@gmail.com` habilitado como segundo correo dueño en la app y en politicas de catalogo/archivos.
-- Allowlist de correo agregada en la app para impedir acceso interno a sesiones no autorizadas.
-- Politicas de Storage preparadas para aceptar archivos privados solo del correo autorizado.
+- Roles reales en `public.app_users` para impedir acceso interno a sesiones no autorizadas.
+- Politicas de Storage preparadas para aceptar archivos privados solo de usuarios internos autorizados.
 - Cargas hacia los endpoints locales de IA limitadas a 15 MB.
 - Cabeceras de seguridad aplicadas en Render: CSP, bloqueo de iframes, HSTS, `nosniff`, permisos restringidos y politica de referencia.
 - Clave publica de Supabase Auth corregida en local, GitHub Pages y Render.
@@ -151,7 +150,7 @@ La app incluye:
 - `public/sw.js`.
 - `public/icon.svg`.
 
-Esto permite instalarla desde Chrome. El service worker cachea la carcasa de la app para abrirla sin conexion. El offline operativo real sigue siendo una etapa futura: ventas simples, presupuestos, gastos y movimientos deberan guardar en cola local y sincronizar.
+Esto permite instalarla desde Chrome. El service worker prioriza red antes que cache para evitar versiones viejas despues de publicar. El offline operativo real sigue siendo una etapa futura: ventas simples, presupuestos, gastos y movimientos deberan guardar en cola local y sincronizar.
 
 ## Backups
 
@@ -173,6 +172,30 @@ En produccion se recomienda:
 - revision semanal de restauracion.
 - copia/versionado de archivos de Storage.
 - registrar cada corrida en `BackupRun`.
+
+## Roles reales
+
+Los usuarios internos se administran en Supabase:
+
+```sql
+select * from public.app_users order by email;
+```
+
+Roles soportados:
+
+- `dueno`
+- `administrador`
+- `encargado`
+- `cajero`
+
+Solo `dueno` puede ejecutar auditorias sensibles de ventas/turnos y ver Capital/Tesoreria. Para agregar usuarios, hacerlo desde SQL o desde una futura pantalla de usuarios conectada a `app_users`.
+
+## Seguridad operativa aplicada
+
+- `operational_state` usa control de version con `expected_updated_at`.
+- Las auditorias sensibles pasan por `public.audit_operational_state`.
+- `create_store_order` recalcula total desde el catalogo.
+- `send-store-emails` requiere `EMAIL_CRON_SECRET`.
 
 ## Archivos
 

@@ -5,10 +5,15 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-Deno.serve(async () => {
+Deno.serve(async (request) => {
   const resendKey = Deno.env.get("RESEND_API_KEY");
+  const cronSecret = Deno.env.get("EMAIL_CRON_SECRET");
   const from = Deno.env.get("STORE_EMAIL_FROM") ?? "Regaleria Shop <pedidos@regaleriashop.com>";
   if (!resendKey) return new Response("Falta RESEND_API_KEY", { status: 500 });
+  if (!cronSecret) return new Response("Falta EMAIL_CRON_SECRET", { status: 500 });
+  if (request.headers.get("Authorization") !== `Bearer ${cronSecret}`) {
+    return new Response("No autorizado", { status: 401 });
+  }
 
   const { data: rows, error } = await supabase
     .from("store_email_queue")
