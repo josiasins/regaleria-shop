@@ -38,7 +38,6 @@ jobs:
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54ZmR4aGl4dmdvZ3hqZW5yZmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NTMyODYsImV4cCI6MjA5NjIyOTI4Nn0.6hz-tg7lHFoOuWwu9cWee-e1iy-AiEQmU8bmH11BAxs
           VITE_PUBLIC_DOMAIN: regaleriashop.com
           VITE_INTERNAL_DOMAIN: sistema.regaleriashop.com
-          VITE_INTERNAL_ALLOWED_EMAILS: josias.insfran66@gmail.com
 
       - name: Add SPA fallback
         run: cp dist/index.html dist/404.html
