@@ -244,6 +244,16 @@
 7. Proximo vencimiento ayuda a recordar prestamos con fecha cargada.
 8. Los movimientos anulados dejan de afectar el panel, pero permanecen en el estado operativo sincronizado.
 
+## Tesoreria consolidada
+
+1. Solo el rol dueño ve Tesoreria.
+2. La vista calcula entradas con ventas registradas y capital ingresado.
+3. La vista calcula salidas con gastos, pagos de prestamos y retiros del dueño.
+4. Plata estimada muestra entradas menos salidas.
+5. Vista conservadora descuenta deuda con proveedores y deuda de prestamos.
+6. La tabla explica de donde sale cada numero para que sea entendible sin conocimientos contables.
+7. La lectura rapida avisa si el saldo estimado o el saldo conservador estan ajustados.
+
 ## Busqueda global y atajos
 
 1. La busqueda superior encuentra productos, clientes, proveedores y ventas.

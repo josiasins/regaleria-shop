@@ -480,6 +480,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: el panel muestra capital total registrado, capital propio, deuda pendiente, pagos realizados, proximo vencimiento y movimientos recientes con animaciones simples de lectura.
 - Persistencia: los movimientos de capital se guardan dentro del snapshot operativo `operational_state`, junto al resto de operaciones internas.
 - Alternativas descartadas: cargar prestamos como gastos o ventas, porque distorsionaria margen, caja, reportes y decisiones de reposicion.
+
+### Tesoreria consolidada solo para dueño
+- Fecha: 2026-07-01.
+- Decision: agregar una vista Tesoreria dentro de Finanzas para ver ventas, capital, gastos, pagos, deudas y saldo estimado en un solo lugar.
+- Motivo: el dueño necesita una lectura rapida de cuanta plata hay y que compromisos existen, sin abrir por separado ventas, gastos, compras y capital.
+- Alcance: muestra plata estimada, vista conservadora despues de deudas, entradas, salidas, resultado operativo, deuda con proveedores y deuda por prestamos.
+- Restriccion: igual que Capital, queda visible y navegable solo para dueño aunque existan permisos configurables.
+- Alternativas descartadas: mezclarlo en Panel principal, porque administradores y encargados pueden ver Panel pero no deberian ver capital ni deuda privada.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

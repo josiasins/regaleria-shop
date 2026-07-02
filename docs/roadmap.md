@@ -139,6 +139,7 @@
 - [x] Presupuestos separados en Nuevo presupuesto y Presupuestos.
 - [x] Transferencias separadas en Cargar transferencia y Comprobantes.
 - [x] Gastos separados en Cargar, Recientes, Resumen y Cierre diario.
+- [x] Tesoreria consolidada para dueño con ventas, capital, gastos, pagos, deudas y saldo estimado.
 - [x] Capital y prestamos privados visibles solo para dueño, con panel visual y movimientos.
 - [x] Configuracion separada en Roles, Operativa, Categorias, Sincronizacion y Atajos.
 - [x] Buscador de producto dentro de ventas.

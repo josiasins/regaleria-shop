@@ -606,6 +606,14 @@ h2 {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+.treasury-table .table-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.treasury-hero .capital-balance {
+  background: linear-gradient(135deg, oklch(97% 0.012 190), oklch(90% 0.034 190));
+}
+
 @keyframes capital-rise {
   from {
     opacity: 0;

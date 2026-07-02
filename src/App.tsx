@@ -56,6 +56,7 @@ const sections = [
   { id: "presupuestos", label: "Presupuestos", icon: FileText },
   { id: "pagos", label: "Transferencias", icon: CreditCard },
   { id: "gastos", label: "Gastos", icon: Wallet },
+  { id: "tesoreria", label: "Tesoreria", icon: Receipt },
   { id: "capital", label: "Capital", icon: TrendUp },
   { id: "catalogo", label: "Catalogo", icon: Storefront },
   { id: "web", label: "Web publica", icon: GlobeHemisphereWest },
@@ -88,7 +89,7 @@ const internalAllowedEmails = Array.from(
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
   { title: "Personas", ids: ["clientes", "proveedores"] },
-  { title: "Finanzas", ids: ["presupuestos", "pagos", "gastos", "capital"] },
+  { title: "Finanzas", ids: ["presupuestos", "pagos", "gastos", "tesoreria", "capital"] },
   { title: "Catalogo y web", ids: ["catalogo", "web"] },
   { title: "Analisis", ids: ["reportes"] },
   { title: "Configuracion", ids: ["sistema"] }
@@ -319,7 +320,7 @@ function InternalApp() {
   const role = useStore((state) => state.activeRole);
   const setRole = useStore((state) => state.setRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
-  const allowedSections = rolePermissions[role].filter((id): id is Section => allSectionIds.includes(id as Section) && (id !== "capital" || role === "dueno"));
+  const allowedSections = rolePermissions[role].filter((id): id is Section => allSectionIds.includes(id as Section) && ((id !== "capital" && id !== "tesoreria") || role === "dueno"));
 
   const navigate = (nextSection: Section) => {
     setSection(nextSection);
@@ -432,6 +433,7 @@ function InternalApp() {
         {section === "presupuestos" && <Quotes />}
         {section === "pagos" && <Transfers />}
         {section === "gastos" && <Expenses />}
+        {section === "tesoreria" && <Treasury />}
         {section === "capital" && <Capital />}
         {section === "catalogo" && <Catalog editingProductId={editingProductId} onEditProduct={setEditingProductId} onBack={() => setEditingProductId(null)} />}
         {section === "web" && <PublicShop />}
@@ -2813,6 +2815,106 @@ function Reports() {
   );
 }
 
+function Treasury() {
+  const { activeRole, sales, expenses, purchaseReceipts, supplierPayments, capitalEntries } = useStore();
+  if (activeRole !== "dueno") {
+    return (
+      <section className="workspace">
+        <Panel title="Tesorería restringida">
+          <div className="empty-lines">Solo el dueño puede ver la plata total del negocio.</div>
+        </Panel>
+      </section>
+    );
+  }
+
+  const activeExpenses = expenses.filter((expense) => !expense.deletedAt);
+  const activePurchases = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
+  const activeCapital = capitalEntries.filter((entry) => !entry.deletedAt);
+  const salesTotal = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const expensesTotal = activeExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const purchasesTotal = activePurchases.reduce((sum, receipt) => sum + receipt.total, 0);
+  const supplierPaymentsTotal = supplierPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const ownCapitalIn = activeCapital.filter((entry) => entry.type === "capital_propio" || entry.type === "ajuste").reduce((sum, entry) => sum + entry.amount, 0);
+  const borrowedIn = activeCapital.filter((entry) => entry.type === "capital_prestado" || entry.type === "prestamo_recibido").reduce((sum, entry) => sum + entry.amount, 0);
+  const loanPayments = activeCapital.filter((entry) => entry.type === "pago_prestamo").reduce((sum, entry) => sum + entry.amount, 0);
+  const ownerWithdrawals = activeCapital.filter((entry) => entry.type === "retiro_dueno").reduce((sum, entry) => sum + entry.amount, 0);
+  const capitalIn = ownCapitalIn + borrowedIn;
+  const capitalOut = loanPayments + ownerWithdrawals;
+  const loanDebt = Math.max(borrowedIn - loanPayments, 0);
+  const supplierDebt = Math.max(purchasesTotal - supplierPaymentsTotal, 0);
+  const moneyIn = salesTotal + capitalIn;
+  const moneyOut = expensesTotal + capitalOut;
+  const estimatedCash = moneyIn - moneyOut;
+  const netAfterDebts = estimatedCash - loanDebt - supplierDebt;
+  const operatingResult = salesTotal - expensesTotal;
+  const maxFlow = Math.max(moneyIn, moneyOut, loanDebt + supplierDebt, 1);
+  const treasuryRows = [
+    { title: "Ventas cobradas registradas", value: salesTotal, kind: "Ingreso" },
+    { title: "Capital ingresado", value: capitalIn, kind: "Ingreso" },
+    { title: "Gastos registrados", value: expensesTotal, kind: "Salida" },
+    { title: "Pagos/retiros de capital", value: capitalOut, kind: "Salida" },
+    { title: "Deuda con proveedores", value: supplierDebt, kind: "Pendiente" },
+    { title: "Deuda por prestamos", value: loanDebt, kind: "Pendiente" }
+  ];
+
+  return (
+    <section className="workspace">
+      <div className="capital-hero treasury-hero">
+        <div>
+          <span>Plata estimada del negocio</span>
+          <h2>{formatMoney(estimatedCash)}</h2>
+          <p>Ventas más capital ingresado, menos gastos, pagos de préstamos y retiros cargados.</p>
+        </div>
+        <div className="capital-balance">
+          <strong>{formatMoney(netAfterDebts)}</strong>
+          <span>Vista conservadora: plata estimada menos deudas pendientes.</span>
+        </div>
+      </div>
+
+      <div className="capital-grid">
+        <CapitalCard title="Entradas" value={formatMoney(moneyIn)} note="Ventas registradas + capital propio/prestado." percent={(moneyIn / maxFlow) * 100} tone="own" />
+        <CapitalCard title="Salidas" value={formatMoney(moneyOut)} note="Gastos + pagos de préstamos + retiros del dueño." percent={(moneyOut / maxFlow) * 100} tone="debt" />
+        <CapitalCard title="Resultado operativo" value={formatMoney(operatingResult)} note="Ventas menos gastos cargados. No incluye capital." percent={Math.min(100, Math.abs(operatingResult) / maxFlow * 100)} tone="paid" />
+        <CapitalCard title="Deudas pendientes" value={formatMoney(loanDebt + supplierDebt)} note="Préstamos pendientes + saldo estimado con proveedores." percent={((loanDebt + supplierDebt) / maxFlow) * 100} tone="due" />
+      </div>
+
+      <div className="split">
+        <Panel title="De dónde sale el número">
+          <div className="table treasury-table">
+            {treasuryRows.map((row) => (
+              <div className="table-row" key={row.title}>
+                <div>
+                  <strong>{row.title}</strong>
+                  <span>{row.kind}</span>
+                </div>
+                <strong>{formatMoney(row.value)}</strong>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel title="Lectura rápida">
+          <div className="decision-list">
+            <div className={clsx("decision", estimatedCash >= 0 ? "calm" : "urgent")}>
+              <Wallet size={22} />
+              <div>
+                <strong>{estimatedCash >= 0 ? "Hay plata positiva estimada" : "La plata estimada está en negativo"}</strong>
+                <p>{estimatedCash >= 0 ? "La operación registrada deja saldo disponible antes de deudas pendientes." : "Revisar gastos, compras y capital cargado antes de decidir nuevas compras."}</p>
+              </div>
+            </div>
+            <div className={clsx("decision", netAfterDebts >= 0 ? "growth" : "urgent")}>
+              <TrendUp size={22} />
+              <div>
+                <strong>{netAfterDebts >= 0 ? "La vista conservadora acompaña" : "Las deudas pesan sobre la caja"}</strong>
+                <p>{netAfterDebts >= 0 ? "Incluso considerando deudas cargadas, el negocio queda con margen estimado." : "Si se pagaran deudas pendientes hoy, el saldo estimado quedaría ajustado."}</p>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </section>
+  );
+}
+
 function Capital() {
   const activeRole = useStore((state) => state.activeRole);
   const capitalEntries = useStore((state) => state.capitalEntries);
@@ -3023,8 +3125,8 @@ function System() {
                     <label className="permission-chip" key={permission.key}>
                       <input
                         type="checkbox"
-                        checked={permission.key === "capital" && settingRole !== "dueno" ? false : allowed.includes(permission.key)}
-                        disabled={permission.key === "capital" && settingRole !== "dueno"}
+                        checked={(permission.key === "capital" || permission.key === "tesoreria") && settingRole !== "dueno" ? false : allowed.includes(permission.key)}
+                        disabled={(permission.key === "capital" || permission.key === "tesoreria") && settingRole !== "dueno"}
                         onChange={(event) => {
                           const next = event.target.checked ? [...allowed, permission.key] : allowed.filter((item) => item !== permission.key);
                           updateRolePermissions(settingRole, next);

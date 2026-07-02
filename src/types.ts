@@ -475,6 +475,7 @@ export type PermissionKey =
   | "presupuestos"
   | "pagos"
   | "gastos"
+  | "tesoreria"
   | "capital"
   | "catalogo"
   | "web"
