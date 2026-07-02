@@ -516,9 +516,63 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let saveInFlight = false;
 let saveQueued = false;
 let applyingSyncedState = false;
+let hasAppliedCloudOperations = false;
+const operationalSafetyBackupKey = "regaleria-operational-safety-backup";
 
 function hasOperationalChange(state: AppState, previous: AppState) {
   return operationalStateKeys.some((key) => state[key] !== previous[key]);
+}
+
+function hasPendingOperationalState(state: OperationalStateFields) {
+  return [
+    ...state.products,
+    ...state.sales,
+    ...state.quotes,
+    ...state.transfers,
+    ...state.expenses,
+    ...state.movements,
+    ...state.onlineOrders,
+    ...state.purchaseReceipts,
+    ...state.customers,
+    ...state.suppliers,
+    ...state.cashClosures,
+    ...state.cashShifts,
+    ...state.supplierPayments,
+    ...state.capitalEntries
+  ].some((item) => item.syncStatus !== "sincronizado");
+}
+
+function snapshotTimestamp(snapshot: OperationalSnapshot | null) {
+  const timestamp = snapshot?.updatedAt ? new Date(snapshot.updatedAt).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function saveSafetyBackup(snapshot: OperationalSnapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(operationalSafetyBackupKey, JSON.stringify(snapshot));
+  } catch {
+    // Best effort: Supabase remains the source of truth when local storage is unavailable.
+  }
+}
+
+function loadSafetyBackup() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(operationalSafetyBackupKey);
+    return raw ? (JSON.parse(raw) as OperationalSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSafetyBackup() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(operationalSafetyBackupKey);
+  } catch {
+    // Nothing to do.
+  }
 }
 
 async function flushOperationalState() {
@@ -532,8 +586,11 @@ async function flushOperationalState() {
   do {
     saveQueued = false;
     const nextState = syncedOperationalState(useStore.getState());
-    const saved = await saveCloudOperations(operationalSnapshotFromState(nextState));
+    const snapshot = operationalSnapshotFromState(nextState);
+    saveSafetyBackup(snapshot);
+    const saved = await saveCloudOperations(snapshot);
     if (saved && !saveQueued) {
+      clearSafetyBackup();
       applyingSyncedState = true;
       useStore.setState(nextState);
       applyingSyncedState = false;
@@ -556,15 +613,25 @@ export const useStore = create<AppState>((set, get) => ({
   activeRole: "dueno",
   catalogStatus: "cargando",
   initializeCatalog: async () => {
+    if (hasAppliedCloudOperations && hasPendingOperationalState(get())) {
+      set({ catalogStatus: "actualizado" });
+      return;
+    }
     const [cloudProducts, commerce, operations] = await Promise.all([loadCloudCatalog(), loadCloudCommerce(), loadCloudOperations()]);
-    if (operations) {
-      const operationalState = stateFromOperationalSnapshot(operations);
+    const backup = loadSafetyBackup();
+    const selectedOperations = backup && snapshotTimestamp(backup) > snapshotTimestamp(operations) ? backup : operations;
+    if (selectedOperations) {
+      const operationalState = stateFromOperationalSnapshot(selectedOperations);
+      hasAppliedCloudOperations = true;
       set({
         ...operationalState,
         products: cloudProducts?.length ? cloudProducts : operationalState.products,
         onlineOrders: commerce.orders.length ? commerce.orders : operationalState.onlineOrders,
         emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
         catalogStatus: cloudProducts === null ? "error" : "actualizado"
+      });
+      if (selectedOperations === backup) void saveCloudOperations(selectedOperations).then((saved) => {
+        if (saved) clearSafetyBackup();
       });
       return;
     }
@@ -587,6 +654,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     const seeded = await seedCloudCatalog(get().products);
     if (seeded) void saveCloudOperations(operationalSnapshotFromState(get()));
+    hasAppliedCloudOperations = true;
     set({ catalogStatus: seeded ? "actualizado" : "error" });
   },
   setRole: (role) => set({ activeRole: role }),

@@ -488,6 +488,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: muestra plata estimada, vista conservadora despues de deudas, entradas, salidas, resultado operativo, deuda con proveedores y deuda por prestamos.
 - Restriccion: igual que Capital, queda visible y navegable solo para dueño aunque existan permisos configurables.
 - Alternativas descartadas: mezclarlo en Panel principal, porque administradores y encargados pueden ver Panel pero no deberian ver capital ni deuda privada.
+
+### Regla estricta de preservacion de datos
+- Fecha: 2026-07-02.
+- Decision: ningun cambio futuro puede borrar, resetear o pisar datos existentes; toda entidad nueva debe quedar conectada al snapshot operativo online y protegida contra refrescos con cambios pendientes.
+- Motivo: un movimiento cargado en Capital no quedo en `operational_state` y al publicar/refrescar desaparecio para el usuario.
+- Alcance: la app no aplica refrescos desde Supabase si hay cambios locales pendientes; antes de guardar mantiene una copia local temporal de seguridad y documenta la regla en `docs/reglas-operativas.md`.
+- Alternativas descartadas: depender solo del guardado automatico posterior, porque un refresh, deploy o lectura periodica puede ocurrir antes de que el dato quede confirmado en la base.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
