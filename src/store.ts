@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
 import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, capitalEntries, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
-import { loadCloudOperations, saveCloudOperations } from "./operationalCloud";
+import { isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
   BusinessProfile,
   BusinessProfileInput,
@@ -267,22 +267,27 @@ function canDeleteSupplier(requestedBy: Role) {
   return requestedBy === "dueno" || requestedBy === "administrador";
 }
 
+function shouldUseDemoData() {
+  return import.meta.env.MODE === "test";
+}
+
 function initialDataState() {
+  const withDemoData = shouldUseDemoData();
   return {
-    products: structuredClone(products),
-    sales: structuredClone(sales),
-    quotes: structuredClone(quotes),
-    transfers: structuredClone(transfers),
-    expenses: structuredClone(expenses),
-    movements: structuredClone(movements),
-    onlineOrders: structuredClone(onlineOrders),
-    purchaseReceipts: structuredClone(purchaseReceipts),
-    customers: structuredClone(customers),
-    suppliers: structuredClone(suppliers),
-    cashClosures: structuredClone(cashClosures),
-    cashShifts: structuredClone(cashShifts),
-    supplierPayments: structuredClone(supplierPayments),
-    capitalEntries: structuredClone(capitalEntries),
+    products: withDemoData ? structuredClone(products) : [],
+    sales: withDemoData ? structuredClone(sales) : [],
+    quotes: withDemoData ? structuredClone(quotes) : [],
+    transfers: withDemoData ? structuredClone(transfers) : [],
+    expenses: withDemoData ? structuredClone(expenses) : [],
+    movements: withDemoData ? structuredClone(movements) : [],
+    onlineOrders: withDemoData ? structuredClone(onlineOrders) : [],
+    purchaseReceipts: withDemoData ? structuredClone(purchaseReceipts) : [],
+    customers: withDemoData ? structuredClone(customers) : [],
+    suppliers: withDemoData ? structuredClone(suppliers) : [],
+    cashClosures: withDemoData ? structuredClone(cashClosures) : [],
+    cashShifts: withDemoData ? structuredClone(cashShifts) : [],
+    supplierPayments: withDemoData ? structuredClone(supplierPayments) : [],
+    capitalEntries: withDemoData ? structuredClone(capitalEntries) : [],
     emailMessages: [],
     salesAuditEntries: [],
     operationAuditEntries: [],
@@ -290,6 +295,27 @@ function initialDataState() {
     categories: structuredClone(categories),
     rolePermissions: structuredClone(rolePermissions),
     activeRole: "dueno" as const
+  };
+}
+
+const blockedOperationalSeedIds = {
+  sales: new Set(["sale_001", "sale_002"]),
+  quotes: new Set(["quote_001"]),
+  transfers: new Set(["tr_001"]),
+  expenses: new Set(["exp_001", "exp_002"]),
+  movements: new Set(["mov_001", "mov_002"]),
+  customers: new Set(["cust_claudia", "cust_empresa_norte"])
+};
+
+function sanitizeOperationalSnapshot(snapshot: OperationalSnapshot): OperationalSnapshot {
+  return {
+    ...snapshot,
+    sales: (snapshot.sales ?? []).filter((item) => !blockedOperationalSeedIds.sales.has(item.id)),
+    quotes: (snapshot.quotes ?? []).filter((item) => !blockedOperationalSeedIds.quotes.has(item.id)),
+    transfers: (snapshot.transfers ?? []).filter((item) => !blockedOperationalSeedIds.transfers.has(item.id)),
+    expenses: (snapshot.expenses ?? []).filter((item) => !blockedOperationalSeedIds.expenses.has(item.id)),
+    movements: (snapshot.movements ?? []).filter((item) => !blockedOperationalSeedIds.movements.has(item.id)),
+    customers: (snapshot.customers ?? []).filter((item) => !blockedOperationalSeedIds.customers.has(item.id))
   };
 }
 
@@ -320,31 +346,32 @@ function operationalSnapshotFromState(state: OperationalStateFields): Operationa
 }
 
 function stateFromOperationalSnapshot(snapshot: OperationalSnapshot): OperationalStateFields {
+  const cleanSnapshot = sanitizeOperationalSnapshot(snapshot);
   return {
-    products: snapshot.products,
-    sales: snapshot.sales,
-    quotes: snapshot.quotes,
-    transfers: snapshot.transfers,
-    expenses: snapshot.expenses,
-    movements: snapshot.movements,
-    onlineOrders: snapshot.onlineOrders,
-    purchaseReceipts: snapshot.purchaseReceipts,
-    customers: snapshot.customers,
-    suppliers: snapshot.suppliers,
-    cashClosures: snapshot.cashClosures,
-    cashShifts: snapshot.cashShifts,
-    supplierPayments: snapshot.supplierPayments,
-    capitalEntries: snapshot.capitalEntries ?? [],
-    emailMessages: snapshot.emailMessages,
-    salesAuditEntries: snapshot.salesAuditEntries,
-    operationAuditEntries: snapshot.operationAuditEntries,
-    businessProfile: snapshot.businessProfile,
-    categories: snapshot.categories,
+    products: cleanSnapshot.products ?? [],
+    sales: cleanSnapshot.sales ?? [],
+    quotes: cleanSnapshot.quotes ?? [],
+    transfers: cleanSnapshot.transfers ?? [],
+    expenses: cleanSnapshot.expenses ?? [],
+    movements: cleanSnapshot.movements ?? [],
+    onlineOrders: cleanSnapshot.onlineOrders ?? [],
+    purchaseReceipts: cleanSnapshot.purchaseReceipts ?? [],
+    customers: cleanSnapshot.customers ?? [],
+    suppliers: cleanSnapshot.suppliers ?? [],
+    cashClosures: cleanSnapshot.cashClosures ?? [],
+    cashShifts: cleanSnapshot.cashShifts ?? [],
+    supplierPayments: cleanSnapshot.supplierPayments ?? [],
+    capitalEntries: cleanSnapshot.capitalEntries ?? [],
+    emailMessages: cleanSnapshot.emailMessages ?? [],
+    salesAuditEntries: cleanSnapshot.salesAuditEntries ?? [],
+    operationAuditEntries: cleanSnapshot.operationAuditEntries ?? [],
+    businessProfile: cleanSnapshot.businessProfile ?? businessProfile,
+    categories: cleanSnapshot.categories ?? categories,
     rolePermissions: {
-      dueno: Array.from(new Set([...(snapshot.rolePermissions?.dueno ?? []), ...rolePermissions.dueno])),
-      administrador: Array.from(new Set([...(snapshot.rolePermissions?.administrador ?? []), ...rolePermissions.administrador])),
-      encargado: Array.from(new Set([...(snapshot.rolePermissions?.encargado ?? []), ...rolePermissions.encargado])),
-      cajero: Array.from(new Set([...(snapshot.rolePermissions?.cajero ?? []), ...rolePermissions.cajero]))
+      dueno: Array.from(new Set([...(cleanSnapshot.rolePermissions?.dueno ?? []), ...rolePermissions.dueno])),
+      administrador: Array.from(new Set([...(cleanSnapshot.rolePermissions?.administrador ?? []), ...rolePermissions.administrador])),
+      encargado: Array.from(new Set([...(cleanSnapshot.rolePermissions?.encargado ?? []), ...rolePermissions.encargado])),
+      cajero: Array.from(new Set([...(cleanSnapshot.rolePermissions?.cajero ?? []), ...rolePermissions.cajero]))
     }
   };
 }
@@ -621,7 +648,8 @@ export const useStore = create<AppState>((set, get) => ({
     const backup = loadSafetyBackup();
     const selectedOperations = backup && snapshotTimestamp(backup) > snapshotTimestamp(operations) ? backup : operations;
     if (selectedOperations) {
-      const operationalState = stateFromOperationalSnapshot(selectedOperations);
+      const cleanOperations = sanitizeOperationalSnapshot(selectedOperations);
+      const operationalState = stateFromOperationalSnapshot(cleanOperations);
       hasAppliedCloudOperations = true;
       set({
         ...operationalState,
@@ -630,7 +658,7 @@ export const useStore = create<AppState>((set, get) => ({
         emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
         catalogStatus: cloudProducts === null ? "error" : "actualizado"
       });
-      if (selectedOperations === backup) void saveCloudOperations(selectedOperations).then((saved) => {
+      if (selectedOperations === backup || cleanOperations !== selectedOperations) void saveCloudOperations(cleanOperations).then((saved) => {
         if (saved) clearSafetyBackup();
       });
       return;
@@ -649,6 +677,13 @@ export const useStore = create<AppState>((set, get) => ({
         catalogStatus: "actualizado"
       });
       void saveCloudOperations(operationalSnapshotFromState(get()));
+      return;
+    }
+
+    if (isCloudOperationsEnabled()) {
+      set({ catalogStatus: "actualizado" });
+      void saveCloudOperations(operationalSnapshotFromState(get()));
+      hasAppliedCloudOperations = true;
       return;
     }
 
@@ -1374,7 +1409,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   closeCashDay: (note) => {
     const today = new Date().toISOString().slice(0, 10);
-    const todaySales = get().sales.filter((sale) => sale.createdAt.slice(0, 10) === today);
+    const todaySales = get().sales.filter((sale) => !sale.deletedAt && sale.createdAt.slice(0, 10) === today);
     const todayExpenses = get().expenses.filter((expense) => !expense.deletedAt && expense.createdAt.slice(0, 10) === today);
     const totalByPayment = (method: PaymentMethod) => money(todaySales.filter((sale) => sale.paymentMethod === method).reduce((sum, sale) => sum + sale.total, 0));
     const closure: CashClosure = {
@@ -1412,7 +1447,7 @@ export const useStore = create<AppState>((set, get) => ({
   closeCashShift: (id, declaredClosingCash, closedBy, note) => {
     const shift = get().cashShifts.find((item) => item.id === id && !item.closedAt);
     if (!shift || declaredClosingCash < 0) return null;
-    const shiftSales = get().sales.filter((sale) => sale.shiftId === id);
+    const shiftSales = get().sales.filter((sale) => !sale.deletedAt && sale.shiftId === id);
     const cashTotal = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
     const closedShift: CashShift = {
       ...shift,
@@ -1427,7 +1462,7 @@ export const useStore = create<AppState>((set, get) => ({
     return closedShift;
   },
   updateSaleWithAudit: (saleId, input, password, reason, requestedBy) => {
-    const sale = get().sales.find((item) => item.id === saleId);
+    const sale = get().sales.find((item) => item.id === saleId && !item.deletedAt);
     if (!sale || !canRunAudit(requestedBy, password, reason) || input.discount < 0) return false;
     const totals = saleTotals(sale.lines, input.discount);
     const updatedSale: Sale = {
@@ -1458,8 +1493,9 @@ export const useStore = create<AppState>((set, get) => ({
     return true;
   },
   deleteSaleWithAudit: (saleId, password, reason, requestedBy) => {
-    const sale = get().sales.find((item) => item.id === saleId);
+    const sale = get().sales.find((item) => item.id === saleId && !item.deletedAt);
     if (!sale || !canRunAudit(requestedBy, password, reason)) return false;
+    const deletedSale: Sale = { ...sale, deletedAt: new Date().toISOString(), deletedBy: requestedBy, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
       entityType: "venta",
       entityId: sale.id,
@@ -1467,10 +1503,11 @@ export const useStore = create<AppState>((set, get) => ({
       action: "eliminacion",
       reason,
       performedBy: requestedBy,
-      before: sale
+      before: sale,
+      after: deletedSale
     });
     set((state) => ({
-      sales: state.sales.filter((item) => item.id !== saleId),
+      sales: state.sales.map((item) => (item.id === saleId ? deletedSale : item)),
       products: restoreSaleStock(state.products, sale),
       movements: [...reversalStockMovementsForSale(sale, reason), ...state.movements],
       salesAuditEntries: [entry, ...state.salesAuditEntries]
@@ -1481,9 +1518,10 @@ export const useStore = create<AppState>((set, get) => ({
   restoreSaleWithAudit: (auditEntryId, password, reason, requestedBy) => {
     const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "venta" && entry.action === "eliminacion");
     const sale = source?.before && "receiptNumber" in source.before ? source.before : null;
-    if (!sale || get().sales.some((item) => item.id === sale.id) || !canRunAudit(requestedBy, password, reason)) return false;
+    const existingDeletedSale = sale ? get().sales.find((item) => item.id === sale.id && item.deletedAt) : null;
+    if (!sale || get().sales.some((item) => item.id === sale.id && !item.deletedAt) || !canRunAudit(requestedBy, password, reason)) return false;
     if (!hasAvailableStock(get().products, sale.lines)) return false;
-    const restoredSale: Sale = { ...sale, syncStatus: "pendiente" };
+    const restoredSale: Sale = { ...(existingDeletedSale ?? sale), deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
       entityType: "venta",
       entityId: restoredSale.id,
@@ -1494,7 +1532,7 @@ export const useStore = create<AppState>((set, get) => ({
       after: restoredSale
     });
     set((state) => ({
-      sales: [restoredSale, ...state.sales],
+      sales: existingDeletedSale ? state.sales.map((item) => (item.id === restoredSale.id ? restoredSale : item)) : [restoredSale, ...state.sales],
       products: applySaleStock(state.products, restoredSale),
       movements: [...stockMovementsForSale(restoredSale), ...state.movements],
       salesAuditEntries: [entry, ...state.salesAuditEntries]
@@ -1505,7 +1543,7 @@ export const useStore = create<AppState>((set, get) => ({
   updateShiftWithAudit: (shiftId, input, password, reason, requestedBy) => {
     const shift = get().cashShifts.find((item) => item.id === shiftId);
     if (!shift || !canRunAudit(requestedBy, password, reason) || input.initialCash < 0 || (input.declaredClosingCash ?? 0) < 0) return false;
-    const shiftSales = get().sales.filter((sale) => sale.shiftId === shiftId);
+    const shiftSales = get().sales.filter((sale) => !sale.deletedAt && sale.shiftId === shiftId);
     const cashTotal = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
     const updatedShift: CashShift = {
       ...shift,

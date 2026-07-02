@@ -123,6 +123,8 @@ export interface Sale {
   total: number;
   margin: number;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: Role;
   syncStatus: SyncStatus;
 }
 

@@ -9,6 +9,9 @@
 - Antes de guardar en Supabase, la app mantiene una copia local temporal de seguridad para evitar perdida ante errores de red, refresh o deploy.
 - Solo se eliminan datos definitivos cuando el dueño lo pide expresamente; por defecto se usa anulacion, baja logica o historial.
 - Antes de publicar, hay que correr build y pruebas y verificar que el paquete publicado incluya el cambio.
+- Los datos demo o de ejemplo no pueden entrar en produccion ni mezclarse con operaciones reales. En produccion, si no hay datos en Supabase, la app debe arrancar vacia y esperar datos reales.
+- Si una copia local o un snapshot online trae semillas viejas conocidas, el sistema debe filtrarlas antes de mostrar o guardar estado operativo.
+- Una anulacion de venta debe quedar como baja logica con auditoria; no debe contarse en caja, reportes ni tesoreria, salvo que el dueño la restaure.
 
 ## Regla para futuras modificaciones
 
@@ -20,3 +23,4 @@ Cada nueva funcion debe responder estas preguntas antes de publicarse:
 4. Que rol puede verlo o modificarlo.
 5. Como se evita pisar informacion ya cargada.
 6. Que queda registrado en historial o auditoria.
+7. Como se evita que datos demo reaparezcan en produccion.

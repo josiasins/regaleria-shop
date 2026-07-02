@@ -495,6 +495,15 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: un movimiento cargado en Capital no quedo en `operational_state` y al publicar/refrescar desaparecio para el usuario.
 - Alcance: la app no aplica refrescos desde Supabase si hay cambios locales pendientes; antes de guardar mantiene una copia local temporal de seguridad y documenta la regla en `docs/reglas-operativas.md`.
 - Alternativas descartadas: depender solo del guardado automatico posterior, porque un refresh, deploy o lectura periodica puede ocurrir antes de que el dato quede confirmado en la base.
+
+### Separacion definitiva entre demo y operacion real
+- Fecha: 2026-07-02.
+- Decision: quitar los datos demo del estado operativo productivo y bloquear su reaparicion desde snapshots o copias locales.
+- Motivo: gastos y ventas de ejemplo ya anulados volvian a mostrarse, generando desconfianza sobre si el sistema respetaba bajas y correcciones reales.
+- Alcance: en produccion el estado interno ya no arranca con ventas, gastos, presupuestos, transferencias, movimientos ni clientes demo; si Supabase no trae datos, se muestra estado vacio. Se limpiaron de Supabase las semillas operativas conocidas, preservando los 45 productos del catalogo y el movimiento de capital real existente.
+- Auditoria: las ventas anuladas pasan a baja logica con `deletedAt/deletedBy`, quedan restaurables por dueño con contraseña y no suman en caja, reportes ni tesoreria.
+- Respaldo: antes de limpiar se guardo una copia local en `backups/operational-state-before-clean-20260701-233512.json`, fuera de Git.
+- Alternativas descartadas: seguir ocultando datos demo solo por filtros visuales, porque una copia local o una sincronizacion posterior podia volver a publicarlos como activos.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

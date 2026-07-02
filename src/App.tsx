@@ -459,6 +459,7 @@ function Header({
 }) {
   const markAllSynced = useStore((state) => state.markAllSynced);
   const { products, customers, suppliers, sales } = useStore();
+  const activeSales = sales.filter((sale) => !sale.deletedAt);
   const [search, setSearch] = useState("");
   const pending = useStore((state) =>
     [
@@ -487,7 +488,7 @@ function Header({
         ...products.map((product) => ({ label: product.name, meta: `${product.category} · ${product.supplier}`, section: "catalogo" as Section })),
         ...customers.map((customer) => ({ label: customer.name, meta: "Cliente", section: "clientes" as Section })),
         ...suppliers.filter((supplier) => !supplier.deletedAt).map((supplier) => ({ label: supplier.name, meta: "Proveedor", section: "proveedores" as Section })),
-        ...sales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section }))
+        ...activeSales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section }))
       ]
         .filter((item) => allowedSections.includes(item.section))
         .filter((item) => `${item.label} ${item.meta}`.toLowerCase().includes(search.trim().toLowerCase()))
@@ -532,8 +533,9 @@ function Header({
 
 function Dashboard() {
   const { sales, expenses, products, transfers, onlineOrders, activeRole } = useStore();
-  const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalMargin = sales.reduce((sum, sale) => sum + sale.margin, 0);
+  const activeSales = sales.filter((sale) => !sale.deletedAt);
+  const totalSales = activeSales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalMargin = activeSales.reduce((sum, sale) => sum + sale.margin, 0);
   const totalExpenses = expenses.filter((expense) => !expense.deletedAt).reduce((sum, expense) => sum + expense.amount, 0);
   const lowStock = products.flatMap((product) => product.variants.filter((variant) => variant.stock <= variant.lowStockAt).map((variant) => `${product.name} (${variant.name})`));
   const pendingTransfers = transfers.filter((transfer) => transfer.status === "pendiente");
@@ -555,7 +557,7 @@ function Dashboard() {
         </Panel>
         <Panel title="Ultimas ventas">
           <DataList
-            items={sales.slice(0, 5).map((sale) => ({
+            items={activeSales.slice(0, 5).map((sale) => ({
               title: sale.receiptNumber,
               meta: sale.customerName ?? sale.type,
               value: formatMoney(sale.total)
@@ -624,17 +626,18 @@ function Sales() {
   const [auditReason, setAuditReason] = useState("");
   const [auditMessage, setAuditMessage] = useState("");
 
+  const activeSales = sales.filter((sale) => !sale.deletedAt);
   const selected = findProductVariant(products, variantId);
   const activeShift = cashShifts.find((shift) => !shift.closedAt);
   const displayedShift = activeShift ?? cashShifts[0];
-  const shiftSales = displayedShift ? sales.filter((sale) => sale.shiftId === displayedShift.id) : [];
+  const shiftSales = displayedShift ? activeSales.filter((sale) => sale.shiftId === displayedShift.id) : [];
   const shiftCashSales = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
   const shiftTransferSales = shiftSales.filter((sale) => sale.paymentMethod === "transferencia").reduce((sum, sale) => sum + sale.total, 0);
   const shiftCardSales = shiftSales.filter((sale) => sale.paymentMethod === "tarjeta").reduce((sum, sale) => sum + sale.total, 0);
   const shiftOtherSales = shiftSales.filter((sale) => sale.paymentMethod === "otro").reduce((sum, sale) => sum + sale.total, 0);
   const expectedClosingCash = (displayedShift?.initialCash ?? 0) + shiftCashSales;
   const activeCustomers = customers.filter((customer) => !customer.deletedAt);
-  const auditSale = sales.find((sale) => sale.id === auditSaleId);
+  const auditSale = activeSales.find((sale) => sale.id === auditSaleId);
   const auditShift = cashShifts.find((shift) => shift.id === auditShiftId);
   const deletedAuditEntries = salesAuditEntries.filter((entry) => entry.action === "eliminacion");
 
@@ -642,8 +645,8 @@ function Sales() {
     if (!isOwner && salesPage === "auditoria") setSalesPage("mostrador");
   }, [isOwner, salesPage]);
   useEffect(() => {
-    if (!sales.some((sale) => sale.id === auditSaleId)) setAuditSaleId(sales[0]?.id ?? "");
-  }, [auditSaleId, sales]);
+    if (!activeSales.some((sale) => sale.id === auditSaleId)) setAuditSaleId(activeSales[0]?.id ?? "");
+  }, [activeSales, auditSaleId]);
   useEffect(() => {
     if (!cashShifts.some((shift) => shift.id === auditShiftId)) setAuditShiftId(cashShifts[0]?.id ?? "");
   }, [auditShiftId, cashShifts]);
@@ -1006,7 +1009,7 @@ function Sales() {
                 <label>
                   Venta
                   <select value={auditSaleId} onChange={(event) => setAuditSaleId(event.target.value)}>
-                    {sales.map((sale) => (
+                    {activeSales.map((sale) => (
                       <option key={sale.id} value={sale.id}>
                         {sale.receiptNumber} · {sale.customerName ?? "Consumidor final"} · {formatMoney(sale.total)}
                       </option>
@@ -2741,7 +2744,7 @@ function Reports() {
   const since = new Date();
   since.setDate(since.getDate() - days);
   const inPeriod = (date: string) => new Date(date) >= since;
-  const periodSales = sales.filter((sale) => inPeriod(sale.createdAt));
+  const periodSales = sales.filter((sale) => !sale.deletedAt && inPeriod(sale.createdAt));
   const periodExpenses = expenses.filter((expense) => !expense.deletedAt && inPeriod(expense.createdAt));
   const periodPurchases = purchaseReceipts.filter((receipt) => !receipt.deletedAt && inPeriod(receipt.createdAt));
   const soldByVariant = new Map<string, { name: string; quantity: number; total: number }>();
@@ -2830,7 +2833,7 @@ function Treasury() {
   const activeExpenses = expenses.filter((expense) => !expense.deletedAt);
   const activePurchases = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
   const activeCapital = capitalEntries.filter((entry) => !entry.deletedAt);
-  const salesTotal = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const salesTotal = sales.filter((sale) => !sale.deletedAt).reduce((sum, sale) => sum + sale.total, 0);
   const expensesTotal = activeExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const purchasesTotal = activePurchases.reduce((sum, receipt) => sum + receipt.total, 0);
   const supplierPaymentsTotal = supplierPayments.reduce((sum, payment) => sum + payment.amount, 0);
