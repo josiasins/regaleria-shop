@@ -1,5 +1,5 @@
 const CACHE_NAME = "regaleria-shell-v1";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const APP_SHELL = ["/", "/manifest.webmanifest", "/brand/icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

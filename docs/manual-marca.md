@@ -14,7 +14,7 @@ Exportaciones operativas:
 
 - `public/brand/regaleria-shop-logo.svg`: logo completo para la app, web, comprobantes y piezas grandes.
 - `public/brand/regaleria-shop-symbol.svg`: recorte compacto para sidebar, favicon, app instalada y espacios chicos.
-- `public/icon.svg`: icono usado por navegador, PWA y manifest.
+- `public/brand/icon.png`: icono usado por navegador, PWA y manifest.
 - `public/brand/logo-concepts.png`: exploracion historica, no usar como marca final.
 
 Cuando el archivo maestro cambie, el flujo correcto es: abrir `regaleria-shop-logo_NEW.af`, exportar SVG nuevo, reemplazar las exportaciones operativas y revisar visualmente en la app.

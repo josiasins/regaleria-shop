@@ -148,7 +148,7 @@ La app incluye:
 
 - `public/manifest.webmanifest`.
 - `public/sw.js`.
-- `public/icon.svg`.
+- `public/brand/icon.png`.
 
 Esto permite instalarla desde Chrome. El service worker prioriza red antes que cache para evitar versiones viejas despues de publicar. El offline operativo real sigue siendo una etapa futura: ventas simples, presupuestos, gastos y movimientos deberan guardar en cola local y sincronizar.
 

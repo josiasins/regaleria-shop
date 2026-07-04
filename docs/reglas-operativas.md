@@ -24,3 +24,12 @@ Cada nueva funcion debe responder estas preguntas antes de publicarse:
 5. Como se evita pisar informacion ya cargada.
 6. Que queda registrado en historial o auditoria.
 7. Como se evita que datos demo reaparezcan en produccion.
+
+## Documentacion obligatoria
+
+- Todo cambio importante debe quedar documentado en el mismo turno de trabajo.
+- Si el cambio modifica comportamiento, datos, permisos, seguridad, ecommerce, caja, stock, compras, gastos, clientes, proveedores, deploy o backups, debe agregarse una entrada en `docs/decisiones.md`.
+- Si el cambio afecta flujos de uso, debe actualizarse `docs/flujos.md` o el documento operativo correspondiente.
+- Si el cambio afecta datos, debe actualizarse `docs/modelo-datos.md`, `docs/online-local-produccion.md` o `docs/auditoria-seguridad.md`, segun corresponda.
+- Si el trabajo se delega a subagentes, el agente principal o el gerente de subagentes debe asegurar que la documentacion quede actualizada antes de cerrar la tarea.
+- Un cambio no se considera terminado si funciona en pantalla pero no queda explicado donde corresponde.

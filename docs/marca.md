@@ -13,7 +13,7 @@ Archivos de marca:
 - `public/brand/regaleria-shop-logo_NEW.af`: fuente maestra editable.
 - `public/brand/regaleria-shop-logo.svg`: logo completo exportado para web, comprobantes, presentaciones y piezas grandes.
 - `public/brand/regaleria-shop-symbol.svg`: recorte compacto exportado para favicon, app instalada, sidebar y espacios chicos.
-- `public/icon.svg`: icono principal de la aplicacion, alineado al simbolo elegido.
+- `public/brand/icon.png`: icono principal de la aplicacion, navegador y PWA.
 - `public/brand/logo-concepts.png`: exploracion anterior de cinco caminos visuales, conservada como historial.
 
 ## Paleta

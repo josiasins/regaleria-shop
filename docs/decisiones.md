@@ -2,6 +2,21 @@
 
 Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas descartadas.
 
+## 2026-07-04
+
+### Icono principal PNG con transparencia
+- Decision: usar `public/brand/icon.png` como icono principal de navegador, Apple touch icon y PWA manifest.
+- Motivo: el archivo aprobado tiene formato PNG RGBA, permite transparencia y representa mejor la marca actual en accesos directos e instalacion en Chrome.
+- Alternativas descartadas: mantener `public/icon.svg` como icono activo, porque ya no refleja el asset seleccionado para la marca actual.
+
+## 2026-07-02
+
+### Documentacion obligatoria para cambios y subagentes
+- Decision: todo cambio importante debe actualizar documentacion en el mismo turno de trabajo; si intervienen subagentes, el agente principal o el gerente de subagentes debe controlar que quede documentado.
+- Motivo: el sistema combina operacion interna, ecommerce, base de datos, seguridad y deploy; sin documentacion actualizada se pierde trazabilidad y se repiten errores.
+- Alcance: decisiones, flujos, modelo de datos, seguridad, produccion, roadmap, manual operativo y cualquier documento afectado por el cambio.
+- Alternativas descartadas: documentar solo al final de una etapa, porque en un sistema en uso real las decisiones intermedias tambien afectan confianza, soporte y continuidad.
+
 ## 2026-06-26
 
 ### Clientes con eliminacion recuperable
