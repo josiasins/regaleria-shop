@@ -4,6 +4,11 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 
 ## 2026-07-04
 
+### Historial de stock completo y consultable
+- Decision: reemplazar el limite fijo de ocho movimientos por un historial filtrable, con carga progresiva y accion para mostrar todos los resultados.
+- Motivo: el historial es una herramienta de auditoria operativa; mostrar solo una muestra impide reconstruir ajustes, ingresos, ventas, devoluciones o perdidas anteriores.
+- Alternativas descartadas: renderizar todos los movimientos siempre, porque puede volver lenta la pantalla a medida que crece el negocio; mantener solo los ultimos movimientos, porque no cumple la necesidad de control.
+
 ### Reintento seguro ante dos ventanas operando
 - Decision: eliminar la confirmacion visual temporizada de sincronizacion y, ante una colision de guardado, recuperar el ultimo estado online, incorporar los registros locales pendientes y reintentar contra la nueva version.
 - Motivo: al corregir stock desde dos ventanas, una podia recibir los datos actualizados pero conservar una cola falsa de conflictos. Eso impedía operar y daba la sensacion de que Supabase no habia guardado cambios que si estaban online.

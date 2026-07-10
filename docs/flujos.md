@@ -78,6 +78,13 @@
 1. Se selecciona una variante.
 2. Se elige tipo: ingreso, ajuste/baja, devolucion o perdida/rotura.
 3. Se carga cantidad y motivo.
+
+## Consulta de historial de stock
+
+1. Se abre Stock > Historial.
+2. Se consulta el historial completo de movimientos, ordenado desde el mas reciente.
+3. Se puede filtrar por producto o motivo, tipo de movimiento y periodo.
+4. El sistema muestra los primeros 20 resultados para conservar rapidez y permite cargar mas o mostrar todos.
 4. El sistema valida que el stock no quede negativo.
 5. Se actualiza la cantidad disponible.
 6. Queda historial auditable con estado de sincronizacion.

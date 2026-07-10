@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "./App";
-import { resetStore } from "./store";
+import { resetStore, useStore } from "./store";
 
 describe("Regaleria app", () => {
   beforeEach(() => {
@@ -67,6 +67,31 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Motivo"), "Conteo de prueba");
     await user.click(screen.getByRole("button", { name: /Registrar movimiento/i }));
     expect(screen.getByText(/Conteo de prueba/i)).toBeInTheDocument();
+  });
+
+  it("shows the complete stock history through filters and progressive loading", async () => {
+    const baseMovement = useStore.getState().movements[0];
+    useStore.setState({
+      movements: Array.from({ length: 25 }, (_, index) => ({
+        ...baseMovement,
+        id: `history_${index}`,
+        reason: `Conteo historico ${index}`,
+        createdAt: new Date(Date.now() - index * 60_000).toISOString()
+      }))
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Stock/i }));
+    await user.click(screen.getByRole("button", { name: "Historial" }));
+    expect(screen.getByText("25 movimiento(s)")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 20 de 25")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cargar 20 mas" }));
+    expect(screen.getByText("Historial completo visible")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Buscar en historial de stock"), "Conteo historico 24");
+    expect(screen.getByText("1 movimiento(s)")).toBeInTheDocument();
   });
 
   it("can create a category while adding a product", async () => {

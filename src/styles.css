@@ -1295,6 +1295,70 @@ label {
   color: oklch(54% 0.026 158);
 }
 
+.history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.45fr) minmax(160px, 0.45fr);
+  gap: 10px;
+  align-items: end;
+  padding-bottom: 14px;
+  border-bottom: 1px solid oklch(88% 0.018 150);
+}
+
+.history-search {
+  min-height: 42px;
+}
+
+.history-filter {
+  display: grid;
+  gap: 5px;
+  color: oklch(42% 0.026 158);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.history-filter select {
+  min-height: 42px;
+}
+
+.history-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0 8px;
+  color: oklch(48% 0.026 158);
+}
+
+.history-summary span {
+  font-size: 0.88rem;
+}
+
+.history-list > div {
+  content-visibility: auto;
+  contain-intrinsic-size: 56px;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.text-action {
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: oklch(40% 0.075 158);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.text-action:hover {
+  color: oklch(31% 0.09 158);
+}
+
 .positive {
   color: oklch(47% 0.09 145);
 }
@@ -1977,6 +2041,20 @@ textarea:focus-visible {
   color: oklch(72% 0.018 154);
 }
 
+.theme-night .history-toolbar {
+  border-bottom-color: oklch(34% 0.026 158);
+}
+
+.theme-night .history-filter,
+.theme-night .history-summary,
+.theme-night .text-action {
+  color: oklch(76% 0.022 154);
+}
+
+.theme-night .text-action:hover {
+  color: oklch(91% 0.03 154);
+}
+
 .theme-night h1,
 .theme-night h2,
 .theme-night strong {
@@ -2547,6 +2625,21 @@ textarea:focus-visible {
     align-items: start;
     gap: 5px;
     padding: 10px 0;
+  }
+
+  .history-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .history-summary,
+  .history-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-actions .secondary-action,
+  .history-actions .text-action {
+    width: 100%;
   }
 
   .table-row {

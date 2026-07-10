@@ -76,6 +76,14 @@ type ExpensePage = "cargar" | "recientes" | "editar" | "eliminados" | "historial
 type SettingsPage = "roles" | "operativa" | "categorias" | "sincronizacion" | "atajos";
 type InterfaceTheme = "dia" | "noche";
 
+const stockMovementLabels: Record<StockMovementType, string> = {
+  ingreso: "Ingreso",
+  venta: "Venta",
+  ajuste: "Ajuste",
+  devolucion: "Devolucion",
+  perdida_rotura: "Perdida o rotura"
+};
+
 const sectionGroups: { title: string; ids: Section[] }[] = [
   { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
   { title: "Personas", ids: ["clientes", "proveedores"] },
@@ -1215,6 +1223,10 @@ function Stock() {
   const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
   const [stockPage, setStockPage] = useState<StockPage>("control");
   const [query, setQuery] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyType, setHistoryType] = useState<StockMovementType | "todos">("todos");
+  const [historyPeriod, setHistoryPeriod] = useState<"todos" | "7" | "30" | "90">("todos");
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
   const [newProduct, setNewProduct] = useState({
     name: "",
     category: "",
@@ -1266,6 +1278,27 @@ function Stock() {
     cost: 0,
     price: 0
   });
+  const historyVariants = useMemo(
+    () => new Map(products.flatMap((product) => product.variants.map((variant) => [variant.id, `${product.name} - ${variant.name}`]))),
+    [products]
+  );
+  const filteredMovements = useMemo(() => {
+    const normalizedQuery = historyQuery.trim().toLowerCase();
+    const minimumDate = historyPeriod === "todos" ? null : Date.now() - Number(historyPeriod) * 24 * 60 * 60 * 1000;
+    return movements.filter((item) => {
+      const variantName = historyVariants.get(item.variantId) ?? "Variante no encontrada";
+      return (
+        (!normalizedQuery || `${variantName} ${item.reason}`.toLowerCase().includes(normalizedQuery)) &&
+        (historyType === "todos" || item.type === historyType) &&
+        (!minimumDate || new Date(item.createdAt).getTime() >= minimumDate)
+      );
+    });
+  }, [historyPeriod, historyQuery, historyType, historyVariants, movements]);
+  const visibleMovements = filteredMovements.slice(0, visibleHistoryCount);
+  const updateHistoryFilter = (update: () => void) => {
+    update();
+    setVisibleHistoryCount(20);
+  };
   const [variantStatus, setVariantStatus] = useState("");
 
   useEffect(() => {
@@ -1680,22 +1713,56 @@ function Stock() {
           </Panel>
         )}
         {stockPage === "historial" && (
-      <Panel title="Historial de movimientos">
-        <div className="movement-list">
-          {movements.slice(0, 8).map((item) => {
-            const found = findVariantName(products, item.variantId);
-            return (
-              <div key={item.id}>
-                <div>
-                  <strong>{found}</strong>
-                  <span>{item.type} · {item.reason} · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}</span>
-                </div>
-                <strong className={item.quantity > 0 ? "positive" : "negative"}>{item.quantity > 0 ? `+${item.quantity}` : item.quantity}</strong>
+          <Panel title="Historial de movimientos">
+            <div className="history-toolbar">
+              <label className="search-field history-search">
+                <MagnifyingGlass size={17} />
+                <input aria-label="Buscar en historial de stock" value={historyQuery} onChange={(event) => updateHistoryFilter(() => setHistoryQuery(event.target.value))} placeholder="Buscar producto o motivo" />
+              </label>
+              <label className="history-filter">
+                <span>Tipo</span>
+                <select value={historyType} onChange={(event) => updateHistoryFilter(() => setHistoryType(event.target.value as StockMovementType | "todos"))}>
+                  <option value="todos">Todos los tipos</option>
+                  {Object.entries(stockMovementLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
+                </select>
+              </label>
+              <label className="history-filter">
+                <span>Periodo</span>
+                <select value={historyPeriod} onChange={(event) => updateHistoryFilter(() => setHistoryPeriod(event.target.value as "todos" | "7" | "30" | "90"))}>
+                  <option value="todos">Todo el historial</option>
+                  <option value="7">Ultimos 7 dias</option>
+                  <option value="30">Ultimos 30 dias</option>
+                  <option value="90">Ultimos 90 dias</option>
+                </select>
+              </label>
+            </div>
+            <div className="history-summary">
+              <strong>{filteredMovements.length} movimiento(s)</strong>
+              <span>{visibleMovements.length === filteredMovements.length ? "Historial completo visible" : `Mostrando ${visibleMovements.length} de ${filteredMovements.length}`}</span>
+            </div>
+            {visibleMovements.length ? (
+              <div className="movement-list history-list">
+                {visibleMovements.map((item) => {
+                  const found = historyVariants.get(item.variantId) ?? "Variante no encontrada";
+                  return (
+                    <div key={item.id}>
+                      <div>
+                        <strong>{found}</strong>
+                        <span>{stockMovementLabels[item.type]} · {item.reason} · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}</span>
+                      </div>
+                      <strong className={item.quantity > 0 ? "positive" : "negative"}>{item.quantity > 0 ? `+${item.quantity}` : item.quantity}</strong>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-      </Panel>
+            ) : <div className="empty-lines">No hay movimientos que coincidan con estos filtros.</div>}
+            {visibleMovements.length < filteredMovements.length && (
+              <div className="history-actions">
+                <button className="secondary-action" onClick={() => setVisibleHistoryCount((count) => Math.min(count + 20, filteredMovements.length))}>Cargar 20 mas</button>
+                <button className="text-action" onClick={() => setVisibleHistoryCount(filteredMovements.length)}>Mostrar todos</button>
+              </div>
+            )}
+          </Panel>
         )}
       </div>
     </section>
