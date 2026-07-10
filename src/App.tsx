@@ -497,13 +497,18 @@ function Header({
   const title = sections.find((item) => item.id === section)?.label ?? "Panel";
   const searchResults = search.trim()
     ? [
-        ...products.map((product) => ({ label: product.name, meta: `${product.category} · ${product.supplier}`, section: "catalogo" as Section })),
+        ...products.flatMap((product) => product.variants.map((variant) => ({
+          label: `${product.name} · ${variant.name}`,
+          meta: `${variant.sku || variant.barcode || "Sin codigo"} · ${product.description || product.category}`,
+          search: productVariantSearchText(product, variant),
+          section: "catalogo" as Section
+        }))),
         ...customers.map((customer) => ({ label: customer.name, meta: "Cliente", section: "clientes" as Section })),
         ...suppliers.filter((supplier) => !supplier.deletedAt).map((supplier) => ({ label: supplier.name, meta: "Proveedor", section: "proveedores" as Section })),
         ...activeSales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section }))
       ]
         .filter((item) => allowedSections.includes(item.section))
-        .filter((item) => `${item.label} ${item.meta}`.toLowerCase().includes(search.trim().toLowerCase()))
+        .filter((item) => `${item.label} ${item.meta} ${"search" in item ? item.search : ""}`.toLowerCase().includes(search.trim().toLowerCase()))
         .slice(0, 6)
     : [];
   return (
@@ -515,7 +520,7 @@ function Header({
       <div className="topbar-actions">
         <label className="global-search">
           <MagnifyingGlass size={17} />
-          <input id="global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar producto, cliente, proveedor o venta" />
+          <input id="global-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar producto, codigo, cliente, proveedor o venta" />
           {searchResults.length > 0 && (
             <div className="global-results">
               {searchResults.map((item) => (
@@ -1186,7 +1191,7 @@ function ProductVariantPicker({ label, searchLabel, products, variantId, onChang
       product,
       variant,
       label: `${product.name} - ${variant.name}`,
-      search: `${product.name} ${product.category} ${product.supplier} ${variant.name} ${variant.sku} ${variant.barcode}`.toLowerCase()
+      search: productVariantSearchText(product, variant)
     }))
   );
   const filtered = options.filter((option) => option.search.includes(query.trim().toLowerCase())).slice(0, 30);
@@ -1197,7 +1202,7 @@ function ProductVariantPicker({ label, searchLabel, products, variantId, onChang
     <div className="product-picker">
       <label>
         {searchLabel}
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre, SKU o codigo" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre, descripcion, SKU o codigo" />
       </label>
       <label>
         {label}
@@ -1205,7 +1210,7 @@ function ProductVariantPicker({ label, searchLabel, products, variantId, onChang
           {!selectedStillVisible && <option value="">Elegir producto</option>}
           {visibleOptions.map(({ product, variant, label }) => (
             <option key={variant.id} value={variant.id}>
-              {label} · {variant.sku} · Stock {variant.stock}
+              {label} · {variant.sku || variant.barcode || "Sin codigo"} · Stock {variant.stock}
             </option>
           ))}
         </select>
@@ -1252,6 +1257,7 @@ function Stock() {
     price: 0
   });
   const [batchLines, setBatchLines] = useState(() => [{ id: crypto.randomUUID(), variantId: products[0]?.variants[0]?.id ?? "", actualStock: products[0]?.variants[0]?.stock ?? 0 }]);
+  const [batchProductQueries, setBatchProductQueries] = useState<Record<string, string>>({});
   const [batchReason, setBatchReason] = useState("");
   const [correctionOfOperationId, setCorrectionOfOperationId] = useState<string | undefined>();
   const [movementStatus, setMovementStatus] = useState("");
@@ -1362,6 +1368,7 @@ function Stock() {
       product.name.toLowerCase().includes(value) ||
       product.category.toLowerCase().includes(value) ||
       product.supplier.toLowerCase().includes(value) ||
+      product.description.toLowerCase().includes(value) ||
       product.variants.some((variant) =>
         [variant.name, variant.sku, variant.barcode].some((field) => field.toLowerCase().includes(value))
       )
@@ -1543,7 +1550,7 @@ function Stock() {
         <Panel title="Control de stock">
           <label className="search-field">
             <MagnifyingGlass size={17} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por producto, SKU o codigo" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por producto, descripcion, SKU o codigo" />
           </label>
           <div className="stock-list">
             {filteredProducts.map((product) => (
@@ -1680,16 +1687,22 @@ function Stock() {
               {batchLines.map((line, index) => {
                 const selected = findStockVariant(line.variantId);
                 const difference = line.actualStock - (selected?.variant.stock ?? 0);
+                const lineSearch = batchProductQueries[line.id]?.trim().toLowerCase() ?? "";
+                const lineOptions = lineSearch ? stockVariants.filter(({ product, variant }) => productVariantSearchText(product, variant).includes(lineSearch)) : stockVariants;
                 return (
                   <div className="batch-line" key={line.id}>
                     <div className="batch-line-heading">
                       <strong>Producto {index + 1}</strong>
                       {batchLines.length > 1 && <button className="icon-button danger-icon" title="Quitar producto" aria-label={`Quitar producto ${index + 1}`} onClick={() => setBatchLines((current) => current.filter((item) => item.id !== line.id))}><Trash size={17} /></button>}
                     </div>
+                    <label className="batch-product-search">
+                      Buscar producto
+                      <input value={batchProductQueries[line.id] ?? ""} onChange={(event) => setBatchProductQueries((current) => ({ ...current, [line.id]: event.target.value }))} placeholder="Nombre, descripcion, SKU o codigo" />
+                    </label>
                     <label className="batch-product-select">
                       Producto y variante
                       <select value={line.variantId} onChange={(event) => updateBatchLine(line.id, { variantId: event.target.value })}>
-                        {stockVariants.map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name}</option>)}
+                        {(lineOptions.length ? lineOptions : stockVariants).map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name} · {variant.sku || variant.barcode || "Sin codigo"}</option>)}
                       </select>
                     </label>
                     <div className="batch-product-info">
@@ -1901,6 +1914,7 @@ function Purchases() {
   const [documentType, setDocumentType] = useState<PurchaseDocumentType>("factura");
   const [documentNumber, setDocumentNumber] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => toDateInputValue());
+  const [purchaseProductQuery, setPurchaseProductQuery] = useState("");
   const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id ?? "nuevo");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
@@ -1919,6 +1933,8 @@ function Purchases() {
   const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>([]);
   const [aiStatus, setAiStatus] = useState("Esperando comprobante.");
   const selected = findProductVariant(products, variantId);
+  const purchaseProductOptions = products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))).filter(({ product, variant }) => productVariantSearchText(product, variant).includes(purchaseProductQuery.trim().toLowerCase()));
+  const visiblePurchaseProductOptions = purchaseProductOptions.length ? purchaseProductOptions : products.flatMap((product) => product.variants.map((variant) => ({ product, variant })));
   const activePurchaseReceipts = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
   const deletedPurchaseReceipts = purchaseReceipts.filter((receipt) => receipt.deletedAt);
   const purchaseHistory = operationAuditEntries.filter((entry) => entry.entityType === "compra");
@@ -1939,6 +1955,7 @@ function Purchases() {
     setEditingReceipt(null);
     setDocumentNumber("");
     setPurchaseDate(toDateInputValue());
+    setPurchaseProductQuery("");
     setSupplierChoice(suppliers[0]?.id ?? "nuevo");
     setNewSupplierName("");
     setQuantity(1);
@@ -2087,7 +2104,7 @@ function Purchases() {
       )}
       {(purchasePage === "factura" || purchasePage === "editar") && (
         <Panel title={editingReceipt ? `Editar ${editingReceipt.number}` : "Factura o remito de compra"}>
-          <div className="form-grid two">
+          <div className="purchase-document-fields">
             <label>
               Proveedor
               <select value={supplierChoice} onChange={(event) => setSupplierChoice(event.target.value)}>
@@ -2108,15 +2125,15 @@ function Purchases() {
                 <option value="otro">Otro</option>
               </select>
             </label>
+            <label>
+              Fecha de compra
+              <input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} />
+            </label>
+            <label>
+              Numero de comprobante
+              <input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} placeholder="Ej: A-0001-00012345" />
+            </label>
           </div>
-          <label>
-            Numero de comprobante
-            <input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} placeholder="Ej: A-0001-00012345" />
-          </label>
-          <label>
-            Fecha de compra
-            <input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} />
-          </label>
           {supplierChoice === "nuevo" && (
             <div className="inline-notice">
               <label>
@@ -2126,13 +2143,19 @@ function Purchases() {
               <span>Al registrar la compra quedará guardado automáticamente en Proveedores.</span>
             </div>
           )}
-          <div className="line-builder purchase-builder">
+          <div className="purchase-product-search">
+            <label>
+              Buscar producto
+              <input value={purchaseProductQuery} onChange={(event) => setPurchaseProductQuery(event.target.value)} placeholder="Nombre, descripcion, SKU o codigo de barras" />
+            </label>
             <label>
               Producto
               <select value={variantId} onChange={(event) => setVariantId(event.target.value)}>
-                {variantOptions(products)}
+                {visiblePurchaseProductOptions.map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name} · {variant.sku || variant.barcode || "Sin codigo"} · Stock {variant.stock}</option>)}
               </select>
             </label>
+          </div>
+          <div className="line-builder purchase-builder">
             <label>
               Cant.
               <input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
@@ -2408,10 +2431,13 @@ function Quotes() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [quoteNote, setQuoteNote] = useState("");
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
+  const [quoteProductQuery, setQuoteProductQuery] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [lines, setLines] = useState<SaleLine[]>([]);
   const activeCustomers = customers.filter((customer) => !customer.deletedAt);
   const selected = findProductVariant(products, variantId);
+  const quoteProductOptions = products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))).filter(({ product, variant }) => productVariantSearchText(product, variant).includes(quoteProductQuery.trim().toLowerCase()));
+  const visibleQuoteProductOptions = quoteProductOptions.length ? quoteProductOptions : products.flatMap((product) => product.variants.map((variant) => ({ product, variant })));
   useEffect(() => {
     if (customerChoice !== "nuevo" && !activeCustomers.some((customer) => customer.id === customerChoice)) {
       setCustomerChoice(activeCustomers[0]?.id ?? "nuevo");
@@ -2475,11 +2501,15 @@ function Quotes() {
               Nota interna
               <input value={quoteNote} onChange={(event) => setQuoteNote(event.target.value)} placeholder="Condiciones, entrega o seguimiento" />
             </label>
-            <div className="line-builder">
+            <div className="line-builder product-search-builder">
+              <label>
+                Buscar producto
+                <input value={quoteProductQuery} onChange={(event) => setQuoteProductQuery(event.target.value)} placeholder="Nombre, descripcion, SKU o codigo" />
+              </label>
               <label>
                 Producto
                 <select value={variantId} onChange={(event) => setVariantId(event.target.value)}>
-                  {variantOptions(products)}
+                  {visibleQuoteProductOptions.map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name} · {variant.sku || variant.barcode || "Sin codigo"}</option>)}
                 </select>
               </label>
               <label>
@@ -2832,7 +2862,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
   const [webFilter, setWebFilter] = useState("todos");
   const publishableProducts = products.filter((product) => product.publishable);
   const filteredProducts = products.filter((product) => {
-    const text = `${product.name} ${product.category} ${product.supplier} ${product.description}`.toLowerCase();
+    const text = `${product.name} ${product.category} ${product.supplier} ${product.description} ${product.variants.map((variant) => `${variant.name} ${variant.sku} ${variant.barcode}`).join(" ")}`.toLowerCase();
     return (
       (!query.trim() || text.includes(query.trim().toLowerCase())) &&
       (categoryFilter === "todas" || product.category === categoryFilter) &&
@@ -2880,7 +2910,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
       <div className="filter-row">
         <label className="search-field compact-search">
           <MagnifyingGlass size={17} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar en catalogo" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nombre, descripcion, SKU o codigo" />
         </label>
         <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
           <option value="todas">Todas las categorias</option>
@@ -3461,7 +3491,7 @@ function PublicShop() {
   const visibleProducts = publishableProducts.filter((product) => {
     const matchesCategory = selectedCategory === "Todos" || product.category === selectedCategory;
     const search = query.trim().toLowerCase();
-    return matchesCategory && (!search || `${product.name} ${product.description} ${product.category}`.toLowerCase().includes(search));
+    return matchesCategory && (!search || `${product.name} ${product.description} ${product.category} ${product.variants.map((variant) => `${variant.name} ${variant.sku} ${variant.barcode}`).join(" ")}`.toLowerCase().includes(search));
   });
 
   useEffect(() => {
@@ -3525,7 +3555,7 @@ function PublicShop() {
             setQuery(event.target.value);
             setStorePage("catalog");
             setSelectedProductId(null);
-          }} placeholder="Buscar regalos, deco, bazar y más" />
+          }} placeholder="Buscar regalos, descripcion o codigo" />
         </label>
         <button
           className={clsx("store-cart-button", storePage === "cart" && "active")}
@@ -4450,6 +4480,10 @@ function findVariantName(products: Product[], variantId: string) {
     if (variant) return `${product.name} - ${variant.name}`;
   }
   return "Variante no encontrada";
+}
+
+function productVariantSearchText(product: Product, variant: Product["variants"][number]) {
+  return [product.name, product.category, product.supplier, product.description, variant.name, variant.sku, variant.barcode].join(" ").toLowerCase();
 }
 
 function variantOptions(products: Product[]) {

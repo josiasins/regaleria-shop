@@ -564,6 +564,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: una factura o remito puede cargarse despues de haber llegado; los reportes deben representar la fecha del comprobante, no solamente el instante en que alguien abrió la pantalla.
 - Alcance: la fecha se persiste como fecha operativa de la compra y se replica al gasto de reposicion y al ingreso de stock vinculados.
 - Alternativas descartadas: guardar la fecha solo en una nota o usar siempre la hora de carga, porque distorsionaria historiales, reportes por periodo y costos de reposicion.
+
+### Busqueda unificada de productos
+- Fecha: 2026-07-10.
+- Decision: indexar visualmente los productos por nombre, descripcion, SKU y codigo de barras en todos los flujos que requieren encontrarlos.
+- Motivo: en mostrador y compras es frecuente tener solamente la etiqueta o codigo fisico, mientras que la descripcion facilita ubicar articulos similares.
+- Alcance: Compras usa un campo de busqueda previo al selector y muestra el codigo junto a cada variante; se compactaron los datos del comprobante en una fila y cantidad, costo y accion en otra.
+- Alternativas descartadas: mantener selects extensos sin filtro, porque degradan velocidad y aumentan el riesgo de elegir una variante equivocada a medida que crece el catalogo.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

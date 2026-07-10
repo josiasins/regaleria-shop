@@ -241,6 +241,12 @@
 3. Esa fecha se usa para la compra, el gasto de reposicion asociado y los movimientos de ingreso de stock.
 4. El momento de la auditoria se conserva por separado, para distinguir cuándo se registró de cuándo ocurrió la compra.
 
+## Busqueda de productos por codigo y descripcion
+
+1. Los buscadores de productos reconocen nombre, descripcion, SKU y codigo de barras.
+2. Esto aplica a busqueda global, control de stock, ventas, compras, presupuestos, catalogo y tienda publica.
+3. En Compras y Presupuestos, primero se escribe el termino y luego se selecciona la variante filtrada, conservando codigo y stock visibles.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

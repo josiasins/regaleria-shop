@@ -226,7 +226,7 @@ describe("Regaleria app", () => {
     await user.selectOptions(screen.getByLabelText("Cliente"), "nuevo");
     await user.type(screen.getByLabelText("Nuevo cliente"), "Mayorista Sur");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
-    expect(await screen.findByText(/MAT-PREM-NEG/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/MAT-PREM-NEG/i)).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /Crear presupuesto/i }));
 
     expect((await screen.findAllByText(/Mayorista Sur/i)).length).toBeGreaterThan(0);
@@ -255,6 +255,18 @@ describe("Regaleria app", () => {
     const stockHistoryButtons = screen.getAllByRole("button", { name: "Historial" });
     await user.click(stockHistoryButtons[stockHistoryButtons.length - 1]);
     expect(screen.getByText(/COM-000001/i)).toBeInTheDocument();
+  });
+
+  it("finds a purchase product by barcode and description", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Compras/i }));
+    await user.type(screen.getByLabelText("Buscar producto"), "7790002000011");
+    expect(screen.getByRole("option", { name: "Vela aromatica artesanal · Vainilla · VEL-SOJ-VAI · Stock 18" })).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Buscar producto"));
+    await user.type(screen.getByLabelText("Buscar producto"), "vaso de vidrio");
+    expect(screen.getByRole("option", { name: "Vela aromatica artesanal · Vainilla · VEL-SOJ-VAI · Stock 18" })).toBeInTheDocument();
   });
 
   it("can create and edit customers and suppliers", async () => {
@@ -547,7 +559,7 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/linea\(s\) detectada\(s\)/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Aplicar precarga/i }));
     expect(screen.getByText("Factura o remito de compra")).toBeInTheDocument();
-    expect(screen.getByText(/MAT-PREM-NEG/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/MAT-PREM-NEG/i).length).toBeGreaterThan(0);
 
   });
 });
