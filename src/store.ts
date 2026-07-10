@@ -38,6 +38,7 @@ import type {
   SaleLine,
   SalesAuditEntry,
   StockAdjustmentInput,
+  StockBatchAdjustmentInput,
   StockMovement,
   Supplier,
   SupplierDraftInput,
@@ -90,6 +91,8 @@ interface AppState {
   deleteSupplier: (id: string, requestedBy: Role) => boolean;
   restoreSupplier: (id: string, requestedBy: Role) => boolean;
   adjustStock: (input: StockAdjustmentInput) => StockMovement | null;
+  adjustStockBatch: (input: StockBatchAdjustmentInput) => StockMovement[] | null;
+  voidStockMovementBatch: (operationId: string, reason: string, requestedBy: Role) => boolean;
   addQuickSale: (variantId: string, quantity: number, paymentMethod: PaymentMethod, shiftId: string, discount?: number) => Sale | null;
   addDetailedSale: (input: SaleDraftInput & { shiftId: string }) => Sale | null;
   addQuote: (input: QuoteDraftInput) => Quote | null;
@@ -1159,6 +1162,112 @@ export const useStore = create<AppState>((set, get) => ({
     const product = get().products.find((item) => item.id === found.product.id);
     if (product) void saveCloudProduct(product);
     return movement;
+  },
+  adjustStockBatch: (input) => {
+    const uniqueLines = new Map(input.lines.map((line) => [line.variantId, line]));
+    if (!uniqueLines.size || uniqueLines.size !== input.lines.length) return null;
+
+    const draftLines = Array.from(uniqueLines.values()).map((line) => {
+      const found = findVariant(get().products, line.variantId);
+      const actualStock = Math.max(0, Math.trunc(line.actualStock));
+      if (!found || !Number.isFinite(actualStock)) return null;
+      return { found, actualStock, quantity: actualStock - found.variant.stock };
+    });
+    if (draftLines.some((line) => !line)) return null;
+
+    const changedLines = draftLines.filter((line): line is NonNullable<typeof line> => Boolean(line && line.quantity));
+    if (!changedLines.length) return null;
+
+    const now = new Date().toISOString();
+    const operationId = `local_stockop_${crypto.randomUUID()}`;
+    const operationNumber = nextNumber("MOV", new Set(get().movements.map((item) => item.operationId ?? item.id)).size);
+    const reason = input.reason.trim() || "Conteo de stock";
+    const createdMovements: StockMovement[] = changedLines.map(({ found, quantity }) => ({
+      id: `local_mov_${crypto.randomUUID()}`,
+      productId: found.product.id,
+      variantId: found.variant.id,
+      type: "ajuste",
+      quantity,
+      reason,
+      createdAt: now,
+      operationId,
+      operationNumber,
+      correctionOfOperationId: input.correctionOfOperationId,
+      syncStatus: "pendiente"
+    }));
+    const deltaByVariant = new Map(createdMovements.map((item) => [item.variantId, item.quantity]));
+    const changedProductIds = new Set(createdMovements.map((item) => item.productId));
+    const entry = makeOperationAuditEntry({
+      entityType: "movimiento",
+      entityId: operationId,
+      entityName: operationNumber,
+      action: input.correctionOfOperationId ? "correccion" : "creacion",
+      reason,
+      performedBy: get().activeRole,
+      after: createdMovements
+    });
+
+    set((state) => ({
+      movements: [...createdMovements, ...state.movements],
+      products: state.products.map((product) =>
+        !changedProductIds.has(product.id)
+          ? product
+          : {
+              ...product,
+              syncStatus: "pendiente",
+              variants: product.variants.map((variant) => {
+                const quantity = deltaByVariant.get(variant.id);
+                return quantity === undefined ? variant : { ...variant, stock: variant.stock + quantity };
+              })
+            }
+      ),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    syncProductsToCloud(get().products, [...changedProductIds]);
+    return createdMovements;
+  },
+  voidStockMovementBatch: (operationId, reason, requestedBy) => {
+    if (!canRunAudit(requestedBy, reason)) return false;
+    const batch = get().movements.filter((item) => item.operationId === operationId && !item.voidedAt);
+    if (!batch.length) return false;
+
+    const currentByVariant = new Map(get().products.flatMap((product) => product.variants.map((variant) => [variant.id, variant.stock])));
+    if (batch.some((item) => (currentByVariant.get(item.variantId) ?? -Infinity) - item.quantity < 0)) return false;
+
+    const now = new Date().toISOString();
+    const voidedBatch = batch.map((item) => ({ ...item, voidedAt: now, voidedBy: requestedBy, syncStatus: "pendiente" as const }));
+    const voidedById = new Map(voidedBatch.map((item) => [item.id, item]));
+    const deltaByVariant = new Map(batch.map((item) => [item.variantId, -item.quantity]));
+    const changedProductIds = new Set(batch.map((item) => item.productId));
+    const entry = makeOperationAuditEntry({
+      entityType: "movimiento",
+      entityId: operationId,
+      entityName: batch[0].operationNumber ?? "Movimiento manual",
+      action: "eliminacion",
+      reason,
+      performedBy: requestedBy,
+      before: batch,
+      after: voidedBatch
+    });
+
+    set((state) => ({
+      movements: state.movements.map((item) => voidedById.get(item.id) ?? item),
+      products: state.products.map((product) =>
+        !changedProductIds.has(product.id)
+          ? product
+          : {
+              ...product,
+              syncStatus: "pendiente",
+              variants: product.variants.map((variant) => {
+                const quantity = deltaByVariant.get(variant.id);
+                return quantity === undefined ? variant : { ...variant, stock: variant.stock + quantity };
+              })
+            }
+      ),
+      operationAuditEntries: [entry, ...state.operationAuditEntries]
+    }));
+    syncProductsToCloud(get().products, [...changedProductIds]);
+    return true;
   },
   addQuickSale: (variantId, quantity, paymentMethod, shiftId, discount = 0) => {
     const found = findVariant(get().products, variantId);

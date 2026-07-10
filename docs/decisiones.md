@@ -548,6 +548,15 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: cache-first podia mostrar versiones viejas despues de publicar; los pedidos publicos no deben confiar en precios ni totales enviados por el navegador.
 - Alcance: la funcion `create_store_order` recalcula total desde catalogo y limita pedidos por email/hora; `send-store-emails` requiere `EMAIL_CRON_SECRET`.
 - Alternativas descartadas: confiar en validaciones del frontend, porque el ecommerce publico puede recibir llamadas directas.
+
+### Movimientos de stock agrupados y auditables
+- Fecha: 2026-07-10.
+- Decision: reemplazar el movimiento manual de una sola linea por un conteo agrupado con varias lineas y comprobante `MOV-...` compartido.
+- Motivo: un conteo real suele afectar varios productos; registrar cada diferencia aislada dificulta revisar la operacion, corregir errores y entender por que cambió el stock.
+- Alcance: cada linea muestra producto, SKU/codigo, descripcion, stock actual, stock real e impacto calculado. Todas las diferencias se persisten dentro del mismo snapshot operativo y se sincronizan junto con los productos afectados.
+- Auditoria: el dueño puede corregir creando una operacion nueva vinculada o anular una agrupada con motivo. Anular es baja logica: conserva las lineas, revierte el stock y guarda antes/despues en `operationAuditEntries`.
+- Restriccion temporal: la autorizacion usa rol dueño y motivo de auditoria. Se preparó el flujo para sumar un codigo de segunda confirmacion cuando el negocio lo habilite.
+- Alternativas descartadas: editar directamente los movimientos historicos o borrarlos fisicamente, porque alteraria la trazabilidad y volveria imposible reconstruir el stock ante una revision.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

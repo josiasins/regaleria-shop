@@ -100,6 +100,17 @@ export interface StockAdjustmentInput {
   reason: string;
 }
 
+export interface StockBatchAdjustmentLine {
+  variantId: string;
+  actualStock: number;
+}
+
+export interface StockBatchAdjustmentInput {
+  reason: string;
+  lines: StockBatchAdjustmentLine[];
+  correctionOfOperationId?: string;
+}
+
 export interface SaleLine {
   productId: string;
   variantId: string;
@@ -313,6 +324,11 @@ export interface StockMovement {
   quantity: number;
   reason: string;
   createdAt: string;
+  operationId?: string;
+  operationNumber?: string;
+  correctionOfOperationId?: string;
+  voidedAt?: string;
+  voidedBy?: Role;
   syncStatus: SyncStatus;
 }
 
@@ -370,7 +386,7 @@ export interface SalesAuditEntry {
   after?: Sale | CashShift;
 }
 
-export type OperationAuditEntity = "gasto" | "proveedor" | "compra";
+export type OperationAuditEntity = "gasto" | "proveedor" | "compra" | "movimiento";
 export type OperationAuditAction = "creacion" | "correccion" | "eliminacion" | "restauracion";
 
 export interface OperationAuditEntry {
@@ -382,8 +398,8 @@ export interface OperationAuditEntry {
   reason: string;
   createdAt: string;
   performedBy: Role;
-  before?: Expense | Supplier | PurchaseReceipt;
-  after?: Expense | Supplier | PurchaseReceipt;
+  before?: Expense | Supplier | PurchaseReceipt | StockMovement | StockMovement[];
+  after?: Expense | Supplier | PurchaseReceipt | StockMovement | StockMovement[];
 }
 
 export interface SupplierPayment {

@@ -222,6 +222,18 @@
 4. Al borrar un gasto, el registro pasa a Eliminados y deja de afectar paneles, reportes y cierre de caja.
 5. Desde Eliminados se puede restaurar el gasto y la restauracion queda auditada.
 
+## Conteo y movimiento agrupado de stock
+
+1. En Stock > Movimiento, la persona agrega uno o varios productos a una misma operacion.
+2. Por cada linea el sistema muestra SKU o codigo de barra, descripcion y stock actual.
+3. La persona carga el stock real contado, no una diferencia manual.
+4. El sistema calcula si cada linea suma, resta o no cambia stock antes de permitir registrar.
+5. Al confirmar, todas las lineas reciben el mismo comprobante `MOV-...`, fecha, motivo y marca de sincronizacion; se guardan como una sola operacion para consulta y auditoria.
+6. Historial agrupa las lineas por comprobante y permite abrir el detalle de cada producto afectado.
+7. Solo el dueño puede corregir o anular una operacion agrupada. Corregir crea una nueva operacion vinculada; no modifica el registro original.
+8. Anular revierte el impacto de las lineas, mantiene el comprobante marcado como anulado y crea una entrada de auditoria con motivo, rol, antes y despues.
+9. La anulacion se rechaza si dejaría una variante con stock negativo.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

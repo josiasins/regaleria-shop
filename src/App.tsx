@@ -1217,7 +1217,8 @@ function Stock() {
   const addCategory = useStore((state) => state.addCategory);
   const updateVariant = useStore((state) => state.updateVariant);
   const importProducts = useStore((state) => state.importProducts);
-  const adjustStock = useStore((state) => state.adjustStock);
+  const adjustStockBatch = useStore((state) => state.adjustStockBatch);
+  const voidStockMovementBatch = useStore((state) => state.voidStockMovementBatch);
   const addVariant = useStore((state) => state.addVariant);
   const activeRole = useStore((state) => state.activeRole);
   const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
@@ -1245,12 +1246,13 @@ function Stock() {
     cost: 0,
     price: 0
   });
-  const [movement, setMovement] = useState({
-    variantId: products[0]?.variants[0]?.id ?? "",
-    type: "ingreso" as Exclude<StockMovementType, "venta">,
-    quantity: 1,
-    reason: ""
-  });
+  const [batchLines, setBatchLines] = useState(() => [{ id: crypto.randomUUID(), variantId: products[0]?.variants[0]?.id ?? "", actualStock: products[0]?.variants[0]?.stock ?? 0 }]);
+  const [batchReason, setBatchReason] = useState("");
+  const [correctionOfOperationId, setCorrectionOfOperationId] = useState<string | undefined>();
+  const [movementStatus, setMovementStatus] = useState("");
+  const [expandedOperationId, setExpandedOperationId] = useState<string | null>(null);
+  const [historyAuditReason, setHistoryAuditReason] = useState("");
+  const [historyAuditStatus, setHistoryAuditStatus] = useState("");
   const [variantDraftId, setVariantDraftId] = useState(products[0]?.variants[0]?.id ?? "");
   const variantDraftFound = products.flatMap((product) => product.variants).find((variant) => variant.id === variantDraftId);
   const [variantDraft, setVariantDraft] = useState({
@@ -1282,6 +1284,10 @@ function Stock() {
     () => new Map(products.flatMap((product) => product.variants.map((variant) => [variant.id, `${product.name} - ${variant.name}`]))),
     [products]
   );
+  const stockVariants = useMemo(
+    () => products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))),
+    [products]
+  );
   const filteredMovements = useMemo(() => {
     const normalizedQuery = historyQuery.trim().toLowerCase();
     const minimumDate = historyPeriod === "todos" ? null : Date.now() - Number(historyPeriod) * 24 * 60 * 60 * 1000;
@@ -1294,7 +1300,29 @@ function Stock() {
       );
     });
   }, [historyPeriod, historyQuery, historyType, historyVariants, movements]);
-  const visibleMovements = filteredMovements.slice(0, visibleHistoryCount);
+  const historyOperations = useMemo(() => {
+    const groups = new Map<string, { id: string; number: string; reason: string; createdAt: string; lines: typeof filteredMovements; voided: boolean; correctionOfOperationId?: string }>();
+    for (const item of filteredMovements) {
+      const id = item.operationId ?? item.id;
+      const current = groups.get(id);
+      if (current) {
+        current.lines.push(item);
+        current.voided = current.voided && Boolean(item.voidedAt);
+      } else {
+        groups.set(id, {
+          id,
+          number: item.operationNumber ?? "Movimiento individual",
+          reason: item.reason,
+          createdAt: item.createdAt,
+          lines: [item],
+          voided: Boolean(item.voidedAt),
+          correctionOfOperationId: item.correctionOfOperationId
+        });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [filteredMovements]);
+  const visibleOperations = historyOperations.slice(0, visibleHistoryCount);
   const updateHistoryFilter = (update: () => void) => {
     update();
     setVisibleHistoryCount(20);
@@ -1313,6 +1341,14 @@ function Stock() {
       price: found.price
     });
   }, [products, variantDraftId]);
+
+  useEffect(() => {
+    if (!stockVariants.length) return;
+    setBatchLines((current) => {
+      if (current.length !== 1 || current[0].variantId) return current;
+      return [{ ...current[0], variantId: stockVariants[0].variant.id, actualStock: stockVariants[0].variant.stock }];
+    });
+  }, [stockVariants]);
 
   const filteredProducts = products.filter((product) => {
     const value = query.trim().toLowerCase();
@@ -1407,12 +1443,56 @@ function Stock() {
     setIsUploadingNewProductImages(false);
   };
 
-  const submitMovement = () => {
-    const result = adjustStock(movement);
-    if (result) {
-      setMovement((current) => ({ ...current, quantity: 1, reason: "" }));
-      setStockPage("historial");
+  const findStockVariant = (variantId: string) => stockVariants.find(({ variant }) => variant.id === variantId);
+  const updateBatchLine = (id: string, update: Partial<(typeof batchLines)[number]>) => {
+    setBatchLines((current) => current.map((line) => {
+      if (line.id !== id) return line;
+      const variantId = update.variantId ?? line.variantId;
+      const selected = findStockVariant(variantId);
+      return { ...line, ...update, actualStock: update.variantId ? selected?.variant.stock ?? 0 : update.actualStock ?? line.actualStock };
+    }));
+  };
+  const addBatchLine = () => {
+    const unused = stockVariants.find(({ variant }) => !batchLines.some((line) => line.variantId === variant.id)) ?? stockVariants[0];
+    if (!unused) return;
+    setBatchLines((current) => [...current, { id: crypto.randomUUID(), variantId: unused.variant.id, actualStock: unused.variant.stock }]);
+  };
+  const submitMovementBatch = () => {
+    const result = adjustStockBatch({
+      reason: batchReason,
+      lines: batchLines.map(({ variantId, actualStock }) => ({ variantId, actualStock })),
+      correctionOfOperationId
+    });
+    if (!result) {
+      setMovementStatus("No hay diferencias para registrar o hay un producto repetido.");
+      return;
     }
+    setMovementStatus(`${result[0].operationNumber} guardado con ${result.length} ajuste(s).`);
+    setBatchReason("");
+    setCorrectionOfOperationId(undefined);
+    setBatchLines([{ id: crypto.randomUUID(), variantId: stockVariants[0]?.variant.id ?? "", actualStock: stockVariants[0]?.variant.stock ?? 0 }]);
+    setStockPage("historial");
+  };
+  const startBatchCorrection = (operation: (typeof historyOperations)[number]) => {
+    if (!operation.lines[0].operationId) return;
+    setBatchLines(operation.lines.map((line) => {
+      const current = findStockVariant(line.variantId);
+      return { id: crypto.randomUUID(), variantId: line.variantId, actualStock: current?.variant.stock ?? 0 };
+    }));
+    setBatchReason(`Correccion de ${operation.number}: `);
+    setCorrectionOfOperationId(operation.id);
+    setMovementStatus(`Vas a crear una correccion nueva vinculada a ${operation.number}. El original no se modifica.`);
+    setStockPage("movimiento");
+  };
+  const voidBatch = (operation: (typeof historyOperations)[number]) => {
+    if (!historyAuditReason.trim()) {
+      setHistoryAuditStatus("Escribi un motivo de auditoria antes de anular.");
+      return;
+    }
+    if (!window.confirm(`Anular ${operation.number}? El stock se revertira y la operacion quedara en el historial.`)) return;
+    const success = voidStockMovementBatch(operation.id, historyAuditReason, activeRole);
+    setHistoryAuditStatus(success ? `${operation.number} fue anulado y el historial se conserva.` : "No se pudo anular. Solo el dueño puede hacerlo y el stock no puede quedar negativo.");
+    if (success) setHistoryAuditReason("");
   };
   const submitVariant = () => updateVariant({ variantId: variantDraftId, ...variantDraft });
   const submitNewVariant = async () => {
@@ -1586,43 +1666,54 @@ function Stock() {
           </Panel>
         )}
         {stockPage === "movimiento" && (
-          <Panel title="Movimiento manual">
-            <div className="form-grid one compact">
+          <Panel title={correctionOfOperationId ? "Corregir movimiento de stock" : "Conteo y ajuste de stock"}>
+            <div className="batch-intro">
+              <strong>{correctionOfOperationId ? "Correccion segura" : "Una sola operacion, varios productos"}</strong>
+              <span>{correctionOfOperationId ? "Se creara un nuevo ajuste vinculado. El movimiento original se conserva para auditoria." : "Cargá el stock real contado. El sistema calcula automaticamente cada suma o resta."}</span>
+            </div>
+            {stockVariants.length ? <div className="batch-lines" aria-label="Lineas del movimiento de stock">
+              {batchLines.map((line, index) => {
+                const selected = findStockVariant(line.variantId);
+                const difference = line.actualStock - (selected?.variant.stock ?? 0);
+                return (
+                  <div className="batch-line" key={line.id}>
+                    <div className="batch-line-heading">
+                      <strong>Producto {index + 1}</strong>
+                      {batchLines.length > 1 && <button className="icon-button danger-icon" title="Quitar producto" aria-label={`Quitar producto ${index + 1}`} onClick={() => setBatchLines((current) => current.filter((item) => item.id !== line.id))}><Trash size={17} /></button>}
+                    </div>
+                    <label className="batch-product-select">
+                      Producto y variante
+                      <select value={line.variantId} onChange={(event) => updateBatchLine(line.id, { variantId: event.target.value })}>
+                        {stockVariants.map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name}</option>)}
+                      </select>
+                    </label>
+                    <div className="batch-product-info">
+                      <span><small>Codigo</small><strong>{selected?.variant.sku || selected?.variant.barcode || "Sin codigo"}</strong></span>
+                      <span><small>Descripcion</small><strong>{selected?.product.description || "Sin descripcion cargada"}</strong></span>
+                    </div>
+                    <div className="batch-stock-fields">
+                      <div><span>Stock actual</span><strong>{selected?.variant.stock ?? 0}</strong></div>
+                      <label>Stock real contado<input aria-label={`Stock real producto ${index + 1}`} type="number" min={0} value={line.actualStock} onChange={(event) => updateBatchLine(line.id, { actualStock: Math.max(0, Number(event.target.value)) })} /></label>
+                      <div className={clsx("batch-difference", difference > 0 && "positive", difference < 0 && "negative")}>
+                        <span>Impacto</span>
+                        <strong>{difference > 0 ? `Suma ${difference}` : difference < 0 ? `Resta ${Math.abs(difference)}` : "Sin cambio"}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div> : <div className="empty-lines">Primero cargá un producto o una variante para poder registrar su conteo.</div>}
+            <div className="batch-actions">
+              <button className="secondary-action" onClick={addBatchLine} disabled={!stockVariants.length}><PlusCircle size={18} /> Agregar producto</button>
               <label>
-                Variante
-                <select value={movement.variantId} onChange={(event) => setMovement({ ...movement, variantId: event.target.value })}>
-                  {products.flatMap((product) =>
-                    product.variants.map((variant) => (
-                      <option key={variant.id} value={variant.id}>
-                        {product.name} - {variant.name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                Motivo de la operacion
+                <input value={batchReason} onChange={(event) => setBatchReason(event.target.value)} placeholder="Ej: conteo semanal de salon" />
               </label>
-              <div className="form-grid two">
-                <label>
-                  Tipo
-                  <select value={movement.type} onChange={(event) => setMovement({ ...movement, type: event.target.value as typeof movement.type })}>
-                    <option value="ingreso">Ingreso</option>
-                    <option value="ajuste">Ajuste / baja</option>
-                    <option value="devolucion">Devolucion</option>
-                    <option value="perdida_rotura">Perdida / rotura</option>
-                  </select>
-                </label>
-                <label>
-                  Cantidad
-                  <input type="number" min={1} value={movement.quantity} onChange={(event) => setMovement({ ...movement, quantity: Number(event.target.value) })} />
-                </label>
-              </div>
-              <label>
-                Motivo
-                <input value={movement.reason} onChange={(event) => setMovement({ ...movement, reason: event.target.value })} placeholder="Compra, rotura, conteo..." />
-              </label>
-              <button className="secondary-action full" onClick={submitMovement} disabled={!movement.variantId || movement.quantity < 1}>
-                <MinusCircle size={19} /> Registrar movimiento
+              <button className="primary-action" onClick={submitMovementBatch} disabled={!batchLines.length || batchLines.some((line) => !line.variantId) || !batchLines.some((line) => line.actualStock !== (findStockVariant(line.variantId)?.variant.stock ?? 0))}>
+                <CheckCircle size={19} /> Registrar operacion de stock
               </button>
             </div>
+            {movementStatus && <span className="muted-text batch-status">{movementStatus}</span>}
           </Panel>
         )}
         {stockPage === "variante" && (
@@ -1738,28 +1829,47 @@ function Stock() {
             </div>
             <div className="history-summary">
               <strong>{filteredMovements.length} movimiento(s)</strong>
-              <span>{visibleMovements.length === filteredMovements.length ? "Historial completo visible" : `Mostrando ${visibleMovements.length} de ${filteredMovements.length}`}</span>
+              <span>{visibleOperations.length === historyOperations.length ? "Historial completo visible" : `Mostrando ${visibleOperations.length} de ${historyOperations.length} operaciones`}</span>
             </div>
-            {visibleMovements.length ? (
+            {activeRole === "dueno" && (
+              <div className="stock-audit-bar">
+                <label>Motivo de auditoria<input value={historyAuditReason} onChange={(event) => setHistoryAuditReason(event.target.value)} placeholder="Obligatorio para anular un movimiento" /></label>
+                <span>Por ahora se confirma con motivo. El codigo de autorizacion se agregara en la siguiente etapa.</span>
+              </div>
+            )}
+            {historyAuditStatus && <div className="audit-status">{historyAuditStatus}</div>}
+            {visibleOperations.length ? (
               <div className="movement-list history-list">
-                {visibleMovements.map((item) => {
-                  const found = historyVariants.get(item.variantId) ?? "Variante no encontrada";
+                {visibleOperations.map((operation) => {
+                  const total = operation.lines.reduce((sum, item) => sum + item.quantity, 0);
+                  const isExpanded = expandedOperationId === operation.id;
+                  const canAuditOperation = activeRole === "dueno" && Boolean(operation.lines[0].operationId) && !operation.voided;
                   return (
-                    <div key={item.id}>
-                      <div>
-                        <strong>{found}</strong>
-                        <span>{stockMovementLabels[item.type]} · {item.reason} · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}</span>
+                    <div className={clsx("history-operation", operation.voided && "voided")} key={operation.id}>
+                      <div className="history-operation-summary">
+                        <div>
+                          <strong>{operation.number}</strong>
+                          <span>{operation.reason} · {operation.lines.length} producto(s) · {formatDistanceToNow(new Date(operation.createdAt), { addSuffix: true, locale: es })}{operation.voided ? " · Anulado" : ""}</span>
+                        </div>
+                        <strong className={total > 0 ? "positive" : total < 0 ? "negative" : ""}>{total > 0 ? `+${total}` : total || "0"}</strong>
                       </div>
-                      <strong className={item.quantity > 0 ? "positive" : "negative"}>{item.quantity > 0 ? `+${item.quantity}` : item.quantity}</strong>
+                      <div className="history-operation-actions">
+                        <button className="text-action" onClick={() => setExpandedOperationId((current) => current === operation.id ? null : operation.id)}>{isExpanded ? "Ocultar detalle" : "Ver detalle"}</button>
+                        {canAuditOperation && <button className="text-action" onClick={() => startBatchCorrection(operation)}>Corregir</button>}
+                        {canAuditOperation && <button className="text-action danger-text" onClick={() => voidBatch(operation)}>Anular</button>}
+                      </div>
+                      {isExpanded && <div className="history-operation-lines">
+                        {operation.lines.map((item) => <div key={item.id}><span>{historyVariants.get(item.variantId) ?? "Variante no encontrada"}</span><strong className={item.quantity > 0 ? "positive" : "negative"}>{item.quantity > 0 ? `+${item.quantity}` : item.quantity}</strong></div>)}
+                      </div>}
                     </div>
                   );
                 })}
               </div>
             ) : <div className="empty-lines">No hay movimientos que coincidan con estos filtros.</div>}
-            {visibleMovements.length < filteredMovements.length && (
+            {visibleOperations.length < historyOperations.length && (
               <div className="history-actions">
-                <button className="secondary-action" onClick={() => setVisibleHistoryCount((count) => Math.min(count + 20, filteredMovements.length))}>Cargar 20 mas</button>
-                <button className="text-action" onClick={() => setVisibleHistoryCount(filteredMovements.length)}>Mostrar todos</button>
+                <button className="secondary-action" onClick={() => setVisibleHistoryCount((count) => Math.min(count + 20, historyOperations.length))}>Cargar 20 mas</button>
+                <button className="text-action" onClick={() => setVisibleHistoryCount(historyOperations.length)}>Mostrar todos</button>
               </div>
             )}
           </Panel>

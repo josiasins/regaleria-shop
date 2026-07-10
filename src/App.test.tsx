@@ -49,7 +49,7 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
   });
 
-  it("can add a product and register a stock movement", async () => {
+  it("can add a product and register a grouped stock operation", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Stock/i }));
@@ -64,9 +64,37 @@ describe("Regaleria app", () => {
     expect(screen.getByText("Llavero inicial")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Movimiento" }));
-    await user.type(screen.getByLabelText("Motivo"), "Conteo de prueba");
-    await user.click(screen.getByRole("button", { name: /Registrar movimiento/i }));
+    await user.clear(screen.getByLabelText("Stock real producto 1"));
+    await user.type(screen.getByLabelText("Stock real producto 1"), "99");
+    await user.type(screen.getByLabelText("Motivo de la operacion"), "Conteo de prueba");
+    await user.click(screen.getByRole("button", { name: /Registrar operacion de stock/i }));
     expect(screen.getByText(/Conteo de prueba/i)).toBeInTheDocument();
+  });
+
+  it("groups stock count lines in one operation and preserves an audited void", () => {
+    const originalProducts = useStore.getState().products;
+    const first = originalProducts[0].variants[0];
+    const second = originalProducts[1].variants[0];
+    const created = useStore.getState().adjustStockBatch({
+      reason: "Conteo general del local",
+      lines: [
+        { variantId: first.id, actualStock: first.stock + 3 },
+        { variantId: second.id, actualStock: Math.max(0, second.stock - 1) }
+      ]
+    });
+
+    expect(created).toHaveLength(2);
+    expect(created?.[0].operationId).toBe(created?.[1].operationId);
+    expect(created?.[0].operationNumber).toMatch(/^MOV-/);
+    expect(useStore.getState().products[0].variants[0].stock).toBe(first.stock + 3);
+    expect(useStore.getState().products[1].variants[0].stock).toBe(second.stock - 1);
+
+    const voided = useStore.getState().voidStockMovementBatch(created?.[0].operationId ?? "", "Conteo cargado por error", "dueno");
+    expect(voided).toBe(true);
+    expect(useStore.getState().products[0].variants[0].stock).toBe(first.stock);
+    expect(useStore.getState().products[1].variants[0].stock).toBe(second.stock);
+    expect(useStore.getState().movements.filter((item) => item.operationId === created?.[0].operationId).every((item) => item.voidedAt)).toBe(true);
+    expect(useStore.getState().operationAuditEntries[0]).toMatchObject({ entityType: "movimiento", action: "eliminacion" });
   });
 
   it("shows the complete stock history through filters and progressive loading", async () => {
@@ -85,7 +113,7 @@ describe("Regaleria app", () => {
     await user.click(screen.getByRole("button", { name: /Stock/i }));
     await user.click(screen.getByRole("button", { name: "Historial" }));
     expect(screen.getByText("25 movimiento(s)")).toBeInTheDocument();
-    expect(screen.getByText("Mostrando 20 de 25")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 20 de 25 operaciones")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cargar 20 mas" }));
     expect(screen.getByText("Historial completo visible")).toBeInTheDocument();

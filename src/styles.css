@@ -1267,6 +1267,109 @@ label {
   width: 100%;
 }
 
+.batch-intro {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  color: oklch(46% 0.03 158);
+}
+
+.batch-intro strong {
+  color: oklch(28% 0.045 158);
+}
+
+.batch-lines {
+  display: grid;
+  gap: 12px;
+}
+
+.batch-line {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid oklch(84% 0.026 154);
+  border-radius: 8px;
+  background: oklch(98% 0.008 152);
+}
+
+.batch-line-heading,
+.history-operation-summary,
+.history-operation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.danger-icon {
+  color: oklch(48% 0.14 28);
+}
+
+.batch-product-select {
+  display: grid;
+  gap: 6px;
+}
+
+.batch-product-info {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.batch-product-info span,
+.batch-stock-fields > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: oklch(94% 0.016 154);
+}
+
+.batch-product-info small,
+.batch-stock-fields span {
+  color: oklch(51% 0.028 158);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.batch-stock-fields {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.45fr) minmax(170px, 0.7fr) minmax(130px, 0.45fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.batch-stock-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.batch-difference.positive {
+  background: oklch(91% 0.055 148);
+}
+
+.batch-difference.negative {
+  background: oklch(94% 0.05 28);
+}
+
+.batch-actions {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 14px;
+}
+
+.batch-actions label {
+  display: grid;
+  gap: 6px;
+}
+
+.batch-status {
+  display: block;
+  margin-top: 10px;
+}
+
 .compact-button {
   min-width: 94px;
   white-space: nowrap;
@@ -1335,6 +1438,73 @@ label {
 .history-list > div {
   content-visibility: auto;
   contain-intrinsic-size: 56px;
+}
+
+.history-operation {
+  display: block !important;
+  padding: 12px 0;
+}
+
+.history-operation.voided {
+  opacity: 0.66;
+}
+
+.history-operation-summary > div span {
+  max-width: min(820px, 72vw);
+}
+
+.history-operation-actions {
+  justify-content: flex-start;
+  margin-top: 5px;
+}
+
+.danger-text {
+  color: oklch(48% 0.14 28);
+}
+
+.history-operation-lines {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: oklch(96% 0.012 154);
+}
+
+.history-operation-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: auto;
+  border: 0;
+}
+
+.stock-audit-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) 1fr;
+  gap: 12px;
+  align-items: end;
+  margin: 10px 0 4px;
+  padding: 12px;
+  border: 1px solid oklch(84% 0.026 154);
+  border-radius: 8px;
+  background: oklch(97% 0.01 154);
+}
+
+.stock-audit-bar label {
+  display: grid;
+  gap: 6px;
+}
+
+.stock-audit-bar span,
+.audit-status {
+  color: oklch(48% 0.03 158);
+  font-size: 0.88rem;
+}
+
+.audit-status {
+  padding: 8px 0;
+  font-weight: 750;
 }
 
 .history-actions {
@@ -2212,6 +2382,41 @@ textarea:focus-visible {
   color: oklch(86% 0.07 30);
 }
 
+.theme-night .batch-intro,
+.theme-night .stock-audit-bar span,
+.theme-night .audit-status {
+  color: oklch(75% 0.02 154);
+}
+
+.theme-night .batch-intro strong {
+  color: oklch(90% 0.016 154);
+}
+
+.theme-night .batch-line,
+.theme-night .stock-audit-bar {
+  border-color: oklch(38% 0.032 158);
+  background: oklch(22% 0.022 158);
+}
+
+.theme-night .batch-product-info span,
+.theme-night .batch-stock-fields > div,
+.theme-night .history-operation-lines {
+  background: oklch(27% 0.026 158);
+}
+
+.theme-night .batch-product-info small,
+.theme-night .batch-stock-fields span {
+  color: oklch(69% 0.02 154);
+}
+
+.theme-night .batch-difference.positive {
+  background: oklch(28% 0.06 148);
+}
+
+.theme-night .batch-difference.negative {
+  background: oklch(29% 0.07 28);
+}
+
 .theme-night .danger-action {
   border-color: oklch(55% 0.15 28);
   background: oklch(45% 0.14 28);
@@ -2629,6 +2834,28 @@ textarea:focus-visible {
 
   .history-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .batch-product-info,
+  .batch-stock-fields,
+  .batch-actions,
+  .stock-audit-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-actions .secondary-action,
+  .batch-actions .primary-action {
+    width: 100%;
+  }
+
+  .history-operation-summary,
+  .history-operation-actions {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .history-operation-summary > div span {
+    max-width: none;
   }
 
   .history-summary,
