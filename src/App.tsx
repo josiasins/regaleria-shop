@@ -113,6 +113,11 @@ function fromDateTimeLocal(value: string, fallback: string) {
   return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
 }
 
+function toDateInputValue(value = new Date()) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "/brand/regaleria-shop-symbol.svg" }: { className?: string; label?: string; src?: string }) {
   return <img className={className} src={src} alt={label} />;
 }
@@ -1895,6 +1900,7 @@ function Purchases() {
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
   const [documentType, setDocumentType] = useState<PurchaseDocumentType>("factura");
   const [documentNumber, setDocumentNumber] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(() => toDateInputValue());
   const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id ?? "nuevo");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
@@ -1932,6 +1938,7 @@ function Purchases() {
   const resetPurchaseForm = () => {
     setEditingReceipt(null);
     setDocumentNumber("");
+    setPurchaseDate(toDateInputValue());
     setSupplierChoice(suppliers[0]?.id ?? "nuevo");
     setNewSupplierName("");
     setQuantity(1);
@@ -1945,6 +1952,7 @@ function Purchases() {
     setEditingReceipt(receipt);
     setDocumentType(receipt.documentType);
     setDocumentNumber(receipt.documentNumber);
+    setPurchaseDate(toDateInputValue(new Date(receipt.createdAt)));
     setSupplierChoice(supplier?.id ?? "nuevo");
     setNewSupplierName(supplier ? "" : receipt.supplier);
     setShippingCost(receipt.shippingCost);
@@ -1959,7 +1967,7 @@ function Purchases() {
   };
   const submitReceipt = () => {
     const supplier = resolveSupplierName(suppliers, supplierChoice, newSupplierName);
-    const input = { documentType, documentNumber, supplier, lines, shippingCost, shippingNote };
+    const input = { documentType, documentNumber, purchaseDate, supplier, lines, shippingCost, shippingNote };
     const saved = editingReceipt ? updatePurchaseReceipt(editingReceipt.id, input, activeRole) : addPurchaseReceipt(input);
     if (saved) {
       resetPurchaseForm();
@@ -2104,6 +2112,10 @@ function Purchases() {
           <label>
             Numero de comprobante
             <input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} placeholder="Ej: A-0001-00012345" />
+          </label>
+          <label>
+            Fecha de compra
+            <input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} />
           </label>
           {supplierChoice === "nuevo" && (
             <div className="inline-notice">

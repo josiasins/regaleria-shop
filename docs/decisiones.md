@@ -557,6 +557,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Auditoria: el dueño puede corregir creando una operacion nueva vinculada o anular una agrupada con motivo. Anular es baja logica: conserva las lineas, revierte el stock y guarda antes/despues en `operationAuditEntries`.
 - Restriccion temporal: la autorizacion usa rol dueño y motivo de auditoria. Se preparó el flujo para sumar un codigo de segunda confirmacion cuando el negocio lo habilite.
 - Alternativas descartadas: editar directamente los movimientos historicos o borrarlos fisicamente, porque alteraria la trazabilidad y volveria imposible reconstruir el stock ante una revision.
+
+### Fecha operativa en compras
+- Fecha: 2026-07-10.
+- Decision: incorporar una fecha de compra editable, inicializada con el dia local actual.
+- Motivo: una factura o remito puede cargarse despues de haber llegado; los reportes deben representar la fecha del comprobante, no solamente el instante en que alguien abrió la pantalla.
+- Alcance: la fecha se persiste como fecha operativa de la compra y se replica al gasto de reposicion y al ingreso de stock vinculados.
+- Alternativas descartadas: guardar la fecha solo en una nota o usar siempre la hora de carga, porque distorsionaria historiales, reportes por periodo y costos de reposicion.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

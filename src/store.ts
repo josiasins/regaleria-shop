@@ -154,6 +154,12 @@ type OperationalStateFields = Pick<
 const money = (value: number) => Math.round(value * 100) / 100;
 const nextNumber = (prefix: string, count: number) => `${prefix}-${String(count + 1).padStart(6, "0")}`;
 
+function purchaseDateToIso(value: string | undefined, fallback = new Date().toISOString()) {
+  if (!value) return fallback;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+}
+
 function findVariant(products: Product[], variantId: string) {
   for (const product of products) {
     const variant = product.variants.find((item) => item.id === variantId);
@@ -505,7 +511,7 @@ function makePurchaseReceiptFromInput(input: PurchaseReceiptDraftInput, existing
     shippingCost: money(Math.max(input.shippingCost, 0)),
     shippingNote: input.shippingNote.trim(),
     total: money(total),
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    createdAt: purchaseDateToIso(input.purchaseDate, existing?.createdAt),
     deletedAt: existing?.deletedAt,
     deletedBy: existing?.deletedBy,
     syncStatus: "pendiente"
@@ -1469,8 +1475,7 @@ export const useStore = create<AppState>((set, get) => ({
     const receipt = makePurchaseReceiptFromInput(input);
     if (!receipt) return null;
     const cleanLines = receipt.lines;
-    const createdAt = new Date().toISOString();
-    receipt.createdAt = createdAt;
+    const createdAt = receipt.createdAt;
     const expense: Expense = {
       id: `local_exp_${crypto.randomUUID()}`,
       category: "Reposicion",
@@ -1547,7 +1552,7 @@ export const useStore = create<AppState>((set, get) => ({
       purchaseReceipts: state.purchaseReceipts.map((receipt) => (receipt.id === id ? updated : receipt)),
       expenses: state.expenses.map((expense) =>
         isExpenseForPurchase(expense, current)
-          ? { ...expense, amount: updated.total, vendor: updated.supplier, note: purchaseExpenseNote(updated), syncStatus: "pendiente" }
+          ? { ...expense, amount: updated.total, vendor: updated.supplier, note: purchaseExpenseNote(updated), createdAt: updated.createdAt, syncStatus: "pendiente" }
           : expense
       ),
       movements: [...stockMovementsForPurchaseDelta(deltas, `Correccion ${current.number}`), ...state.movements],

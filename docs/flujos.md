@@ -234,6 +234,13 @@
 8. Anular revierte el impacto de las lineas, mantiene el comprobante marcado como anulado y crea una entrada de auditoria con motivo, rol, antes y despues.
 9. La anulacion se rechaza si dejaría una variante con stock negativo.
 
+## Fecha de compra
+
+1. Factura o remito de compra propone la fecha local actual por defecto.
+2. La persona puede elegir la fecha real que figura en el comprobante antes de registrar o editar.
+3. Esa fecha se usa para la compra, el gasto de reposicion asociado y los movimientos de ingreso de stock.
+4. El momento de la auditoria se conserva por separado, para distinguir cuándo se registró de cuándo ocurrió la compra.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

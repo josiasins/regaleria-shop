@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "./App";
@@ -241,6 +241,7 @@ describe("Regaleria app", () => {
     await user.selectOptions(screen.getAllByLabelText("Proveedor")[0], "nuevo");
     await user.type(screen.getByLabelText("Nuevo proveedor"), "Mayorista regalos");
     await user.type(screen.getByLabelText("Numero de comprobante"), "R-100");
+    fireEvent.change(screen.getByLabelText("Fecha de compra"), { target: { value: "2026-05-18" } });
     await user.clear(screen.getByLabelText("Costo"));
     await user.type(screen.getByLabelText("Costo"), "11500");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
@@ -248,6 +249,7 @@ describe("Regaleria app", () => {
 
     expect(await screen.findByText(/COM-000001/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Mayorista regalos/i).length).toBeGreaterThan(0);
+    expect(useStore.getState().purchaseReceipts[0].createdAt.slice(0, 10)).toBe("2026-05-18");
 
     await user.click(screen.getByRole("button", { name: /Stock/i }));
     const stockHistoryButtons = screen.getAllByRole("button", { name: "Historial" });

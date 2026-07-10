@@ -238,6 +238,7 @@ export interface PurchaseReceipt {
 export interface PurchaseReceiptDraftInput {
   documentType: PurchaseDocumentType;
   documentNumber: string;
+  purchaseDate: string;
   supplier: string;
   lines: PurchaseLine[];
   shippingCost: number;
