@@ -270,6 +270,14 @@
 4. Al registrar la compra se elimina el borrador porque el comprobante ya quedo guardado en la base de datos.
 5. Al regresar a la pestaña, la aplicacion avisa que se pueden revisar actualizaciones; no recarga datos de forma invasiva ni redirige a Panel.
 
+## Compra con Factura A e IVA discriminado
+
+1. En Tipo de comprobante se selecciona `Factura A · IVA discriminado`.
+2. Se indica si el costo ingresado viene con IVA o sin IVA y la alicuota aplicable.
+3. Antes de agregar la linea, el sistema muestra neto unitario, IVA de la linea y total con IVA.
+4. El resumen final discrimina neto de productos, IVA total y total pagado; el envio se suma al total pagado.
+5. Se guarda el costo bruto para stock y reposicion, mas los valores netos e IVA para reportes futuros. No genera comprobantes fiscales ni integra AFIP.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

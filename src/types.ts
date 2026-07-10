@@ -207,7 +207,7 @@ export interface Expense {
 
 export type ExpenseDraftInput = Pick<Expense, "category" | "amount" | "vendor" | "note">;
 
-export type PurchaseDocumentType = "factura" | "remito" | "ticket" | "otro";
+export type PurchaseDocumentType = "factura" | "factura_a" | "factura_b" | "factura_c" | "remito" | "ticket" | "otro";
 
 export interface PurchaseLine {
   productId: string;
@@ -215,8 +215,15 @@ export interface PurchaseLine {
   name: string;
   sku: string;
   quantity: number;
+  /** Costo total unitario pagado, IVA incluido cuando corresponde. */
   unitCost: number;
+  unitNetCost?: number;
+  unitVat?: number;
+  vatRate?: number;
+  unitCostIncludesVat?: boolean;
   subtotal: number;
+  netSubtotal?: number;
+  vatSubtotal?: number;
 }
 
 export interface PurchaseReceipt {
@@ -228,6 +235,8 @@ export interface PurchaseReceipt {
   lines: PurchaseLine[];
   shippingCost: number;
   shippingNote: string;
+  netTotal?: number;
+  vatTotal?: number;
   total: number;
   createdAt: string;
   deletedAt?: string;

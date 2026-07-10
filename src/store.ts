@@ -519,6 +519,8 @@ function makePurchaseReceiptFromInput(input: PurchaseReceiptDraftInput, existing
   const cleanLines = input.lines.filter((line) => line.quantity > 0 && line.unitCost >= 0);
   if (!input.supplier.trim() || !input.documentNumber.trim() || !cleanLines.length) return null;
   const total = cleanLines.reduce((sum, line) => sum + line.subtotal, 0) + Math.max(input.shippingCost, 0);
+  const netTotal = cleanLines.reduce((sum, line) => sum + (line.netSubtotal ?? line.subtotal), 0) + Math.max(input.shippingCost, 0);
+  const vatTotal = cleanLines.reduce((sum, line) => sum + (line.vatSubtotal ?? 0), 0);
   return {
     id: existing?.id ?? `local_purchase_${crypto.randomUUID()}`,
     number: existing?.number ?? nextNumber("COM", useStore.getState().purchaseReceipts.length),
@@ -528,6 +530,8 @@ function makePurchaseReceiptFromInput(input: PurchaseReceiptDraftInput, existing
     lines: cleanLines,
     shippingCost: money(Math.max(input.shippingCost, 0)),
     shippingNote: input.shippingNote.trim(),
+    netTotal: money(netTotal),
+    vatTotal: money(vatTotal),
     total: money(total),
     createdAt: purchaseDateToIso(input.purchaseDate, existing?.createdAt),
     deletedAt: existing?.deletedAt,

@@ -69,6 +69,7 @@ type Section = (typeof sections)[number]["id"];
 type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" | "historial";
 type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
 type PurchasePage = "factura" | "precarga" | "recientes" | "editar" | "eliminadas" | "historial" | "cuentas" | "pago";
+type PurchaseVatInputMode = "con_iva" | "sin_iva";
 type ContactPage = "lista" | "nuevo" | "editar" | "eliminados" | "historial";
 type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
@@ -138,6 +139,8 @@ type PurchaseDraft = {
   variantId: string;
   quantity: number;
   unitCost: number;
+  vatInputMode: PurchaseVatInputMode;
+  vatRate: number;
   shippingCost: number;
   shippingNote: string;
   lines: PurchaseLine[];
@@ -184,6 +187,8 @@ function loadPurchaseDraft(): PurchaseDraft | null {
       variantId: draft.variantId ?? "",
       quantity: Math.max(draft.quantity ?? 1, 1),
       unitCost: Math.max(draft.unitCost ?? 0, 0),
+      vatInputMode: draft.vatInputMode === "sin_iva" ? "sin_iva" : "con_iva",
+      vatRate: [0, 10.5, 21, 27].includes(draft.vatRate ?? 21) ? draft.vatRate ?? 21 : 21,
       shippingCost: Math.max(draft.shippingCost ?? 0, 0),
       shippingNote: draft.shippingNote ?? "",
       lines: Array.isArray(draft.lines) ? draft.lines : [],
@@ -2050,6 +2055,8 @@ function Purchases() {
   const [variantId, setVariantId] = useState(savedDraft?.variantId ?? products[0]?.variants[0]?.id ?? "");
   const [quantity, setQuantity] = useState(savedDraft?.quantity ?? 1);
   const [unitCost, setUnitCost] = useState(savedDraft?.unitCost ?? 0);
+  const [vatInputMode, setVatInputMode] = useState<PurchaseVatInputMode>(savedDraft?.vatInputMode ?? "con_iva");
+  const [vatRate, setVatRate] = useState(savedDraft?.vatRate ?? 21);
   const [shippingCost, setShippingCost] = useState(savedDraft?.shippingCost ?? 0);
   const [shippingNote, setShippingNote] = useState(savedDraft?.shippingNote ?? "");
   const [autoCostPulse, setAutoCostPulse] = useState(false);
@@ -2063,6 +2070,8 @@ function Purchases() {
   const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>(savedDraft?.aiDraftLines ?? []);
   const [aiStatus, setAiStatus] = useState("Esperando comprobante.");
   const selected = findProductVariant(products, variantId);
+  const isFacturaA = documentType === "factura_a";
+  const vatPreview = calculatePurchaseVat(unitCost, quantity, isFacturaA ? vatRate : 0, vatInputMode);
   const purchaseProductOptions = products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))).filter(({ product, variant }) => productVariantSearchText(product, variant).includes(purchaseProductQuery.trim().toLowerCase()));
   const visiblePurchaseProductOptions = purchaseProductOptions.length ? purchaseProductOptions : products.flatMap((product) => product.variants.map((variant) => ({ product, variant })));
   const activePurchaseReceipts = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
@@ -2093,6 +2102,8 @@ function Purchases() {
     setNewSupplierName("");
     setQuantity(1);
     setUnitCost(0);
+    setVatInputMode("con_iva");
+    setVatRate(21);
     setShippingCost(0);
     setShippingNote("");
     setLines([]);
@@ -2115,6 +2126,8 @@ function Purchases() {
       variantId,
       quantity,
       unitCost,
+      vatInputMode,
+      vatRate,
       shippingCost,
       shippingNote,
       lines,
@@ -2123,7 +2136,7 @@ function Purchases() {
       aiFileName,
       aiDraftLines
     });
-  }, [aiDraftLines, aiExpected, aiFileName, aiSource, documentNumber, documentType, editingReceipt, hasPurchaseDraft, lines, newSupplierName, purchaseDate, purchasePage, purchaseProductQuery, quantity, shippingCost, shippingNote, supplierChoice, unitCost, variantId]);
+  }, [aiDraftLines, aiExpected, aiFileName, aiSource, documentNumber, documentType, editingReceipt, hasPurchaseDraft, lines, newSupplierName, purchaseDate, purchasePage, purchaseProductQuery, quantity, shippingCost, shippingNote, supplierChoice, unitCost, variantId, vatInputMode, vatRate]);
   useEffect(() => {
     if (!hasPurchaseDraft || editingReceipt) return;
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
@@ -2144,11 +2157,13 @@ function Purchases() {
     setShippingCost(receipt.shippingCost);
     setShippingNote(receipt.shippingNote);
     setLines(receipt.lines);
+    setVatInputMode(receipt.lines[0]?.unitCostIncludesVat === false ? "sin_iva" : "con_iva");
+    setVatRate(receipt.lines[0]?.vatRate ?? 21);
     setPurchasePage("editar");
   };
   const addLine = () => {
     if (!selected || quantity < 1 || unitCost < 0) return;
-    const next = buildPurchaseLine(selected.product, selected.variant, quantity, unitCost);
+    const next = buildPurchaseLine(selected.product, selected.variant, quantity, unitCost, isFacturaA ? vatRate : 0, vatInputMode);
     setLines((current) => mergePurchaseLine(current, next));
     setVariantId("");
     setPurchaseProductQuery("");
@@ -2296,9 +2311,12 @@ function Purchases() {
               </select>
             </label>
             <label>
-              Tipo
+              Tipo de comprobante
               <select value={documentType} onChange={(event) => setDocumentType(event.target.value as PurchaseDocumentType)}>
-                <option value="factura">Factura</option>
+                <option value="factura">Factura sin clasificar</option>
+                <option value="factura_a">Factura A · IVA discriminado</option>
+                <option value="factura_b">Factura B</option>
+                <option value="factura_c">Factura C</option>
                 <option value="remito">Remito</option>
                 <option value="ticket">Ticket</option>
                 <option value="otro">Otro</option>
@@ -2335,13 +2353,40 @@ function Purchases() {
               </select>
             </label>
           </div>
+          {isFacturaA && (
+            <section className="vat-entry" aria-label="Discriminación de IVA">
+              <div className="vat-entry-controls">
+                <label>
+                  Importe ingresado
+                  <select value={vatInputMode} onChange={(event) => setVatInputMode(event.target.value as PurchaseVatInputMode)}>
+                    <option value="con_iva">Precio con IVA</option>
+                    <option value="sin_iva">Precio sin IVA</option>
+                  </select>
+                </label>
+                <label>
+                  Alícuota IVA
+                  <select value={vatRate} onChange={(event) => setVatRate(Number(event.target.value))}>
+                    <option value={0}>0%</option>
+                    <option value={10.5}>10,5%</option>
+                    <option value={21}>21%</option>
+                    <option value={27}>27%</option>
+                  </select>
+                </label>
+              </div>
+              <div className="vat-preview">
+                <span>Neto unitario <strong>{formatMoney(vatPreview.unitNet)}</strong></span>
+                <span>IVA de esta línea <strong>{formatMoney(vatPreview.vatTotal)}</strong></span>
+                <span>Total con IVA <strong>{formatMoney(vatPreview.grossTotal)}</strong></span>
+              </div>
+            </section>
+          )}
           <div className="line-builder purchase-builder">
             <label>
               Cant.
               <input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
             </label>
             <div className={clsx("purchase-cost-field", autoCostPulse && "auto-filled-field")}>
-              <label htmlFor="purchase-unit-cost">Costo por producto</label>
+              <label htmlFor="purchase-unit-cost">{isFacturaA ? `Costo por producto (${vatInputMode === "con_iva" ? "con IVA" : "sin IVA"})` : "Costo por producto"}</label>
               <input id="purchase-unit-cost" type="number" min={0} value={unitCost} onChange={(event) => setUnitCost(Number(event.target.value))} />
               <span>{autoCostPulse ? "Costo anterior precargado" : "Editable para esta compra"}</span>
             </div>
@@ -2362,8 +2407,13 @@ function Purchases() {
           </div>
           <div className="checkout-row">
             <div>
-              <span>Total compra</span>
-              <strong>{formatMoney(purchaseLineTotal(lines) + shippingCost)}</strong>
+              {isFacturaA ? <>
+                <span>Neto productos {formatMoney(purchaseNetTotal(lines))} · IVA {formatMoney(purchaseVatTotal(lines))}</span>
+                <strong>Total con IVA {formatMoney(purchaseLineTotal(lines) + shippingCost)}</strong>
+              </> : <>
+                <span>Total compra</span>
+                <strong>{formatMoney(purchaseLineTotal(lines) + shippingCost)}</strong>
+              </>}
             </div>
             <button className="primary-action" onClick={submitReceipt} disabled={!resolveSupplierName(suppliers, supplierChoice, newSupplierName).trim() || !documentNumber.trim() || !lines.length}>
               {editingReceipt ? <CheckCircle size={19} /> : <Truck size={19} />}
@@ -4511,6 +4561,7 @@ function PurchaseReceiptList({
             <span>
               {receipt.supplier} · {receipt.documentNumber} · {receipt.lines.length} linea(s)
               {receipt.shippingCost ? ` · Envio ${formatMoney(receipt.shippingCost)}` : ""}
+              {receipt.vatTotal ? ` · IVA ${formatMoney(receipt.vatTotal)}` : ""}
               {receipt.deletedAt ? ` · Anulada ${new Date(receipt.deletedAt).toLocaleDateString("es-AR")}` : ""}
             </span>
             <span>{receipt.lines.map((line) => `${line.name} x${line.quantity}`).join(" · ")}</span>
@@ -4574,7 +4625,7 @@ function PurchaseLines({ lines, onRemove }: { lines: PurchaseLine[]; onRemove: (
         <div key={line.variantId}>
           <div>
             <strong>{line.name}</strong>
-            <span>{line.quantity} x {formatMoney(line.unitCost)} · {line.sku}</span>
+            <span>{line.quantity} x {formatMoney(line.unitCost)} · {line.sku}{line.vatSubtotal ? ` · IVA ${formatMoney(line.vatSubtotal)}` : ""}</span>
           </div>
           <strong>{formatMoney(line.subtotal)}</strong>
           <button className="icon-button" title="Quitar linea" onClick={() => onRemove(line.variantId)}>
@@ -4688,15 +4739,41 @@ function buildUiSaleLine(product: Product, variant: Product["variants"][number],
   };
 }
 
-function buildPurchaseLine(product: Product, variant: Product["variants"][number], quantity: number, unitCost: number): PurchaseLine {
+function roundPurchaseMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function calculatePurchaseVat(inputCost: number, quantity: number, vatRate: number, inputMode: PurchaseVatInputMode) {
+  const rate = Math.max(vatRate, 0) / 100;
+  const unitNet = rate > 0 && inputMode === "con_iva" ? inputCost / (1 + rate) : inputCost;
+  const unitVat = unitNet * rate;
+  const unitGross = unitNet + unitVat;
+  return {
+    unitNet: roundPurchaseMoney(unitNet),
+    unitVat: roundPurchaseMoney(unitVat),
+    unitGross: roundPurchaseMoney(unitGross),
+    netTotal: roundPurchaseMoney(unitNet * quantity),
+    vatTotal: roundPurchaseMoney(unitVat * quantity),
+    grossTotal: roundPurchaseMoney(unitGross * quantity)
+  };
+}
+
+function buildPurchaseLine(product: Product, variant: Product["variants"][number], quantity: number, unitCost: number, vatRate = 0, inputMode: PurchaseVatInputMode = "con_iva"): PurchaseLine {
+  const vat = calculatePurchaseVat(unitCost, quantity, vatRate, inputMode);
   return {
     productId: product.id,
     variantId: variant.id,
     name: `${product.name} - ${variant.name}`,
     sku: variant.sku,
     quantity,
-    unitCost,
-    subtotal: quantity * unitCost
+    unitCost: vat.unitGross,
+    unitNetCost: vat.unitNet,
+    unitVat: vat.unitVat,
+    vatRate,
+    unitCostIncludesVat: inputMode === "con_iva",
+    subtotal: vat.grossTotal,
+    netSubtotal: vat.netTotal,
+    vatSubtotal: vat.vatTotal
   };
 }
 
@@ -4776,6 +4853,14 @@ function saleLineTotal(lines: SaleLine[]) {
 
 function purchaseLineTotal(lines: PurchaseLine[]) {
   return lines.reduce((sum, line) => sum + line.subtotal, 0);
+}
+
+function purchaseNetTotal(lines: PurchaseLine[]) {
+  return lines.reduce((sum, line) => sum + (line.netSubtotal ?? line.subtotal), 0);
+}
+
+function purchaseVatTotal(lines: PurchaseLine[]) {
+  return lines.reduce((sum, line) => sum + (line.vatSubtotal ?? 0), 0);
 }
 
 function slugify(value: string) {

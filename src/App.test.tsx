@@ -316,6 +316,27 @@ describe("Regaleria app", () => {
     expect(screen.getByRole("option", { name: "Vela aromatica artesanal · Vainilla · VEL-SOJ-VAI · Stock 18" })).toBeInTheDocument();
   });
 
+  it("discriminates VAT for a purchase registered as Factura A", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Compras/i }));
+    await user.selectOptions(screen.getByLabelText("Tipo de comprobante"), "factura_a");
+    expect(screen.getByLabelText("Importe ingresado")).toBeInTheDocument();
+    expect(screen.getByLabelText("Alícuota IVA")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/Costo por producto \(con IVA\)/i));
+    await user.type(screen.getByLabelText(/Costo por producto \(con IVA\)/i), "12100");
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.type(screen.getByLabelText("Numero de comprobante"), "A-0001-00000001");
+    await user.click(screen.getByRole("button", { name: /Registrar compra/i }));
+
+    const receipt = useStore.getState().purchaseReceipts[0];
+    expect(receipt.documentType).toBe("factura_a");
+    expect(receipt.lines[0]).toMatchObject({ unitCost: 12100, unitNetCost: 10000, vatSubtotal: 2100, vatRate: 21 });
+    expect(receipt).toMatchObject({ netTotal: 10000, vatTotal: 2100, total: 12100 });
+  });
+
   it("can create and edit customers and suppliers", async () => {
     const user = userEvent.setup();
     render(<App />);

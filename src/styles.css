@@ -477,6 +477,39 @@ button.sync-pill {
   gap: 8px;
 }
 
+.vat-entry {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 14px;
+  padding: 14px;
+  border: 1px solid oklch(80% 0.052 83);
+  border-radius: 8px;
+  background: oklch(97% 0.025 83);
+}
+
+.vat-entry-controls,
+.vat-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.vat-preview {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.vat-preview span {
+  display: grid;
+  gap: 3px;
+  color: oklch(41% 0.04 83);
+  font-size: 0.82rem;
+}
+
+.vat-preview strong {
+  color: oklch(27% 0.045 83);
+  font-size: 1rem;
+}
+
 .workspace {
   padding: 28px 34px 44px;
   min-width: 0;
@@ -2845,6 +2878,11 @@ textarea:focus-visible {
   .draft-notice {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .vat-entry-controls,
+  .vat-preview {
+    grid-template-columns: 1fr;
   }
 
   .metric-grid,

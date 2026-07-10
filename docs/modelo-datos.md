@@ -16,8 +16,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - QuoteLine: lineas de presupuesto.
 - Transfer: comprobante manual de transferencia asociado a venta o presupuesto.
 - Expense: gasto del negocio.
-- PurchaseReceipt: factura, remito u otro comprobante de compra de mercaderia.
-- PurchaseLine: lineas de compra que actualizan stock y costo de variantes.
+- PurchaseReceipt: factura, remito u otro comprobante de compra de mercaderia. Conserva total pagado, neto e IVA total cuando una Factura A los discrimina.
+- PurchaseLine: lineas de compra que actualizan stock y costo de variantes. Puede conservar costo bruto, neto, alicuota, IVA unitario y subtotales discriminados.
 - OnlineOrder: pedido creado desde la web publica.
 - OnlineOrderLine: lineas del pedido web.
 - StockMovement: historial de movimientos de stock.

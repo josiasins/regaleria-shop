@@ -599,6 +599,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: una recarga al volver desde otra pestaña podia abrir Panel y perder una factura o remito casi terminado, obligando a cargar de nuevo informacion ya revisada.
 - Alcance: Compras conserva comprobante, fecha, proveedor, busqueda, lineas, costos, envio y precarga hasta que se registra o se descarta expresamente. Mientras exista borrador, Chrome advierte antes de recargar o abandonar la pagina. Al volver a una pestaña, el sistema ofrece `Revisar actualizaciones`; esa accion no cambia la seccion activa ni borra formularios.
 - Alternativas descartadas: refrescar automaticamente de forma periodica, porque prioriza datos potencialmente mas recientes por encima del trabajo no confirmado de la persona que esta operando.
+
+### IVA discriminado en compras
+- Fecha: 2026-07-10.
+- Decision: incorporar Factura A como tipo de comprobante de compra y guardar importe bruto, neto, alicuota e IVA por linea, junto con neto e IVA total del comprobante.
+- Motivo: aunque el negocio sea monotributista hoy, necesita conocer el costo total pagado y conservar la discriminacion para una eventual condicion de Responsable Inscripto.
+- Alcance: en Factura A se puede ingresar el precio con IVA o sin IVA y elegir alicuota 0%, 10,5%, 21% o 27%. Stock y gasto de reposicion usan el total efectivamente pagado; el neto e IVA quedan disponibles para futuros reportes fiscales sin alterar compras anteriores.
+- Alternativas descartadas: guardar solo un texto con el IVA en notas, porque no permitiria sumar, auditar ni reutilizar los importes de manera confiable.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
