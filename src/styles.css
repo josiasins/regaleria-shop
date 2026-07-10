@@ -2433,6 +2433,11 @@ textarea:focus-visible {
   color: oklch(88% 0.056 150);
 }
 
+.theme-night .sync-pill.update-available {
+  background: oklch(38% 0.075 83);
+  color: oklch(94% 0.045 88);
+}
+
 .theme-night .theme-toggle,
 .theme-night .sales-tab,
 .theme-night .stock-tab,
@@ -2482,6 +2487,21 @@ textarea:focus-visible {
 .theme-night .secondary-action.danger {
   background: oklch(32% 0.07 28);
   color: oklch(86% 0.07 30);
+}
+
+.theme-night .inline-notice,
+.theme-night .vat-entry {
+  border-color: oklch(42% 0.04 82);
+  background: oklch(23% 0.027 84);
+}
+
+.theme-night .inline-notice > span,
+.theme-night .vat-preview span {
+  color: oklch(76% 0.025 84);
+}
+
+.theme-night .vat-preview strong {
+  color: oklch(93% 0.025 88);
 }
 
 .theme-night .batch-intro,

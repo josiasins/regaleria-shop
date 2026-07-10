@@ -606,6 +606,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: aunque el negocio sea monotributista hoy, necesita conocer el costo total pagado y conservar la discriminacion para una eventual condicion de Responsable Inscripto.
 - Alcance: en Factura A se puede ingresar el precio con IVA o sin IVA y elegir alicuota 0%, 10,5%, 21% o 27%. Stock y gasto de reposicion usan el total efectivamente pagado; el neto e IVA quedan disponibles para futuros reportes fiscales sin alterar compras anteriores.
 - Alternativas descartadas: guardar solo un texto con el IVA en notas, porque no permitiria sumar, auditar ni reutilizar los importes de manera confiable.
+
+### Contraste consistente en modo noche
+- Fecha: 2026-07-10.
+- Decision: aplicar variantes oscuras especificas a los avisos contextuales de Compras, incluidos alta rapida de proveedor y discriminacion de IVA.
+- Motivo: estos bloques conservaban fondos claros en modo noche, rompiendo la continuidad visual y reduciendo legibilidad durante una carga extensa.
+- Alcance: los avisos usan fondo oscuro, borde diferenciado y textos con contraste adecuado, sin cambiar informacion ni comportamiento de compras.
+- Alternativas descartadas: reutilizar el fondo claro del modo dia, porque produce un salto visual y hace que una alerta normal parezca un error.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
