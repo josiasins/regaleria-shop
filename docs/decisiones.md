@@ -571,6 +571,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: en mostrador y compras es frecuente tener solamente la etiqueta o codigo fisico, mientras que la descripcion facilita ubicar articulos similares.
 - Alcance: Compras usa un campo de busqueda previo al selector y muestra el codigo junto a cada variante; se compactaron los datos del comprobante en una fila y cantidad, costo y accion en otra.
 - Alternativas descartadas: mantener selects extensos sin filtro, porque degradan velocidad y aumentan el riesgo de elegir una variante equivocada a medida que crece el catalogo.
+
+### Reinicio seguro de la linea de compra
+- Fecha: 2026-07-10.
+- Decision: al agregar una linea de compra, limpiar la busqueda, seleccion de producto, cantidad y costo del editor sin alterar la lista ya cargada.
+- Motivo: conservar el producto anterior visible inducía duplicados involuntarios durante una carga extensa de factura o remito.
+- Alcance: el formulario vuelve a mostrar `Seleccionar producto`; cantidad, costo por producto y Agregar se alinean en la misma fila; el bloque de envio se separa visualmente de las lineas.
+- Alternativas descartadas: conservar la ultima seleccion como atajo, porque el riesgo operativo de una repeticion accidental es mayor que el ahorro de unos pocos clics.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

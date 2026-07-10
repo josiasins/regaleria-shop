@@ -1981,6 +1981,10 @@ function Purchases() {
     if (!selected || quantity < 1 || unitCost < 0) return;
     const next = buildPurchaseLine(selected.product, selected.variant, quantity, unitCost);
     setLines((current) => mergePurchaseLine(current, next));
+    setVariantId("");
+    setPurchaseProductQuery("");
+    setQuantity(1);
+    setUnitCost(0);
   };
   const submitReceipt = () => {
     const supplier = resolveSupplierName(suppliers, supplierChoice, newSupplierName);
@@ -2151,6 +2155,7 @@ function Purchases() {
             <label>
               Producto
               <select value={variantId} onChange={(event) => setVariantId(event.target.value)}>
+                <option value="">Seleccionar producto</option>
                 {visiblePurchaseProductOptions.map(({ product, variant }) => <option key={variant.id} value={variant.id}>{product.name} · {variant.name} · {variant.sku || variant.barcode || "Sin codigo"} · Stock {variant.stock}</option>)}
               </select>
             </label>
@@ -2161,7 +2166,7 @@ function Purchases() {
               <input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
             </label>
             <div className={clsx("purchase-cost-field", autoCostPulse && "auto-filled-field")}>
-              <label htmlFor="purchase-unit-cost">Costo</label>
+              <label htmlFor="purchase-unit-cost">Costo por producto</label>
               <input id="purchase-unit-cost" type="number" min={0} value={unitCost} onChange={(event) => setUnitCost(Number(event.target.value))} />
               <span>{autoCostPulse ? "Costo anterior precargado" : "Editable para esta compra"}</span>
             </div>

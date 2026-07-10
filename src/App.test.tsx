@@ -242,9 +242,11 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Nuevo proveedor"), "Mayorista regalos");
     await user.type(screen.getByLabelText("Numero de comprobante"), "R-100");
     fireEvent.change(screen.getByLabelText("Fecha de compra"), { target: { value: "2026-05-18" } });
-    await user.clear(screen.getByLabelText("Costo"));
-    await user.type(screen.getByLabelText("Costo"), "11500");
+    await user.clear(screen.getByLabelText("Costo por producto"));
+    await user.type(screen.getByLabelText("Costo por producto"), "11500");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    expect((screen.getByLabelText("Producto") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("Buscar producto") as HTMLInputElement).value).toBe("");
     await user.click(screen.getByRole("button", { name: /Registrar compra/i }));
 
     expect(await screen.findByText(/COM-000001/i)).toBeInTheDocument();

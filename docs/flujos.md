@@ -247,6 +247,13 @@
 2. Esto aplica a busqueda global, control de stock, ventas, compras, presupuestos, catalogo y tienda publica.
 3. En Compras y Presupuestos, primero se escribe el termino y luego se selecciona la variante filtrada, conservando codigo y stock visibles.
 
+## Carga continua de lineas de compra
+
+1. La persona busca y selecciona un producto, indica cantidad y costo por producto, y presiona Agregar.
+2. La linea queda incorporada a la lista de la compra actual.
+3. El selector vuelve a `Seleccionar producto`; se limpian busqueda, costo y cantidad para evitar cargar por error el mismo articulo dos veces.
+4. Costo de envio y detalle aparecen separados de la lista para distinguir costos de productos y logistica.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

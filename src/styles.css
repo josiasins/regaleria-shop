@@ -1055,6 +1055,21 @@ label {
 
 .line-builder.purchase-builder {
   grid-template-columns: minmax(100px, 0.38fr) minmax(160px, 0.62fr) auto;
+  align-items: start;
+}
+
+.line-builder.purchase-builder > label,
+.line-builder.purchase-builder .purchase-cost-field {
+  align-self: start;
+}
+
+.line-builder.purchase-builder .secondary-action {
+  align-self: start;
+  margin-top: 28px;
+}
+
+.line-builder.purchase-builder .purchase-cost-field > label {
+  min-height: 22px;
 }
 
 .product-search-builder {
@@ -1072,6 +1087,11 @@ label {
   grid-template-columns: minmax(200px, 0.8fr) minmax(280px, 1.2fr);
   gap: 12px;
   margin-top: 14px;
+}
+
+.purchase-shipping {
+  margin-top: 24px;
+  padding-top: 4px;
 }
 
 .cart-lines,
