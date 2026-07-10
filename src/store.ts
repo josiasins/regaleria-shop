@@ -215,6 +215,7 @@ function reversalStockMovementsForSale(sale: Sale, reason: string): StockMovemen
 function applySaleStock(products: Product[], sale: Sale) {
   return products.map((product) => ({
     ...product,
+    syncStatus: sale.lines.some((line) => line.productId === product.id) ? "pendiente" : product.syncStatus,
     variants: product.variants.map((variant) => {
       const quantitySold = sale.lines
         .filter((line) => line.variantId === variant.id)
@@ -227,6 +228,7 @@ function applySaleStock(products: Product[], sale: Sale) {
 function restoreSaleStock(products: Product[], sale: Sale) {
   return products.map((product) => ({
     ...product,
+    syncStatus: sale.lines.some((line) => line.productId === product.id) ? "pendiente" : product.syncStatus,
     variants: product.variants.map((variant) => {
       const quantityRestored = sale.lines
         .filter((line) => line.variantId === variant.id)
@@ -438,7 +440,7 @@ function shouldCreateContact(name: string) {
 
 function syncProductsToCloud(products: Product[], productIds?: string[]) {
   const selected = productIds ? products.filter((product) => productIds.includes(product.id)) : products;
-  for (const product of selected) void saveCloudProduct(product);
+  return Promise.all(selected.map((product) => saveCloudProduct(product)));
 }
 
 function purchaseLineDeltas(before: PurchaseLine[], after: PurchaseLine[]) {
@@ -602,6 +604,71 @@ function clearSafetyBackup() {
   }
 }
 
+type SyncableRecord = { id: string; syncStatus: string };
+type IdentifiedRecord = { id: string };
+
+function mergePendingRecords<T extends SyncableRecord>(remote: T[], local: T[]) {
+  const pending = local.filter((item) => item.syncStatus !== "sincronizado");
+  const pendingIds = new Set(pending.map((item) => item.id));
+  return [...pending, ...remote.filter((item) => !pendingIds.has(item.id))];
+}
+
+function mergeImmutableRecords<T extends IdentifiedRecord>(remote: T[], local: T[]) {
+  const remoteIds = new Set(remote.map((item) => item.id));
+  return [...local.filter((item) => !remoteIds.has(item.id)), ...remote];
+}
+
+function rebaseOperationalState(remote: OperationalStateFields, local: OperationalStateFields, cloudProducts: Product[] | null): OperationalStateFields {
+  const onlineProducts = cloudProducts?.length ? cloudProducts : remote.products;
+  return {
+    ...remote,
+    // El catalogo se persiste por separado para que el stock visible quede alineado
+    // con la ultima version online antes de reintentar el snapshot operativo.
+    products: mergePendingRecords(onlineProducts, local.products),
+    sales: mergePendingRecords(remote.sales, local.sales),
+    quotes: mergePendingRecords(remote.quotes, local.quotes),
+    transfers: mergePendingRecords(remote.transfers, local.transfers),
+    expenses: mergePendingRecords(remote.expenses, local.expenses),
+    movements: mergePendingRecords(remote.movements, local.movements),
+    onlineOrders: mergePendingRecords(remote.onlineOrders, local.onlineOrders),
+    purchaseReceipts: mergePendingRecords(remote.purchaseReceipts, local.purchaseReceipts),
+    customers: mergePendingRecords(remote.customers, local.customers),
+    suppliers: mergePendingRecords(remote.suppliers, local.suppliers),
+    cashClosures: mergePendingRecords(remote.cashClosures, local.cashClosures),
+    cashShifts: mergePendingRecords(remote.cashShifts, local.cashShifts),
+    supplierPayments: mergePendingRecords(remote.supplierPayments, local.supplierPayments),
+    capitalEntries: mergePendingRecords(remote.capitalEntries, local.capitalEntries),
+    emailMessages: mergeImmutableRecords(remote.emailMessages, local.emailMessages),
+    salesAuditEntries: mergeImmutableRecords(remote.salesAuditEntries, local.salesAuditEntries),
+    operationAuditEntries: mergeImmutableRecords(remote.operationAuditEntries, local.operationAuditEntries),
+    // Configuracion remota gana en una colision: evita que un navegador atrasado
+    // revierta permisos o datos del negocio mientras se esta resolviendo stock.
+    businessProfile: remote.businessProfile,
+    categories: Array.from(new Set([...remote.categories, ...local.categories])),
+    rolePermissions: remote.rolePermissions
+  };
+}
+
+async function retryOperationalConflict(localState: OperationalStateFields) {
+  const [operations, cloudProducts] = await Promise.all([loadCloudOperations(), loadCloudCatalog()]);
+  if (!operations) return false;
+
+  const remote = stateFromOperationalSnapshot(sanitizeOperationalSnapshot(operations.snapshot));
+  const rebased = rebaseOperationalState(remote, localState, cloudProducts);
+  const nextState = syncedOperationalState(rebased);
+  const snapshot = operationalSnapshotFromState(nextState);
+  saveSafetyBackup(snapshot);
+  const saved = await saveCloudOperations(snapshot, operations.updatedAt);
+  if (!saved.ok) return false;
+
+  cloudOperationsUpdatedAt = saved.updatedAt;
+  clearSafetyBackup();
+  applyingSyncedState = true;
+  useStore.setState(nextState);
+  applyingSyncedState = false;
+  return true;
+}
+
 async function flushOperationalState() {
   if (import.meta.env.MODE === "test") return;
   if (saveInFlight) {
@@ -612,7 +679,13 @@ async function flushOperationalState() {
   saveInFlight = true;
   do {
     saveQueued = false;
-    const nextState = syncedOperationalState(useStore.getState());
+    const localState = useStore.getState();
+    const pendingProductIds = localState.products
+      .filter((product) => product.syncStatus !== "sincronizado")
+      .map((product) => product.id);
+    if (pendingProductIds.length) await syncProductsToCloud(localState.products, pendingProductIds);
+
+    const nextState = syncedOperationalState(localState);
     const snapshot = operationalSnapshotFromState(nextState);
     saveSafetyBackup(snapshot);
     const saved = await saveCloudOperations(snapshot, cloudOperationsUpdatedAt);
@@ -623,14 +696,9 @@ async function flushOperationalState() {
       useStore.setState(nextState);
       applyingSyncedState = false;
     } else if (!saved.ok && saved.reason === "conflict") {
-      applyingSyncedState = true;
-      useStore.setState((state) => ({
-        ...state,
-        products: state.products.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item)),
-        sales: state.sales.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item)),
-        expenses: state.expenses.map((item) => (item.syncStatus === "pendiente" ? { ...item, syncStatus: "con_conflicto" } : item))
-      }));
-      applyingSyncedState = false;
+      // Otra ventana guardo primero. Traemos esa version, incorporamos solo los
+      // registros locales pendientes y reintentamos contra su marca de tiempo.
+      await retryOperationalConflict(localState);
     }
   } while (saveQueued);
   saveInFlight = false;
@@ -1836,13 +1904,11 @@ export const useStore = create<AppState>((set, get) => ({
     return sale;
   },
   markAllSynced: () => {
-    const nextState = syncedOperationalState(get());
-    void saveCloudOperations(operationalSnapshotFromState(nextState), cloudOperationsUpdatedAt).then((saved) => {
-      if (saved.ok) {
-        cloudOperationsUpdatedAt = saved.updatedAt;
-        set(nextState);
-      }
-    });
+    if (import.meta.env.MODE === "test") {
+      set(syncedOperationalState(get()));
+      return;
+    }
+    void flushOperationalState();
   }
 }));
 

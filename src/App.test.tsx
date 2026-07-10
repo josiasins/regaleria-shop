@@ -31,7 +31,6 @@ describe("Regaleria app", () => {
     expect(screen.getByText("CI-000003")).toBeInTheDocument();
     expect(screen.getByText(/Consumidor final/i)).toBeInTheDocument();
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Todo actualizado/i)).toBeInTheDocument();
   });
 
   it("can open a sales shift with declared cash", async () => {

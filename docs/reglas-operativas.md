@@ -6,6 +6,8 @@
 - Todo dato operativo nuevo debe quedar conectado al estado persistente online antes de considerarse terminado.
 - Si se agrega una entidad nueva, debe incluirse en el snapshot operativo, sincronizacion, estado pendiente/sincronizado y documentacion.
 - La app no debe refrescar datos desde la nube si existen cambios locales pendientes de guardar.
+- Un estado `sincronizado` solo puede mostrarse despues de que Supabase confirme el guardado; nunca por un temporizador o una simulacion visual.
+- Cuando dos ventanas guarden datos operativos, la aplicacion debe recuperar la version online, conservar los registros locales pendientes y reintentar. Un conflicto no puede dejar bloqueada la operacion ni ocultar cambios ya confirmados.
 - Antes de guardar en Supabase, la app mantiene una copia local temporal de seguridad para evitar perdida ante errores de red, refresh o deploy.
 - Solo se eliminan datos definitivos cuando el dueño lo pide expresamente; por defecto se usa anulacion, baja logica o historial.
 - Antes de publicar, hay que correr build y pruebas y verificar que el paquete publicado incluya el cambio.

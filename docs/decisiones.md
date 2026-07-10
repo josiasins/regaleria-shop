@@ -4,6 +4,12 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 
 ## 2026-07-04
 
+### Reintento seguro ante dos ventanas operando
+- Decision: eliminar la confirmacion visual temporizada de sincronizacion y, ante una colision de guardado, recuperar el ultimo estado online, incorporar los registros locales pendientes y reintentar contra la nueva version.
+- Motivo: al corregir stock desde dos ventanas, una podia recibir los datos actualizados pero conservar una cola falsa de conflictos. Eso impedía operar y daba la sensacion de que Supabase no habia guardado cambios que si estaban online.
+- Alcance: productos, movimientos, ventas, compras, gastos, turnos, capital, clientes, proveedores y demas registros operativos con estado de sincronizacion. El catalogo se consulta como referencia online antes del reintento.
+- Alternativas descartadas: marcar todo como sincronizado despues de unos segundos, porque no prueba el guardado; sobrescribir la base con el snapshot local, porque podria borrar cambios de otra ventana; obligar al usuario a resolver manualmente cada conflicto, porque vuelve inutil el uso normal desde mas de una pantalla.
+
 ### Icono principal PNG con transparencia
 - Decision: usar `public/brand/icon.png` como icono principal de navegador, Apple touch icon y PWA manifest.
 - Motivo: el archivo aprobado tiene formato PNG RGBA, permite transparencia y representa mejor la marca actual en accesos directos e instalacion en Chrome.

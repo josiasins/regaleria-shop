@@ -462,7 +462,6 @@ function Header({
   interfaceTheme: InterfaceTheme;
   onToggleTheme: () => void;
 }) {
-  const markAllSynced = useStore((state) => state.markAllSynced);
   const { products, customers, suppliers, sales } = useStore();
   const activeSales = sales.filter((sale) => !sale.deletedAt);
   const [search, setSearch] = useState("");
@@ -482,11 +481,6 @@ function Header({
       ...state.cashShifts
     ].filter((item) => item.syncStatus !== "sincronizado").length
   );
-  useEffect(() => {
-    if (!pending) return;
-    const timer = window.setTimeout(() => markAllSynced(), 900);
-    return () => window.clearTimeout(timer);
-  }, [markAllSynced, pending]);
   const title = sections.find((item) => item.id === section)?.label ?? "Panel";
   const searchResults = search.trim()
     ? [
