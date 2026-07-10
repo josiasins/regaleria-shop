@@ -141,6 +141,33 @@ describe("Regaleria app", () => {
     expect(screen.getByRole("option", { name: "Papeleria" })).toBeInTheDocument();
   });
 
+  it("keeps categories already assigned to catalog products available in product creation", async () => {
+    const products = useStore.getState().products;
+    useStore.setState({
+      products: [{ ...products[0], category: "Marroquineria" }, ...products.slice(1)],
+      categories: ["Deco"]
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Stock/i }));
+    await user.click(screen.getByRole("button", { name: /Alta de producto/i }));
+
+    expect(screen.getByRole("option", { name: "Marroquineria" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "Sin categoria" })).toHaveLength(1);
+  });
+
+  it("opens the catalog editor from a product in stock control", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Stock/i }));
+    await user.click(screen.getByRole("button", { name: "Editar Set matero premium" }));
+
+    expect(screen.getByText("Editar producto")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Set matero premium" })).toBeInTheDocument();
+  });
+
   it("can create a detailed sale with cart lines", async () => {
     const user = userEvent.setup();
     render(<App />);

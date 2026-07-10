@@ -254,6 +254,14 @@
 3. El selector vuelve a `Seleccionar producto`; se limpian busqueda, costo y cantidad para evitar cargar por error el mismo articulo dos veces.
 4. Costo de envio y detalle aparecen separados de la lista para distinguir costos de productos y logistica.
 
+## Categorias y edicion desde stock
+
+1. Al abrir Alta de producto, el selector combina las categorias configuradas con las categorias que ya utilizan los productos del catalogo.
+2. Una categoria asignada, por ejemplo `Marroquineria`, permanece disponible aunque otra ventana tenga una configuracion anterior.
+3. El valor `Sin categoria` se ofrece una sola vez y una nueva categoria se registra tambien en Configuracion.
+4. En Control de stock, el icono de lapiz abre la ficha completa de ese producto en Catalogo.
+5. Guardar desde esa ficha actualiza la misma ficha publicada y conserva su historial operativo; no cambia el stock salvo que se realice una operacion de inventario separada.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

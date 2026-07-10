@@ -317,6 +317,24 @@ const blockedOperationalSeedIds = {
   customers: new Set(["cust_claudia", "cust_empresa_norte"])
 };
 
+// Las categorias configuradas y las que ya estan asignadas en el catalogo son
+// dos vistas del mismo dato de negocio. Nunca se debe ocultar una categoria que
+// siga siendo usada por un producto, aunque una copia operativa llegue atrasada.
+function mergeCategories(configuredCategories: readonly string[], catalogProducts: readonly Product[]) {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const value of [...configuredCategories, ...catalogProducts.map((product) => product.category)]) {
+    const category = value.trim();
+    const key = category.toLocaleLowerCase();
+    if (!category || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(category);
+  }
+
+  return merged;
+}
+
 function sanitizeOperationalSnapshot(snapshot: OperationalSnapshot): OperationalSnapshot {
   return {
     ...snapshot,
@@ -349,7 +367,7 @@ function operationalSnapshotFromState(state: OperationalStateFields): Operationa
     salesAuditEntries: state.salesAuditEntries,
     operationAuditEntries: state.operationAuditEntries,
     businessProfile: state.businessProfile,
-    categories: state.categories,
+    categories: mergeCategories(state.categories, state.products),
     rolePermissions: state.rolePermissions,
     updatedAt: new Date().toISOString()
   };
@@ -376,7 +394,7 @@ function stateFromOperationalSnapshot(snapshot: OperationalSnapshot): Operationa
     salesAuditEntries: cleanSnapshot.salesAuditEntries ?? [],
     operationAuditEntries: cleanSnapshot.operationAuditEntries ?? [],
     businessProfile: cleanSnapshot.businessProfile ?? businessProfile,
-    categories: cleanSnapshot.categories ?? categories,
+    categories: mergeCategories(cleanSnapshot.categories ?? categories, cleanSnapshot.products ?? []),
     rolePermissions: {
       dueno: Array.from(new Set([...(cleanSnapshot.rolePermissions?.dueno ?? []), ...rolePermissions.dueno])),
       administrador: Array.from(new Set([...(cleanSnapshot.rolePermissions?.administrador ?? []), ...rolePermissions.administrador])),
@@ -629,11 +647,12 @@ function mergeImmutableRecords<T extends IdentifiedRecord>(remote: T[], local: T
 
 function rebaseOperationalState(remote: OperationalStateFields, local: OperationalStateFields, cloudProducts: Product[] | null): OperationalStateFields {
   const onlineProducts = cloudProducts?.length ? cloudProducts : remote.products;
+  const rebasedProducts = mergePendingRecords(onlineProducts, local.products);
   return {
     ...remote,
     // El catalogo se persiste por separado para que el stock visible quede alineado
     // con la ultima version online antes de reintentar el snapshot operativo.
-    products: mergePendingRecords(onlineProducts, local.products),
+    products: rebasedProducts,
     sales: mergePendingRecords(remote.sales, local.sales),
     quotes: mergePendingRecords(remote.quotes, local.quotes),
     transfers: mergePendingRecords(remote.transfers, local.transfers),
@@ -653,7 +672,7 @@ function rebaseOperationalState(remote: OperationalStateFields, local: Operation
     // Configuracion remota gana en una colision: evita que un navegador atrasado
     // revierta permisos o datos del negocio mientras se esta resolviendo stock.
     businessProfile: remote.businessProfile,
-    categories: Array.from(new Set([...remote.categories, ...local.categories])),
+    categories: mergeCategories([...remote.categories, ...local.categories], rebasedProducts),
     rolePermissions: remote.rolePermissions
   };
 }
@@ -754,9 +773,11 @@ export const useStore = create<AppState>((set, get) => ({
       const operationalState = stateFromOperationalSnapshot(cleanOperations);
       cloudOperationsUpdatedAt = operations?.updatedAt ?? selectedOperations.updatedAt ?? null;
       hasAppliedCloudOperations = true;
+      const resolvedProducts = cloudProducts?.length ? cloudProducts : operationalState.products;
       set({
         ...operationalState,
-        products: cloudProducts?.length ? cloudProducts : operationalState.products,
+        products: resolvedProducts,
+        categories: mergeCategories(operationalState.categories, resolvedProducts),
         onlineOrders: commerce.orders.length ? commerce.orders : operationalState.onlineOrders,
         emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
         catalogStatus: cloudProducts === null ? "error" : "actualizado"
@@ -778,6 +799,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (cloudProducts.length) {
       set({
         products: cloudProducts,
+        categories: mergeCategories(get().categories, cloudProducts),
         onlineOrders: commerce.orders.length ? commerce.orders : get().onlineOrders,
         emailMessages: commerce.emails.length ? commerce.emails : get().emailMessages,
         catalogStatus: "actualizado"
@@ -851,7 +873,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       products: [product, ...state.products],
       movements: [movement, ...state.movements],
-      categories: product.category && !state.categories.includes(product.category) ? [...state.categories, product.category] : state.categories,
+      categories: mergeCategories(state.categories, [product]),
       catalogStatus: "actualizado"
     }));
     return product;
@@ -904,6 +926,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set((state) => ({
       products: state.products.map((item) => (item.id === product.id ? product : item)),
+      categories: mergeCategories(state.categories, [product]),
       catalogStatus: "actualizado"
     }));
     return true;
@@ -999,7 +1022,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       products: [...newProducts, ...state.products],
       movements: [...newMovements, ...state.movements],
-      categories: Array.from(new Set([...state.categories, ...newProducts.map((product) => product.category)]))
+      categories: mergeCategories(state.categories, newProducts)
     }));
     for (const product of newProducts) void saveCloudProduct(product);
     return newProducts.length;
@@ -1883,10 +1906,14 @@ export const useStore = create<AppState>((set, get) => ({
   addCategory: (category) => {
     const clean = category.trim();
     if (!clean) return;
-    set((state) => ({ categories: Array.from(new Set([...state.categories, clean])) }));
+    set((state) => ({ categories: mergeCategories([...state.categories, clean], state.products) }));
   },
   removeCategory: (category) => {
-    set((state) => ({ categories: state.categories.filter((item) => item !== category) }));
+    set((state) => ({
+      // Si algun producto todavia la usa, se conserva disponible para evitar
+      // que una edicion posterior pierda su categoria.
+      categories: mergeCategories(state.categories.filter((item) => item !== category), state.products)
+    }));
   },
   updateRolePermissions: (role, permissions) => {
     set((state) => ({ rolePermissions: { ...state.rolePermissions, [role]: permissions } }));

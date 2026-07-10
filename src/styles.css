@@ -1165,6 +1165,13 @@ label {
   padding-top: 12px;
 }
 
+.stock-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .stock-item:first-child {
   border-top: 0;
   padding-top: 0;
@@ -2853,6 +2860,10 @@ textarea:focus-visible {
   .table-row,
   .stock-item {
     grid-template-columns: 1fr;
+  }
+
+  .stock-item-actions {
+    justify-content: flex-start;
   }
 
   .line-builder.purchase-builder {

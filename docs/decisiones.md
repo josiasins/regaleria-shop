@@ -578,6 +578,20 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: conservar el producto anterior visible inducía duplicados involuntarios durante una carga extensa de factura o remito.
 - Alcance: el formulario vuelve a mostrar `Seleccionar producto`; cantidad, costo por producto y Agregar se alinean en la misma fila; el bloque de envio se separa visualmente de las lineas.
 - Alternativas descartadas: conservar la ultima seleccion como atajo, porque el riesgo operativo de una repeticion accidental es mayor que el ahorro de unos pocos clics.
+
+### Categorias preservadas desde el catalogo
+- Fecha: 2026-07-10.
+- Decision: construir la lista disponible de categorias a partir de la configuracion y de todas las categorias ya asignadas a productos sincronizados.
+- Motivo: una categoria como `Marroquineria` podia seguir visible en productos existentes pero no aparecer al dar de alta, si una copia operativa de configuracion estaba desactualizada.
+- Alcance: no se modifica ni elimina la categoria de ningun producto. Al guardar, cargar o resolver un conflicto de sincronizacion, las categorias usadas por el catalogo se conservan en la lista; la opcion `Sin categoria` se muestra una sola vez en el alta.
+- Alternativas descartadas: depender solo de la lista de Configuracion, porque separa artificialmente datos que deben mantenerse consistentes para operar.
+
+### Edicion directa desde control de stock
+- Fecha: 2026-07-10.
+- Decision: agregar una accion de editar por producto dentro de Control de stock.
+- Motivo: al revisar inventario es habitual detectar una ficha incompleta o una categoria incorrecta; obligar a buscar el mismo producto de nuevo en Catalogo demora y favorece errores.
+- Alcance: el boton abre la ficha de edicion existente del Catalogo, con las mismas validaciones y guardado en la nube. No crea una segunda forma de editar ni altera stock por si solo.
+- Alternativas descartadas: editar campos directamente dentro de la lista de stock, porque mezclar inventario y datos de catalogo dificulta revisar que cambio antes de guardarlo.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

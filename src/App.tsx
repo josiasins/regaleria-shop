@@ -444,7 +444,10 @@ function InternalApp() {
         <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} />
         {section === "panel" && <Dashboard />}
         {section === "ventas" && <Sales />}
-        {section === "stock" && <Stock />}
+        {section === "stock" && <Stock onEditProduct={(productId) => {
+          setEditingProductId(productId);
+          navigate("catalogo");
+        }} />}
         {section === "compras" && <Purchases />}
         {section === "clientes" && <Customers />}
         {section === "proveedores" && <Suppliers />}
@@ -1219,7 +1222,7 @@ function ProductVariantPicker({ label, searchLabel, products, variantId, onChang
   );
 }
 
-function Stock() {
+function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }) {
   const products = useStore((state) => state.products);
   const categories = useStore((state) => state.categories);
   const movements = useStore((state) => state.movements);
@@ -1298,6 +1301,15 @@ function Stock() {
   const stockVariants = useMemo(
     () => products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))),
     [products]
+  );
+  const availableCategories = useMemo(
+    () => Array.from(new Map(
+      [...categories, ...products.map((product) => product.category)]
+        .map((category) => category.trim())
+        .filter((category) => category && category.toLocaleLowerCase() !== "sin categoria")
+        .map((category) => [category.toLocaleLowerCase(), category])
+    ).values()),
+    [categories, products]
   );
   const filteredMovements = useMemo(() => {
     const normalizedQuery = historyQuery.trim().toLowerCase();
@@ -1567,7 +1579,17 @@ function Stock() {
                     ))}
                   </div>
                 </div>
-                <Status status={product.syncStatus} />
+                <div className="stock-item-actions">
+                  <button
+                    className="icon-button"
+                    onClick={() => onEditProduct(product.id)}
+                    aria-label={`Editar ${product.name}`}
+                    title={`Editar ${product.name}`}
+                  >
+                    <PencilSimple size={18} />
+                  </button>
+                  <Status status={product.syncStatus} />
+                </div>
               </article>
             ))}
           </div>
@@ -1585,7 +1607,7 @@ function Stock() {
                   Categoria
                   <select value={newProduct.category} onChange={(event) => setNewProduct({ ...newProduct, category: event.target.value })}>
                     <option value="">Sin categoria</option>
-                    {categories.map((category) => (
+                    {availableCategories.map((category) => (
                       <option key={category} value={category}>{category}</option>
                     ))}
                     <option value="__new">Agregar nueva categoria</option>
