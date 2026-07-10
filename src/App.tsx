@@ -35,7 +35,7 @@ import {
 import { clsx } from "clsx";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
@@ -124,6 +124,28 @@ function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "
 
 const allSectionIds = sections.map((section) => section.id);
 const themeStorageKey = "regaleria-interface-theme";
+const internalSectionStorageKey = "regaleria-internal-section";
+const purchaseDraftStorageKey = "regaleria-purchase-draft-v1";
+
+type PurchaseDraft = {
+  purchasePage: "factura" | "precarga";
+  documentType: PurchaseDocumentType;
+  documentNumber: string;
+  purchaseDate: string;
+  purchaseProductQuery: string;
+  supplierChoice: string;
+  newSupplierName: string;
+  variantId: string;
+  quantity: number;
+  unitCost: number;
+  shippingCost: number;
+  shippingNote: string;
+  lines: PurchaseLine[];
+  aiExpected: string;
+  aiSource: string;
+  aiFileName: string;
+  aiDraftLines: PurchaseLine[];
+};
 
 function getInitialInterfaceTheme(): InterfaceTheme {
   if (typeof window === "undefined") return "dia";
@@ -131,6 +153,63 @@ function getInitialInterfaceTheme(): InterfaceTheme {
     return window.localStorage.getItem(themeStorageKey) === "noche" ? "noche" : "dia";
   } catch {
     return "dia";
+  }
+}
+
+function getInitialSection(): Section {
+  if (typeof window === "undefined") return "panel";
+  try {
+    const saved = window.localStorage.getItem(internalSectionStorageKey);
+    return allSectionIds.includes(saved as Section) ? saved as Section : "panel";
+  } catch {
+    return "panel";
+  }
+}
+
+function loadPurchaseDraft(): PurchaseDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(purchaseDraftStorageKey);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Partial<PurchaseDraft>;
+    if (!draft.documentType || !draft.purchaseDate) return null;
+    return {
+      purchasePage: draft.purchasePage === "precarga" ? "precarga" : "factura",
+      documentType: draft.documentType,
+      documentNumber: draft.documentNumber ?? "",
+      purchaseDate: draft.purchaseDate,
+      purchaseProductQuery: draft.purchaseProductQuery ?? "",
+      supplierChoice: draft.supplierChoice ?? "nuevo",
+      newSupplierName: draft.newSupplierName ?? "",
+      variantId: draft.variantId ?? "",
+      quantity: Math.max(draft.quantity ?? 1, 1),
+      unitCost: Math.max(draft.unitCost ?? 0, 0),
+      shippingCost: Math.max(draft.shippingCost ?? 0, 0),
+      shippingNote: draft.shippingNote ?? "",
+      lines: Array.isArray(draft.lines) ? draft.lines : [],
+      aiExpected: draft.aiExpected ?? "",
+      aiSource: draft.aiSource ?? "",
+      aiFileName: draft.aiFileName ?? "",
+      aiDraftLines: Array.isArray(draft.aiDraftLines) ? draft.aiDraftLines : []
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePurchaseDraft(draft: PurchaseDraft) {
+  try {
+    window.localStorage.setItem(purchaseDraftStorageKey, JSON.stringify(draft));
+  } catch {
+    // Si el navegador no permite almacenamiento, la compra sigue funcionando.
+  }
+}
+
+function clearPurchaseDraft() {
+  try {
+    window.localStorage.removeItem(purchaseDraftStorageKey);
+  } catch {
+    // Nada que limpiar si el navegador bloqueo el almacenamiento local.
   }
 }
 
@@ -146,13 +225,29 @@ export function App() {
 
 function useCatalogSync() {
   const initializeCatalog = useStore((state) => state.initializeCatalog);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const refresh = useCallback(async () => {
+    await initializeCatalog();
+    setUpdateAvailable(false);
+  }, [initializeCatalog]);
 
   useEffect(() => {
     if (!isCloudCatalogEnabled()) return;
-    void initializeCatalog();
-    const refresh = window.setInterval(() => void initializeCatalog(), 10_000);
-    return () => window.clearInterval(refresh);
-  }, [initializeCatalog]);
+    void refresh();
+    let wasHidden = document.visibilityState === "hidden";
+    const notifyWhenReturning = () => {
+      if (document.visibilityState === "hidden") {
+        wasHidden = true;
+        return;
+      }
+      if (wasHidden) setUpdateAvailable(true);
+      wasHidden = false;
+    };
+    document.addEventListener("visibilitychange", notifyWhenReturning);
+    return () => document.removeEventListener("visibilitychange", notifyWhenReturning);
+  }, [refresh]);
+
+  return { updateAvailable, refresh };
 }
 
 function isPublicWebsite() {
@@ -324,12 +419,12 @@ function PublicSite() {
 }
 
 function InternalApp() {
-  useCatalogSync();
+  const { updateAvailable, refresh } = useCatalogSync();
   useEffect(() => {
     document.title = "Regaleria | Gestión";
   }, []);
 
-  const [section, setSection] = useState<Section>("panel");
+  const [section, setSection] = useState<Section>(getInitialSection);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -378,6 +473,14 @@ function InternalApp() {
       // La preferencia visual es local; si el navegador la bloquea, la app sigue funcionando.
     }
   }, [interfaceTheme]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(internalSectionStorageKey, section);
+    } catch {
+      // La ubicacion es una preferencia local; no bloquea el uso del sistema.
+    }
+  }, [section]);
 
   return (
     <div className={clsx("app-shell", interfaceTheme === "noche" && "theme-night")}>
@@ -441,7 +544,7 @@ function InternalApp() {
         </div>
       </aside>
       <main>
-        <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} />
+        <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} updateAvailable={updateAvailable} onRefresh={refresh} />
         {section === "panel" && <Dashboard />}
         {section === "ventas" && <Sales />}
         {section === "stock" && <Stock onEditProduct={(productId) => {
@@ -470,13 +573,17 @@ function Header({
   onNavigate,
   allowedSections,
   interfaceTheme,
-  onToggleTheme
+  onToggleTheme,
+  updateAvailable,
+  onRefresh
 }: {
   section: Section;
   onNavigate: (section: Section) => void;
   allowedSections: Section[];
   interfaceTheme: InterfaceTheme;
   onToggleTheme: () => void;
+  updateAvailable: boolean;
+  onRefresh: () => Promise<void>;
 }) {
   const { products, customers, suppliers, sales } = useStore();
   const activeSales = sales.filter((sale) => !sale.deletedAt);
@@ -542,10 +649,10 @@ function Header({
           {interfaceTheme === "noche" ? <Sun size={18} weight="duotone" /> : <Moon size={18} weight="duotone" />}
           <span>{interfaceTheme === "noche" ? "Dia" : "Noche"}</span>
         </button>
-        <div className={clsx("sync-pill", pending ? "syncing" : "synced")}>
+        <button className={clsx("sync-pill", pending ? "syncing" : updateAvailable ? "update-available" : "synced")} onClick={() => void onRefresh()} title={updateAvailable ? "Revisar actualizaciones sin salir de esta pantalla" : "Revisar datos ahora"}>
           <ArrowClockwise size={18} />
-          {pending ? `Sincronizando ${pending} cambio${pending === 1 ? "" : "s"}` : "Todo actualizado"}
-        </div>
+          {pending ? `Sincronizando ${pending} cambio${pending === 1 ? "" : "s"}` : updateAvailable ? "Revisar actualizaciones" : "Todo actualizado"}
+        </button>
       </div>
     </header>
   );
@@ -1931,28 +2038,29 @@ function Purchases() {
   const deletePurchaseReceipt = useStore((state) => state.deletePurchaseReceipt);
   const restorePurchaseReceipt = useStore((state) => state.restorePurchaseReceipt);
   const addSupplierPayment = useStore((state) => state.addSupplierPayment);
-  const [purchasePage, setPurchasePage] = useState<PurchasePage>("factura");
+  const [savedDraft] = useState(loadPurchaseDraft);
+  const [purchasePage, setPurchasePage] = useState<PurchasePage>(savedDraft?.purchasePage ?? "factura");
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
-  const [documentType, setDocumentType] = useState<PurchaseDocumentType>("factura");
-  const [documentNumber, setDocumentNumber] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState(() => toDateInputValue());
-  const [purchaseProductQuery, setPurchaseProductQuery] = useState("");
-  const [supplierChoice, setSupplierChoice] = useState(suppliers[0]?.id ?? "nuevo");
-  const [newSupplierName, setNewSupplierName] = useState("");
-  const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
-  const [quantity, setQuantity] = useState(1);
-  const [unitCost, setUnitCost] = useState(0);
-  const [shippingCost, setShippingCost] = useState(0);
-  const [shippingNote, setShippingNote] = useState("");
+  const [documentType, setDocumentType] = useState<PurchaseDocumentType>(savedDraft?.documentType ?? "factura");
+  const [documentNumber, setDocumentNumber] = useState(savedDraft?.documentNumber ?? "");
+  const [purchaseDate, setPurchaseDate] = useState(() => savedDraft?.purchaseDate ?? toDateInputValue());
+  const [purchaseProductQuery, setPurchaseProductQuery] = useState(savedDraft?.purchaseProductQuery ?? "");
+  const [supplierChoice, setSupplierChoice] = useState(savedDraft?.supplierChoice ?? suppliers[0]?.id ?? "nuevo");
+  const [newSupplierName, setNewSupplierName] = useState(savedDraft?.newSupplierName ?? "");
+  const [variantId, setVariantId] = useState(savedDraft?.variantId ?? products[0]?.variants[0]?.id ?? "");
+  const [quantity, setQuantity] = useState(savedDraft?.quantity ?? 1);
+  const [unitCost, setUnitCost] = useState(savedDraft?.unitCost ?? 0);
+  const [shippingCost, setShippingCost] = useState(savedDraft?.shippingCost ?? 0);
+  const [shippingNote, setShippingNote] = useState(savedDraft?.shippingNote ?? "");
   const [autoCostPulse, setAutoCostPulse] = useState(false);
-  const [lines, setLines] = useState<PurchaseLine[]>([]);
+  const [lines, setLines] = useState<PurchaseLine[]>(savedDraft?.lines ?? []);
   const [paymentSupplier, setPaymentSupplier] = useState(suppliers[0]?.name ?? "");
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
-  const [aiExpected, setAiExpected] = useState("");
-  const [aiSource, setAiSource] = useState("");
-  const [aiFileName, setAiFileName] = useState("");
-  const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>([]);
+  const [aiExpected, setAiExpected] = useState(savedDraft?.aiExpected ?? "");
+  const [aiSource, setAiSource] = useState(savedDraft?.aiSource ?? "");
+  const [aiFileName, setAiFileName] = useState(savedDraft?.aiFileName ?? "");
+  const [aiDraftLines, setAiDraftLines] = useState<PurchaseLine[]>(savedDraft?.aiDraftLines ?? []);
   const [aiStatus, setAiStatus] = useState("Esperando comprobante.");
   const selected = findProductVariant(products, variantId);
   const purchaseProductOptions = products.flatMap((product) => product.variants.map((variant) => ({ product, variant }))).filter(({ product, variant }) => productVariantSearchText(product, variant).includes(purchaseProductQuery.trim().toLowerCase()));
@@ -1960,6 +2068,9 @@ function Purchases() {
   const activePurchaseReceipts = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
   const deletedPurchaseReceipts = purchaseReceipts.filter((receipt) => receipt.deletedAt);
   const purchaseHistory = operationAuditEntries.filter((entry) => entry.entityType === "compra");
+  const hasPurchaseDraft = Boolean(
+    documentNumber.trim() || purchaseProductQuery.trim() || newSupplierName.trim() || lines.length || shippingCost || shippingNote.trim() || aiExpected.trim() || aiSource.trim() || aiFileName || aiDraftLines.length
+  );
   useEffect(() => {
     if (!selected) return;
     setUnitCost(selected.variant.cost);
@@ -1985,7 +2096,43 @@ function Purchases() {
     setShippingCost(0);
     setShippingNote("");
     setLines([]);
+    clearPurchaseDraft();
   };
+  useEffect(() => {
+    if (editingReceipt) return;
+    if (!hasPurchaseDraft) {
+      clearPurchaseDraft();
+      return;
+    }
+    savePurchaseDraft({
+      purchasePage: purchasePage === "precarga" ? "precarga" : "factura",
+      documentType,
+      documentNumber,
+      purchaseDate,
+      purchaseProductQuery,
+      supplierChoice,
+      newSupplierName,
+      variantId,
+      quantity,
+      unitCost,
+      shippingCost,
+      shippingNote,
+      lines,
+      aiExpected,
+      aiSource,
+      aiFileName,
+      aiDraftLines
+    });
+  }, [aiDraftLines, aiExpected, aiFileName, aiSource, documentNumber, documentType, editingReceipt, hasPurchaseDraft, lines, newSupplierName, purchaseDate, purchasePage, purchaseProductQuery, quantity, shippingCost, shippingNote, supplierChoice, unitCost, variantId]);
+  useEffect(() => {
+    if (!hasPurchaseDraft || editingReceipt) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [editingReceipt, hasPurchaseDraft]);
   const editReceipt = (receipt: PurchaseReceipt) => {
     const supplier = suppliers.find((item) => item.name.toLowerCase() === receipt.supplier.toLowerCase());
     setEditingReceipt(receipt);
@@ -2083,7 +2230,7 @@ function Purchases() {
             const Icon = tab.icon;
             return (
               <button key={tab.id} className={clsx("module-tab", purchasePage === tab.id && "active")} onClick={() => {
-                if (tab.id === "factura") resetPurchaseForm();
+                if (tab.id === "factura" && editingReceipt) resetPurchaseForm();
                 setPurchasePage(tab.id);
               }}>
                 <Icon size={18} weight="duotone" />
@@ -2130,6 +2277,12 @@ function Purchases() {
       )}
       {(purchasePage === "factura" || purchasePage === "editar") && (
         <Panel title={editingReceipt ? `Editar ${editingReceipt.number}` : "Factura o remito de compra"}>
+          {!editingReceipt && hasPurchaseDraft && (
+            <div className="draft-notice">
+              <span><ClockCounterClockwise size={17} /> Borrador guardado automáticamente en este dispositivo.</span>
+              <button className="secondary-action" onClick={resetPurchaseForm}>Descartar borrador</button>
+            </div>
+          )}
           <div className="purchase-document-fields">
             <label>
               Proveedor

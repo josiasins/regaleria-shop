@@ -437,6 +437,10 @@ h2 {
   font-weight: 700;
 }
 
+button.sync-pill {
+  border: 0;
+}
+
 .sync-pill.syncing {
   background: oklch(82% 0.055 83);
   color: oklch(29% 0.025 95);
@@ -445,6 +449,32 @@ h2 {
 .sync-pill.synced {
   background: oklch(88% 0.042 151);
   color: oklch(34% 0.05 158);
+}
+
+.sync-pill.update-available {
+  background: oklch(85% 0.09 83);
+  color: oklch(30% 0.05 80);
+}
+
+.draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -2px 0 18px;
+  padding: 10px 12px;
+  border: 1px solid oklch(80% 0.045 150);
+  border-radius: 8px;
+  background: oklch(95% 0.024 150);
+  color: oklch(33% 0.04 158);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.draft-notice span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .workspace {
@@ -2810,6 +2840,11 @@ textarea:focus-visible {
   .sync-pill {
     justify-content: center;
     width: 100%;
+  }
+
+  .draft-notice {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .metric-grid,

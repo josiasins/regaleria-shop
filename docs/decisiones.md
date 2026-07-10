@@ -592,6 +592,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: al revisar inventario es habitual detectar una ficha incompleta o una categoria incorrecta; obligar a buscar el mismo producto de nuevo en Catalogo demora y favorece errores.
 - Alcance: el boton abre la ficha de edicion existente del Catalogo, con las mismas validaciones y guardado en la nube. No crea una segunda forma de editar ni altera stock por si solo.
 - Alternativas descartadas: editar campos directamente dentro de la lista de stock, porque mezclar inventario y datos de catalogo dificulta revisar que cambio antes de guardarlo.
+
+### Continuidad de trabajo y actualizaciones no intrusivas
+- Fecha: 2026-07-10.
+- Decision: recordar la seccion interna visitada y guardar automaticamente los borradores de compra en el dispositivo. La revision de datos remotos deja de ejecutarse cada diez segundos mientras una persona trabaja.
+- Motivo: una recarga al volver desde otra pestaña podia abrir Panel y perder una factura o remito casi terminado, obligando a cargar de nuevo informacion ya revisada.
+- Alcance: Compras conserva comprobante, fecha, proveedor, busqueda, lineas, costos, envio y precarga hasta que se registra o se descarta expresamente. Mientras exista borrador, Chrome advierte antes de recargar o abandonar la pagina. Al volver a una pestaña, el sistema ofrece `Revisar actualizaciones`; esa accion no cambia la seccion activa ni borra formularios.
+- Alternativas descartadas: refrescar automaticamente de forma periodica, porque prioriza datos potencialmente mas recientes por encima del trabajo no confirmado de la persona que esta operando.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

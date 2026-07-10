@@ -262,6 +262,14 @@
 4. En Control de stock, el icono de lapiz abre la ficha completa de ese producto en Catalogo.
 5. Guardar desde esa ficha actualiza la misma ficha publicada y conserva su historial operativo; no cambia el stock salvo que se realice una operacion de inventario separada.
 
+## Continuidad de una compra en preparacion
+
+1. Al escribir datos de una factura, remito o precarga, Compras guarda un borrador local automaticamente sin afectar stock, gastos ni cuentas de proveedor.
+2. Si se actualiza la aplicacion o se vuelve desde otra pagina, el sistema abre la ultima seccion usada y recupera el borrador de compra.
+3. La pantalla muestra que el borrador esta protegido, Chrome advierte antes de salir o recargar y permite descartarlo solamente con una accion explicita.
+4. Al registrar la compra se elimina el borrador porque el comprobante ya quedo guardado en la base de datos.
+5. Al regresar a la pestaña, la aplicacion avisa que se pueden revisar actualizaciones; no recarga datos de forma invasiva ni redirige a Panel.
+
 ## Baja y restauracion de proveedores
 
 1. Proveedores muestra solo proveedores activos.

@@ -6,6 +6,8 @@ import { resetStore, useStore } from "./store";
 
 describe("Regaleria app", () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     resetStore();
   });
 
@@ -284,6 +286,22 @@ describe("Regaleria app", () => {
     const stockHistoryButtons = screen.getAllByRole("button", { name: "Historial" });
     await user.click(stockHistoryButtons[stockHistoryButtons.length - 1]);
     expect(screen.getByText(/COM-000001/i)).toBeInTheDocument();
+  });
+
+  it("restores the current section and an unfinished purchase after a reload", async () => {
+    const user = userEvent.setup();
+    const firstRender = render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Compras/i }));
+    await user.type(screen.getByLabelText("Numero de comprobante"), "BORRADOR-2026-01");
+    expect(screen.getByText(/Borrador guardado automáticamente/i)).toBeInTheDocument();
+
+    firstRender.unmount();
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Compras" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("BORRADOR-2026-01")).toBeInTheDocument();
+    expect(screen.getByText(/Borrador guardado automáticamente/i)).toBeInTheDocument();
   });
 
   it("finds a purchase product by barcode and description", async () => {
