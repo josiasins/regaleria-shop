@@ -651,9 +651,9 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 
 ### Navegacion con marca visible en movil, tablet y escritorio
 - Fecha: 2026-07-11.
-- Decision: reemplazar la barra movil con texto `Menu` por un disparador de tres lineas, un simbolo de regalo centrado y un espacio de equilibrio. En escritorio y tablet el mismo simbolo acompana el logotipo completo dentro del lateral.
+- Decision: reemplazar la barra movil con texto `Menu` por un disparador de tres lineas, un simbolo de regalo centrado y un espacio de equilibrio. El lateral de escritorio, tablet y movil usa exclusivamente el mismo simbolo de regalo.
 - Motivo: la barra anterior se percibia como un menu aislado y no daba contexto de marca. El texto ocupaba espacio tactil sin agregar informacion necesaria.
-- Alcance: se reutiliza el SVG vectorial oficial `regaleria-shop-symbol.svg` de la carpeta de marca como fuente de una variante recortada de regalo para interfaz, transformada a blanco sobre superficies oscuras. Se preservan el menu lateral, sus permisos y las operaciones actuales; solo cambia la presentacion y la accesibilidad conserva el nombre `Abrir menu`.
+- Alcance: se reutiliza el SVG vectorial oficial `regaleria-shop-symbol.svg` de la carpeta de marca como fuente de una variante recortada de regalo para interfaz, transformada a blanco sobre superficies oscuras. Se elimina el logotipo tipografico duplicado del lateral. Se preservan el menu lateral, sus permisos y las operaciones actuales; solo cambia la presentacion y la accesibilidad conserva el nombre `Abrir menu`.
 - Alternativas descartadas: redibujar el icono desde la captura, porque podria introducir una version inconsistente; usar el icono PNG con volumen, porque no mantiene la lectura minima necesaria en una barra pequena.
 # 2026-06-19 - Carrito como pagina propia
 

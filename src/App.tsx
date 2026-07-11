@@ -503,7 +503,6 @@ function InternalApp() {
       <aside className={clsx("sidebar", isMobileNavOpen && "open")}>
         <div className="brand-lockup">
           <BrandMark className="sidebar-brand-symbol" label="" />
-          <BrandMark className="brand-lockup-logo" src="/brand/Regaleria-shop-logo-white-costado.svg" />
           <button className="mobile-menu-close" onClick={() => setIsMobileNavOpen(false)} aria-label="Cerrar menu">
             <MinusCircle size={20} />
           </button>
