@@ -648,6 +648,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: el encabezado de tablet comprimía el contexto del modulo y los cuatro campos del comprobante quedaban demasiado angostos. En celular, mantener columnas no permite leer ni tocar los controles con seguridad.
 - Alcance: sidebar como drawer desde tablet, pestañas operativas desplazables horizontalmente, formularios de comprobante en dos columnas en tablet y una en celular. No se alteran datos, flujos ni permisos.
 - Alternativas descartadas: reducir artificialmente tipografia o esconder campos importantes, porque deterioraria lectura y obligaria a abrir pantallas extra para completar operaciones basicas.
+
+### Navegacion con marca visible en movil, tablet y escritorio
+- Fecha: 2026-07-11.
+- Decision: reemplazar la barra movil con texto `Menu` por un disparador de tres lineas, un simbolo de regalo centrado y un espacio de equilibrio. En escritorio y tablet el mismo simbolo acompana el logotipo completo dentro del lateral.
+- Motivo: la barra anterior se percibia como un menu aislado y no daba contexto de marca. El texto ocupaba espacio tactil sin agregar informacion necesaria.
+- Alcance: se reutiliza el SVG vectorial oficial `regaleria-shop-symbol.svg` de la carpeta de marca como fuente de una variante recortada de regalo para interfaz, transformada a blanco sobre superficies oscuras. Se preservan el menu lateral, sus permisos y las operaciones actuales; solo cambia la presentacion y la accesibilidad conserva el nombre `Abrir menu`.
+- Alternativas descartadas: redibujar el icono desde la captura, porque podria introducir una version inconsistente; usar el icono PNG con volumen, porque no mantiene la lectura minima necesaria en una barra pequena.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

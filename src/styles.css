@@ -216,13 +216,29 @@ button:disabled {
 }
 
 .brand-lockup-logo {
-  width: 156px;
-  max-width: calc(100% - 48px);
+  width: 142px;
+  max-width: calc(100% - 102px);
   max-height: 68px;
   height: auto;
   display: block;
   object-fit: contain;
   object-position: left center;
+}
+
+.sidebar-brand-symbol,
+.mobile-menu-logo {
+  display: block;
+  object-fit: contain;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  filter: brightness(0) invert(1);
+}
+
+.sidebar-brand-symbol {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
 }
 
 nav {
@@ -3019,11 +3035,30 @@ textarea:focus-visible {
     border-bottom: 1px solid oklch(83% 0.026 150);
     background: oklch(32% 0.035 160);
     color: oklch(96% 0.012 150);
-    display: flex;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
-    gap: 9px;
-    padding: 0 18px;
-    font-weight: 850;
+    padding: 4px 12px;
+  }
+
+  .mobile-menu-trigger,
+  .mobile-menu-balance {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-menu-trigger {
+    display: grid;
+    place-items: center;
+    border: 1px solid oklch(82% 0.025 153 / 28%);
+    border-radius: 7px;
+    color: oklch(96% 0.012 150);
+  }
+
+  .mobile-menu-logo {
+    width: 38px;
+    height: 38px;
+    justify-self: center;
   }
 
   .mobile-menu-close {
@@ -3068,6 +3103,17 @@ textarea:focus-visible {
 
   .brand-lockup {
     justify-content: flex-start;
+  }
+
+  .sidebar-brand-symbol {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .brand-lockup-logo {
+    width: 138px;
+    max-width: calc(100% - 96px);
   }
 
   nav {
@@ -3198,6 +3244,14 @@ textarea:focus-visible {
 
   .brand-lockup {
     gap: 10px;
+  }
+
+  .sidebar-brand-symbol {
+    display: none;
+  }
+
+  .brand-lockup-logo {
+    max-width: calc(100% - 48px);
   }
 
   .brand-mark {

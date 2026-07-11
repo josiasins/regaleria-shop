@@ -13,6 +13,7 @@ import {
   House,
   EnvelopeSimple,
   Keyboard,
+  List,
   ListBullets,
   MagnifyingGlass,
   MinusCircle,
@@ -121,7 +122,7 @@ function toDateInputValue(value = new Date()) {
   return local.toISOString().slice(0, 10);
 }
 
-function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "/brand/regaleria-shop-symbol.svg" }: { className?: string; label?: string; src?: string }) {
+function BrandMark({ className = "brand-mark", label = "Regaleria Shop", src = "/brand/regaleria-shop-gift-mark.svg" }: { className?: string; label?: string; src?: string }) {
   return <img className={className} src={src} alt={label} />;
 }
 
@@ -492,12 +493,16 @@ function InternalApp() {
   return (
     <div className={clsx("app-shell", interfaceTheme === "noche" && "theme-night")}>
       <button className="mobile-menu-button" onClick={() => setIsMobileNavOpen(true)} aria-label="Abrir menu">
-        <ListBullets size={22} />
-        <span>Menu</span>
+        <span className="mobile-menu-trigger" aria-hidden="true">
+          <List size={22} weight="regular" />
+        </span>
+        <BrandMark className="mobile-menu-logo" label="" />
+        <span className="mobile-menu-balance" aria-hidden="true" />
       </button>
       {isMobileNavOpen && <button className="mobile-nav-backdrop" onClick={() => setIsMobileNavOpen(false)} aria-label="Cerrar menu" />}
       <aside className={clsx("sidebar", isMobileNavOpen && "open")}>
         <div className="brand-lockup">
+          <BrandMark className="sidebar-brand-symbol" label="" />
           <BrandMark className="brand-lockup-logo" src="/brand/Regaleria-shop-logo-white-costado.svg" />
           <button className="mobile-menu-close" onClick={() => setIsMobileNavOpen(false)} aria-label="Cerrar menu">
             <MinusCircle size={20} />
