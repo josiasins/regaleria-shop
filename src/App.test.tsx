@@ -288,6 +288,47 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/COM-000001/i)).toBeInTheDocument();
   });
 
+  it("links split payments to a supplier receipt", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Compras/i }));
+    await user.type(screen.getByLabelText("Numero de comprobante"), "PAGO-100");
+    await user.clear(screen.getByLabelText("Costo por producto"));
+    await user.type(screen.getByLabelText("Costo por producto"), "10000");
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByLabelText("Compra pagada"));
+    await user.clear(screen.getByLabelText("Monto del pago 1"));
+    await user.type(screen.getByLabelText("Monto del pago 1"), "6000");
+    await user.click(screen.getByRole("button", { name: /Agregar otro medio/i }));
+    await user.selectOptions(screen.getAllByLabelText("Medio de pago")[1], "transferencia");
+    await user.type(screen.getByLabelText("Monto del pago 2"), "4000");
+    await user.click(screen.getByRole("button", { name: /Registrar compra/i }));
+
+    const receipt = useStore.getState().purchaseReceipts[0];
+    const payments = useStore.getState().supplierPayments.filter((payment) => payment.receiptId === receipt.id);
+    expect(payments).toHaveLength(2);
+    expect(payments.map((payment) => payment.paymentMethod).sort()).toEqual(["efectivo", "transferencia"]);
+  });
+
+  it("registers a later payment against a selected receipt", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: /Compras/i }));
+    await user.type(screen.getByLabelText("Numero de comprobante"), "PAGO-101");
+    await user.clear(screen.getByLabelText("Costo por producto"));
+    await user.type(screen.getByLabelText("Costo por producto"), "8000");
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Registrar compra/i }));
+
+    const receipt = useStore.getState().purchaseReceipts[0];
+    await user.click(screen.getByRole("button", { name: "Registrar pago" }));
+    await user.selectOptions(screen.getByLabelText("Factura o remito cargado"), receipt.id);
+    await user.type(screen.getByLabelText("Monto del pago 1"), "3000");
+    await user.click(screen.getByRole("button", { name: "Confirmar pago de factura" }));
+
+    expect(useStore.getState().supplierPayments).toEqual(expect.arrayContaining([expect.objectContaining({ receiptId: receipt.id, amount: 3000 })]));
+  });
+
   it("restores the current section and an unfinished purchase after a reload", async () => {
     const user = userEvent.setup();
     const firstRender = render(<App />);

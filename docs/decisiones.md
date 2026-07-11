@@ -627,6 +627,27 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: la ficha debe priorizar los datos que se editan con frecuencia y conservar una jerarquia clara en pantallas chicas o con modo noche.
 - Alcance: SEO conserva sus campos y validaciones al abrirse; solo cambia su presentacion. Sus colores se adaptan especificamente al tema oscuro, sin fondos claros ajenos a la interfaz.
 - Alternativas descartadas: ocultar por completo SEO, porque se perderian recomendaciones utiles al publicar; conservar la galeria y SEO siempre expandidos, porque desplazan datos mas operativos y alargan innecesariamente la ficha.
+
+### Compras recientes con lectura por comprobante
+- Fecha: 2026-07-11.
+- Decision: presentar Compras recientes en dos vistas: Lista jerarquica y Comprobantes verticales con proporcion de hoja A4.
+- Motivo: una sola fila de texto no permite revisar rapidamente proveedor, monto, cuenta pagada y articulos de compras con muchas lineas.
+- Alcance: ambos modos muestran proveedor, total, estado de pago y los articulos como cantidad mas nombre. El estado de pago se estima aplicando los pagos registrados de cada proveedor a sus compras activas en orden cronologico; no altera montos, stock ni cuentas.
+- Alternativas descartadas: repetir la cadena completa de articulos en un unico renglon, porque no es escaneable; agregar una marca manual de pago sin asociacion contable, porque podria contradecir la cuenta corriente del proveedor.
+
+### Pagos vinculados a comprobantes de compra
+- Fecha: 2026-07-11.
+- Decision: permitir marcar una compra como pagada durante su carga y dividir el importe entre varios medios. El modulo `Registrar pago` selecciona un comprobante ya cargado y registra uno o mas pagos contra su saldo.
+- Motivo: un pago a proveedor necesita explicar que factura cancela y puede ocurrir en efectivo, transferencia, tarjeta o combinaciones. Un pago suelto por proveedor no alcanza para saber qué compra continúa pendiente.
+- Alcance: cada pago nuevo conserva proveedor, comprobante vinculado, medio, monto, nota y fecha. El sistema bloquea importes por encima del saldo de la factura. Pagos historicos sin comprobante vinculado se conservan y siguen aportando a la lectura general de cuenta por proveedor.
+- Alternativas descartadas: un unico campo de nota para el medio de pago, porque no permite dividir ni auditar; asignar pagos historicos automaticamente a una factura, porque podria inventar una relacion que no existia.
+
+### Jerarquia adaptable para tablet y celular
+- Fecha: 2026-07-11.
+- Decision: en tablet el encabezado interno se divide en contexto y acciones, mientras los formularios de compras conservan pares de campos. En celular, las acciones superiores se apilan y los formularios pasan a una sola columna con controles tactiles amplios.
+- Motivo: el encabezado de tablet comprimía el contexto del modulo y los cuatro campos del comprobante quedaban demasiado angostos. En celular, mantener columnas no permite leer ni tocar los controles con seguridad.
+- Alcance: sidebar como drawer desde tablet, pestañas operativas desplazables horizontalmente, formularios de comprobante en dos columnas en tablet y una en celular. No se alteran datos, flujos ni permisos.
+- Alternativas descartadas: reducir artificialmente tipografia o esconder campos importantes, porque deterioraria lectura y obligaria a abrir pantallas extra para completar operaciones basicas.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

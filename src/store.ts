@@ -113,7 +113,7 @@ interface AppState {
   updateShiftWithAudit: (shiftId: string, input: CashShiftAuditUpdateInput, reason: string, requestedBy: Role) => Promise<boolean>;
   deleteShiftWithAudit: (shiftId: string, reason: string, requestedBy: Role) => Promise<boolean>;
   restoreShiftWithAudit: (auditEntryId: string, reason: string, requestedBy: Role) => Promise<boolean>;
-  addSupplierPayment: (supplier: string, amount: number, note: string) => SupplierPayment | null;
+  addSupplierPayment: (input: { supplier: string; receiptId?: string; amount: number; paymentMethod: PaymentMethod; note: string }) => SupplierPayment | null;
   addCapitalEntry: (input: CapitalEntryDraftInput, requestedBy: Role) => CapitalEntry | null;
   deleteCapitalEntry: (id: string, requestedBy: Role) => boolean;
   updateBusinessProfile: (input: BusinessProfileInput) => void;
@@ -1512,6 +1512,9 @@ export const useStore = create<AppState>((set, get) => ({
   addPurchaseReceipt: (input) => {
     const receipt = makePurchaseReceiptFromInput(input);
     if (!receipt) return null;
+    const paymentDrafts = (input.payments ?? []).filter((payment) => payment.amount > 0);
+    const paymentTotal = paymentDrafts.reduce((sum, payment) => sum + payment.amount, 0);
+    if (paymentTotal > receipt.total + 0.01) return null;
     const cleanLines = receipt.lines;
     const createdAt = receipt.createdAt;
     const expense: Expense = {
@@ -1546,8 +1549,19 @@ export const useStore = create<AppState>((set, get) => ({
       performedBy: get().activeRole,
       after: receipt
     });
+    const createdPayments: SupplierPayment[] = paymentDrafts.map((payment) => ({
+      id: `local_suppay_${crypto.randomUUID()}`,
+      supplier: receipt.supplier,
+      receiptId: receipt.id,
+      amount: money(payment.amount),
+      paymentMethod: payment.paymentMethod,
+      note: payment.note.trim(),
+      createdAt,
+      syncStatus: "pendiente"
+    }));
     set((state) => ({
       purchaseReceipts: [receipt, ...state.purchaseReceipts],
+      supplierPayments: [...createdPayments, ...state.supplierPayments],
       expenses: [expense, ...state.expenses],
       movements: [...receiptMovements, ...state.movements],
       suppliers: newSupplier ? [newSupplier, ...state.suppliers] : state.suppliers,
@@ -1875,13 +1889,21 @@ export const useStore = create<AppState>((set, get) => ({
       salesAuditEntries: [entry, ...current.salesAuditEntries]
     }, reason);
   },
-  addSupplierPayment: (supplier, amount, note) => {
-    if (!supplier.trim() || amount <= 0) return null;
+  addSupplierPayment: (input) => {
+    if (!input.supplier.trim() || input.amount <= 0) return null;
+    const receipt = input.receiptId ? get().purchaseReceipts.find((item) => item.id === input.receiptId && !item.deletedAt) : undefined;
+    if (input.receiptId && (!receipt || receipt.supplier.toLowerCase() !== input.supplier.trim().toLowerCase())) return null;
+    const alreadyPaid = input.receiptId
+      ? get().supplierPayments.filter((payment) => payment.receiptId === input.receiptId).reduce((sum, payment) => sum + payment.amount, 0)
+      : 0;
+    if (receipt && input.amount > receipt.total - alreadyPaid + 0.01) return null;
     const payment: SupplierPayment = {
       id: `local_suppay_${crypto.randomUUID()}`,
-      supplier: supplier.trim(),
-      amount: money(amount),
-      note: note.trim(),
+      supplier: input.supplier.trim(),
+      receiptId: input.receiptId,
+      amount: money(input.amount),
+      paymentMethod: input.paymentMethod,
+      note: input.note.trim(),
       createdAt: new Date().toISOString(),
       syncStatus: "pendiente"
     };

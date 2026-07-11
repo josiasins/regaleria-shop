@@ -261,6 +261,13 @@ export interface PurchaseReceiptDraftInput {
   lines: PurchaseLine[];
   shippingCost: number;
   shippingNote: string;
+  payments?: PurchasePaymentDraft[];
+}
+
+export interface PurchasePaymentDraft {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note: string;
 }
 
 export interface Customer {
@@ -424,7 +431,9 @@ export interface OperationAuditEntry {
 export interface SupplierPayment {
   id: string;
   supplier: string;
+  receiptId?: string;
   amount: number;
+  paymentMethod?: PaymentMethod;
   note: string;
   createdAt: string;
   syncStatus: SyncStatus;

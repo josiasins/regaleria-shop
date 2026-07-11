@@ -354,3 +354,27 @@
 5. Si la casilla queda desactivada, la web conserva el precio interno para esa variante.
 6. Al guardar, se conserva proveedor, historial y stock; se actualizan solo los datos comerciales y los precios elegidos.
 7. SEO permanece cerrado para reducir ruido visual y se abre solo cuando se quiere completar titulo, descripcion o revisar recomendaciones.
+
+## Revision de compras recientes
+
+1. En Compras se abre `Compras recientes`.
+2. Se alterna entre `Lista` para una lectura compacta y `Comprobantes` para revisar cada compra como hoja vertical.
+3. Cada comprobante muestra proveedor, identificacion, total y estado de pago estimado desde la cuenta de proveedor.
+4. Los articulos se muestran solo como cantidad y nombre para priorizar la revision de lo recibido.
+5. Editar o anular mantiene el flujo de auditoria existente; cambiar de vista no modifica datos.
+
+## Pago de compras a proveedor
+
+1. Durante la carga, se puede marcar `Compra pagada`.
+2. Se registra uno o varios medios de pago; sus importes deben sumar el total para confirmar el comprobante como pagado.
+3. Si la compra queda pendiente, `Registrar pago` permite elegir la factura o remito ya cargado.
+4. Se agregan uno o varios pagos parciales, cada uno con medio, monto y referencia opcional.
+5. El sistema calcula el saldo de la factura y no permite superar ese monto.
+6. Cada pago queda vinculado al comprobante y se refleja en Compras recientes y Cuenta de proveedores.
+
+## Uso en pantallas chicas
+
+1. En tablet, el menu lateral se abre desde `Menu`; el encabezado conserva contexto arriba y herramientas debajo.
+2. Compras muestra los datos principales del comprobante en pares para mantener lectura y velocidad de carga.
+3. En celular, el formulario se ordena en una columna, con botones y campos a ancho completo.
+4. Las vistas internas de cada modulo se pueden desplazar de forma horizontal sin ocultar funciones.

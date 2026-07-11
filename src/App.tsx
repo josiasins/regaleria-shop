@@ -70,6 +70,8 @@ type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" 
 type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
 type PurchasePage = "factura" | "precarga" | "recientes" | "editar" | "eliminadas" | "historial" | "cuentas" | "pago";
 type PurchaseVatInputMode = "con_iva" | "sin_iva";
+type PurchaseReceiptView = "lista" | "comprobantes";
+type PurchasePaymentState = "pagada" | "parcial" | "pendiente";
 type ContactPage = "lista" | "nuevo" | "editar" | "eliminados" | "historial";
 type QuotePage = "nuevo" | "lista";
 type TransferPage = "cargar" | "comprobantes";
@@ -2045,6 +2047,7 @@ function Purchases() {
   const addSupplierPayment = useStore((state) => state.addSupplierPayment);
   const [savedDraft] = useState(loadPurchaseDraft);
   const [purchasePage, setPurchasePage] = useState<PurchasePage>(savedDraft?.purchasePage ?? "factura");
+  const [receiptView, setReceiptView] = useState<PurchaseReceiptView>("comprobantes");
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
   const [documentType, setDocumentType] = useState<PurchaseDocumentType>(savedDraft?.documentType ?? "factura");
   const [documentNumber, setDocumentNumber] = useState(savedDraft?.documentNumber ?? "");
@@ -2059,11 +2062,14 @@ function Purchases() {
   const [vatRate, setVatRate] = useState(savedDraft?.vatRate ?? 21);
   const [shippingCost, setShippingCost] = useState(savedDraft?.shippingCost ?? 0);
   const [shippingNote, setShippingNote] = useState(savedDraft?.shippingNote ?? "");
+  const [markPurchasePaid, setMarkPurchasePaid] = useState(false);
+  const [purchasePaymentLines, setPurchasePaymentLines] = useState(() => [newPurchasePaymentLine()]);
+  const [purchasePaymentStatus, setPurchasePaymentStatus] = useState("");
   const [autoCostPulse, setAutoCostPulse] = useState(false);
   const [lines, setLines] = useState<PurchaseLine[]>(savedDraft?.lines ?? []);
-  const [paymentSupplier, setPaymentSupplier] = useState(suppliers[0]?.name ?? "");
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentReceiptId, setPaymentReceiptId] = useState("");
+  const [registeredPaymentLines, setRegisteredPaymentLines] = useState(() => [newPurchasePaymentLine()]);
+  const [registeredPaymentStatus, setRegisteredPaymentStatus] = useState("");
   const [aiExpected, setAiExpected] = useState(savedDraft?.aiExpected ?? "");
   const [aiSource, setAiSource] = useState(savedDraft?.aiSource ?? "");
   const [aiFileName, setAiFileName] = useState(savedDraft?.aiFileName ?? "");
@@ -2077,6 +2083,15 @@ function Purchases() {
   const activePurchaseReceipts = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
   const deletedPurchaseReceipts = purchaseReceipts.filter((receipt) => receipt.deletedAt);
   const purchaseHistory = operationAuditEntries.filter((entry) => entry.entityType === "compra");
+  const receiptPaymentStates = useMemo(
+    () => getPurchasePaymentStates(activePurchaseReceipts, supplierPayments),
+    [activePurchaseReceipts, supplierPayments]
+  );
+  const purchaseTotal = purchaseLineTotal(lines) + shippingCost;
+  const selectedPaymentReceipt = activePurchaseReceipts.find((receipt) => receipt.id === paymentReceiptId);
+  const selectedReceiptPayments = supplierPayments.filter((payment) => payment.receiptId === paymentReceiptId);
+  const selectedReceiptPaid = selectedReceiptPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const selectedReceiptBalance = Math.max((selectedPaymentReceipt?.total ?? 0) - selectedReceiptPaid, 0);
   const hasPurchaseDraft = Boolean(
     documentNumber.trim() || purchaseProductQuery.trim() || newSupplierName.trim() || lines.length || shippingCost || shippingNote.trim() || aiExpected.trim() || aiSource.trim() || aiFileName || aiDraftLines.length
   );
@@ -2106,6 +2121,9 @@ function Purchases() {
     setVatRate(21);
     setShippingCost(0);
     setShippingNote("");
+    setMarkPurchasePaid(false);
+    setPurchasePaymentLines([newPurchasePaymentLine()]);
+    setPurchasePaymentStatus("");
     setLines([]);
     clearPurchaseDraft();
   };
@@ -2159,6 +2177,9 @@ function Purchases() {
     setLines(receipt.lines);
     setVatInputMode(receipt.lines[0]?.unitCostIncludesVat === false ? "sin_iva" : "con_iva");
     setVatRate(receipt.lines[0]?.vatRate ?? 21);
+    setMarkPurchasePaid(false);
+    setPurchasePaymentLines([newPurchasePaymentLine()]);
+    setPurchasePaymentStatus("");
     setPurchasePage("editar");
   };
   const addLine = () => {
@@ -2172,24 +2193,55 @@ function Purchases() {
   };
   const submitReceipt = () => {
     const supplier = resolveSupplierName(suppliers, supplierChoice, newSupplierName);
-    const input = { documentType, documentNumber, purchaseDate, supplier, lines, shippingCost, shippingNote };
+    const payments = purchasePaymentLines.filter((payment) => payment.amount > 0);
+    const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (markPurchasePaid && Math.abs(paidAmount - purchaseTotal) > 0.01) {
+      setPurchasePaymentStatus(`Los pagos deben sumar ${formatMoney(purchaseTotal)} para marcar esta compra como pagada.`);
+      return;
+    }
+    const input = { documentType, documentNumber, purchaseDate, supplier, lines, shippingCost, shippingNote, payments: markPurchasePaid ? payments : undefined };
     const saved = editingReceipt ? updatePurchaseReceipt(editingReceipt.id, input, activeRole) : addPurchaseReceipt(input);
     if (saved) {
       resetPurchaseForm();
       setPurchasePage("recientes");
     }
   };
+  const updatePurchasePaymentLine = (id: string, update: Partial<(typeof purchasePaymentLines)[number]>) => {
+    setPurchasePaymentLines((current) => current.map((payment) => payment.id === id ? { ...payment, ...update } : payment));
+  };
+  const updateRegisteredPaymentLine = (id: string, update: Partial<(typeof registeredPaymentLines)[number]>) => {
+    setRegisteredPaymentLines((current) => current.map((payment) => payment.id === id ? { ...payment, ...update } : payment));
+  };
+  const togglePurchasePaid = (paid: boolean) => {
+    setMarkPurchasePaid(paid);
+    setPurchasePaymentStatus("");
+    if (paid) setPurchasePaymentLines([{ ...newPurchasePaymentLine(), amount: purchaseTotal }]);
+  };
   const removeReceipt = (receipt: PurchaseReceipt) => {
     const ok = window.confirm(`Anular ${receipt.number}? Se revierte el stock ingresado por esta compra y queda en historial.`);
     if (ok) deletePurchaseReceipt(receipt.id, activeRole);
   };
   const submitSupplierPayment = () => {
-    const payment = addSupplierPayment(paymentSupplier, paymentAmount, paymentNote);
-    if (payment) {
-      setPaymentAmount(0);
-      setPaymentNote("");
-      setPurchasePage("cuentas");
+    if (!selectedPaymentReceipt) return;
+    const payments = registeredPaymentLines.filter((payment) => payment.amount > 0);
+    const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    if (!payments.length || total > selectedReceiptBalance + 0.01) {
+      setRegisteredPaymentStatus(`El pago no puede superar el saldo de ${formatMoney(selectedReceiptBalance)}.`);
+      return;
     }
+    const created = payments.every((payment) => addSupplierPayment({
+      supplier: selectedPaymentReceipt.supplier,
+      receiptId: selectedPaymentReceipt.id,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+      note: payment.note
+    }));
+    if (!created) {
+      setRegisteredPaymentStatus("No se pudo guardar el pago. Revisa el saldo e intenta nuevamente.");
+      return;
+    }
+    setRegisteredPaymentLines([newPurchasePaymentLine()]);
+    setRegisteredPaymentStatus("Pago registrado y vinculado a la factura.");
   };
   const readAiFile = (file?: File) => {
     if (!file) return;
@@ -2420,6 +2472,20 @@ function Purchases() {
               {editingReceipt ? "Guardar cambios" : "Registrar compra"}
             </button>
           </div>
+          {!editingReceipt && (
+            <section className="purchase-payment-entry" aria-label="Pago de esta compra">
+              <label className="check-row">
+                <input type="checkbox" checked={markPurchasePaid} onChange={(event) => togglePurchasePaid(event.target.checked)} />
+                Compra pagada
+              </label>
+              {markPurchasePaid && <>
+                <div className="purchase-payment-heading"><strong>Cómo se pagó</strong><span>Podés dividir el total entre distintos medios.</span></div>
+                <PurchasePaymentLineEditor lines={purchasePaymentLines} onChange={updatePurchasePaymentLine} onAdd={() => setPurchasePaymentLines((current) => [...current, newPurchasePaymentLine()])} onRemove={(id) => setPurchasePaymentLines((current) => current.length > 1 ? current.filter((payment) => payment.id !== id) : current)} />
+                <div className="purchase-payment-total"><span>Pagado {formatMoney(purchasePaymentLines.reduce((sum, payment) => sum + payment.amount, 0))}</span><strong>Total {formatMoney(purchaseTotal)}</strong></div>
+                {purchasePaymentStatus && <span className="error-text">{purchasePaymentStatus}</span>}
+              </>}
+            </section>
+          )}
           {editingReceipt && (
             <button className="secondary-action full" onClick={() => {
               resetPurchaseForm();
@@ -2432,12 +2498,23 @@ function Purchases() {
       )}
       {purchasePage === "recientes" && (
         <Panel title="Compras recientes">
-          <PurchaseReceiptList receipts={activePurchaseReceipts} onEdit={editReceipt} onDelete={removeReceipt} />
+          <div className="receipt-view-toolbar">
+            <div><strong>Comprobantes registrados</strong><span>{activePurchaseReceipts.length} compra(s) activas.</span></div>
+            <div className="segmented-control" aria-label="Vista de compras recientes">
+              <button className={clsx(receiptView === "lista" && "active")} onClick={() => setReceiptView("lista")}>
+                <ListBullets size={17} /> Lista
+              </button>
+              <button className={clsx(receiptView === "comprobantes" && "active")} onClick={() => setReceiptView("comprobantes")}>
+                <Receipt size={17} /> Comprobantes
+              </button>
+            </div>
+          </div>
+          <PurchaseReceiptList receipts={activePurchaseReceipts} paymentStates={receiptPaymentStates} view={receiptView} onEdit={editReceipt} onDelete={removeReceipt} />
         </Panel>
       )}
       {purchasePage === "eliminadas" && (
         <Panel title="Compras eliminadas">
-          <PurchaseReceiptList receipts={deletedPurchaseReceipts} onRestore={(receipt) => restorePurchaseReceipt(receipt.id, activeRole)} />
+          <PurchaseReceiptList receipts={deletedPurchaseReceipts} view="lista" onRestore={(receipt) => restorePurchaseReceipt(receipt.id, activeRole)} />
         </Panel>
       )}
       {purchasePage === "historial" && (
@@ -2458,26 +2535,28 @@ function Purchases() {
       )}
       {purchasePage === "pago" && (
         <Panel title="Registrar pago a proveedor">
-          <div className="form-grid one compact">
+          <div className="supplier-payment-form">
             <label>
-              Proveedor
-              <select value={paymentSupplier} onChange={(event) => setPaymentSupplier(event.target.value)}>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
+              Factura o remito cargado
+              <select value={paymentReceiptId} onChange={(event) => {
+                setPaymentReceiptId(event.target.value);
+                setRegisteredPaymentLines([newPurchasePaymentLine()]);
+                setRegisteredPaymentStatus("");
+              }}>
+                <option value="">Seleccionar comprobante</option>
+                {activePurchaseReceipts.map((receipt) => (
+                  <option key={receipt.id} value={receipt.id}>{receipt.number} · {receipt.supplier} · {formatMoney(receipt.total)}</option>
                 ))}
               </select>
             </label>
-            <label>
-              Monto
-              <input type="number" min={0} value={paymentAmount} onChange={(event) => setPaymentAmount(Number(event.target.value))} />
-            </label>
-            <label>
-              Nota
-              <input value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Efectivo, transferencia, referencia" />
-            </label>
-            <button className="primary-action" onClick={submitSupplierPayment} disabled={!paymentSupplier || paymentAmount <= 0}>
-              <Wallet size={18} /> Registrar pago
-            </button>
+            {selectedPaymentReceipt && <>
+              <div className="supplier-payment-summary"><span>{selectedPaymentReceipt.supplier} · Total factura {formatMoney(selectedPaymentReceipt.total)}</span><strong>Saldo a pagar {formatMoney(selectedReceiptBalance)}</strong></div>
+              <PurchasePaymentLineEditor lines={registeredPaymentLines} onChange={updateRegisteredPaymentLine} onAdd={() => setRegisteredPaymentLines((current) => [...current, newPurchasePaymentLine()])} onRemove={(id) => setRegisteredPaymentLines((current) => current.length > 1 ? current.filter((payment) => payment.id !== id) : current)} />
+              <button className="primary-action" aria-label="Confirmar pago de factura" onClick={submitSupplierPayment} disabled={selectedReceiptBalance <= 0}>
+                <Wallet size={18} /> Registrar pago
+              </button>
+              {registeredPaymentStatus && <span className={clsx(registeredPaymentStatus.startsWith("Pago registrado") ? "success-text" : "error-text")}>{registeredPaymentStatus}</span>}
+            </>}
           </div>
         </Panel>
       )}
@@ -4579,57 +4658,137 @@ function OperationAuditList({ entries }: { entries: OperationAuditEntry[] }) {
   );
 }
 
+function newPurchasePaymentLine() {
+  return { id: crypto.randomUUID(), paymentMethod: "efectivo" as PaymentMethod, amount: 0, note: "" };
+}
+
+function PurchasePaymentLineEditor({
+  lines,
+  onChange,
+  onAdd,
+  onRemove
+}: {
+  lines: Array<ReturnType<typeof newPurchasePaymentLine>>;
+  onChange: (id: string, update: Partial<ReturnType<typeof newPurchasePaymentLine>>) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="purchase-payment-lines">
+      {lines.map((payment, index) => (
+        <div className="purchase-payment-line" key={payment.id}>
+          <label>
+            Medio de pago
+            <select value={payment.paymentMethod} onChange={(event) => onChange(payment.id, { paymentMethod: event.target.value as PaymentMethod })}>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="otro">Otro</option>
+            </select>
+          </label>
+          <label>
+            Monto
+            <input aria-label={`Monto del pago ${index + 1}`} type="number" min={0} value={payment.amount} onChange={(event) => onChange(payment.id, { amount: Number(event.target.value) || 0 })} />
+          </label>
+          <label>
+            Referencia
+            <input value={payment.note} onChange={(event) => onChange(payment.id, { note: event.target.value })} placeholder="Opcional" />
+          </label>
+          <button className="icon-button" title="Quitar medio de pago" aria-label={`Quitar pago ${index + 1}`} onClick={() => onRemove(payment.id)} disabled={lines.length === 1}>
+            <Trash size={17} />
+          </button>
+        </div>
+      ))}
+      <button className="secondary-action purchase-payment-add" onClick={onAdd}><PlusCircle size={17} /> Agregar otro medio</button>
+    </div>
+  );
+}
+
 function PurchaseReceiptList({
   receipts,
+  paymentStates,
+  view = "lista",
   onEdit,
   onDelete,
   onRestore
 }: {
   receipts: PurchaseReceipt[];
+  paymentStates?: Map<string, PurchasePaymentState>;
+  view?: PurchaseReceiptView;
   onEdit?: (receipt: PurchaseReceipt) => void;
   onDelete?: (receipt: PurchaseReceipt) => void;
   onRestore?: (receipt: PurchaseReceipt) => void;
 }) {
   if (!receipts.length) return <div className="empty-lines">Sin compras para mostrar.</div>;
+  const getPaymentState = (receipt: PurchaseReceipt) => receipt.deletedAt ? "pendiente" : paymentStates?.get(receipt.id) ?? "pendiente";
+  const renderActions = (receipt: PurchaseReceipt) => (
+    <div className="row-actions">
+      {onRestore ? (
+        <button className="secondary-action" onClick={() => onRestore(receipt)}>
+          <ArrowClockwise size={17} /> Restaurar
+        </button>
+      ) : (
+        <>
+          {onEdit && <button className="secondary-action" onClick={() => onEdit(receipt)}><PencilSimple size={17} /> Editar</button>}
+          {onDelete && <button className="secondary-action danger" onClick={() => onDelete(receipt)}><Trash size={17} /> Anular</button>}
+        </>
+      )}
+    </div>
+  );
+  if (view === "comprobantes") {
+    return (
+      <div className="purchase-receipt-grid">
+        {receipts.map((receipt) => {
+          const paymentState = getPaymentState(receipt);
+          return (
+            <article className="purchase-receipt-sheet" key={receipt.id}>
+              <header>
+                <div><span>Compra a proveedor</span><strong>{receipt.supplier}</strong></div>
+                <span className={clsx("payment-chip", paymentState)}>{paymentState === "pagada" ? "Pagada" : paymentState === "parcial" ? "Pago parcial" : "Pendiente de pago"}</span>
+              </header>
+              <div className="purchase-receipt-reference"><strong>{receipt.number}</strong><span>{receipt.documentNumber || "Sin numero"} · {new Date(receipt.createdAt).toLocaleDateString("es-AR")}</span></div>
+              <div className="purchase-receipt-total"><span>Total comprado</span><strong>{formatMoney(receipt.total)}</strong></div>
+              <section className="purchase-receipt-lines" aria-label={`Artículos de ${receipt.number}`}>
+                <span>Artículos</span>
+                <ul>{receipt.lines.map((line) => <li key={line.variantId}><strong>{line.quantity}</strong><span>{line.name}</span></li>)}</ul>
+              </section>
+              {receipt.shippingCost > 0 && <small>Envío incluido: {formatMoney(receipt.shippingCost)}</small>}
+              {renderActions(receipt)}
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
   return (
-    <div className="table operational-list">
+    <div className="purchase-receipt-list">
       {receipts.map((receipt) => (
-        <div className="table-row operational-row" key={receipt.id}>
-          <div>
-            <strong>{receipt.number} · {receipt.documentType}</strong>
-            <span>
-              {receipt.supplier} · {receipt.documentNumber} · {receipt.lines.length} linea(s)
-              {receipt.shippingCost ? ` · Envio ${formatMoney(receipt.shippingCost)}` : ""}
-              {receipt.vatTotal ? ` · IVA ${formatMoney(receipt.vatTotal)}` : ""}
-              {receipt.deletedAt ? ` · Anulada ${new Date(receipt.deletedAt).toLocaleDateString("es-AR")}` : ""}
-            </span>
-            <span>{receipt.lines.map((line) => `${line.name} x${line.quantity}`).join(" · ")}</span>
-          </div>
-          <strong>{formatMoney(receipt.total)}</strong>
-          <div className="row-actions">
-            {onRestore ? (
-              <button className="secondary-action" onClick={() => onRestore(receipt)}>
-                <ArrowClockwise size={17} /> Restaurar
-              </button>
-            ) : (
-              <>
-                {onEdit && (
-                  <button className="secondary-action" onClick={() => onEdit(receipt)}>
-                    <PencilSimple size={17} /> Editar
-                  </button>
-                )}
-                {onDelete && (
-                  <button className="secondary-action danger" onClick={() => onDelete(receipt)}>
-                    <Trash size={17} /> Anular
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <article className="purchase-receipt-list-row" key={receipt.id}>
+          <div className="purchase-receipt-list-heading"><span>Compra a proveedor</span><strong>{receipt.supplier}</strong><small>{receipt.number} · {receipt.documentNumber || "Sin numero"} · {new Date(receipt.createdAt).toLocaleDateString("es-AR")}</small></div>
+          <ul className="purchase-receipt-list-lines">{receipt.lines.map((line) => <li key={line.variantId}><strong>{line.quantity}</strong><span>{line.name}</span></li>)}</ul>
+          <div className="purchase-receipt-list-total"><span className={clsx("payment-chip", getPaymentState(receipt))}>{receipt.deletedAt ? "Anulada" : getPaymentState(receipt) === "pagada" ? "Pagada" : getPaymentState(receipt) === "parcial" ? "Pago parcial" : "Pendiente de pago"}</span><strong>{formatMoney(receipt.total)}</strong></div>
+          {renderActions(receipt)}
+        </article>
       ))}
     </div>
   );
+}
+
+function getPurchasePaymentStates(receipts: PurchaseReceipt[], payments: { supplier: string; amount: number }[]) {
+  const availablePayments = new Map<string, number>();
+  for (const payment of payments) {
+    const key = payment.supplier.trim().toLocaleLowerCase();
+    availablePayments.set(key, (availablePayments.get(key) ?? 0) + payment.amount);
+  }
+  const states = new Map<string, PurchasePaymentState>();
+  for (const receipt of [...receipts].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())) {
+    const key = receipt.supplier.trim().toLocaleLowerCase();
+    const available = availablePayments.get(key) ?? 0;
+    const applied = Math.min(available, receipt.total);
+    states.set(receipt.id, applied >= receipt.total ? "pagada" : applied > 0 ? "parcial" : "pendiente");
+    availablePayments.set(key, Math.max(available - applied, 0));
+  }
+  return states;
 }
 
 function CartLines({ lines, onRemove }: { lines: SaleLine[]; onRemove: (variantId: string) => void }) {

@@ -23,7 +23,7 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - StockMovement: historial de movimientos de stock.
 - CashClosure: cierre de caja diario con totales por medio de pago y gastos.
 - CashShift: turno operativo de mostrador con efectivo inicial declarado, responsable, apertura, cierre, efectivo contado, efectivo esperado, nota y estado de sincronizacion.
-- SupplierPayment: pago parcial o total a proveedor.
+- SupplierPayment: pago parcial o total a proveedor, con comprobante de compra opcional, medio de pago y nota.
 - CapitalEntry: movimiento privado del dueño para capital propio, capital prestado, prestamos, pagos, retiros o ajustes.
 - RolePermission: permisos editables por rol.
 - BusinessProfile: configuracion inicial del negocio, dominios, moneda, contacto, leyenda de comprobantes y politica de backups.
@@ -41,7 +41,7 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - Product puede tener varias imagenes para galeria publicable. La marca no reemplaza al proveedor: proveedor sostiene compras y costos; marca se usa en Catalogo y puede mostrarse al cliente.
 - Variant usa `webPrice` solamente cuando fue configurado en Catalogo; si no existe, la web usa `price`. El pedido web recalcula este valor en PostgreSQL antes de guardarse.
 - CashClosure resume ventas y gastos del dia para control interno.
-- SupplierPayment permite construir saldo por proveedor junto con PurchaseReceipt.
+- SupplierPayment permite construir saldo por proveedor junto con PurchaseReceipt. Los pagos nuevos se vinculan al comprobante para calcular el saldo de esa factura y admitir pagos divididos.
 - CapitalEntry no reemplaza ventas, gastos ni caja; permite ver estructura de capital y deuda del negocio solo para dueño.
 - RolePermission permite que Configuracion cambie visibilidad de modulos y permiso de descuentos.
 - BusinessProfile alimenta Configuracion > Operativa y define `regaleriashop.com` como web publica y `sistema.regaleriashop.com` como sistema interno.
