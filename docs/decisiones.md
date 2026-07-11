@@ -613,6 +613,20 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: estos bloques conservaban fondos claros en modo noche, rompiendo la continuidad visual y reduciendo legibilidad durante una carga extensa.
 - Alcance: los avisos usan fondo oscuro, borde diferenciado y textos con contraste adecuado, sin cambiar informacion ni comportamiento de compras.
 - Alternativas descartadas: reutilizar el fondo claro del modo dia, porque produce un salto visual y hace que una alerta normal parezca un error.
+
+### Catalogo comercial: marca y precios web independientes
+- Fecha: 2026-07-11.
+- Decision: separar `Marca` de `Proveedor` en la ficha de Catalogo y permitir, por variante, un precio interno obligatorio y un precio web opcional activado por casilla.
+- Motivo: proveedor pertenece a compras, costos y cuentas corrientes; no describe necesariamente la identidad comercial del producto. La tienda puede requerir un precio distinto sin alterar el valor usado por caja o ventas internas.
+- Alcance: no se borra ni modifica el proveedor historico de productos existentes. Cuando no se define marca se muestra `Sin marca`. Si la casilla de precio web queda desactivada, la web usa automaticamente el precio interno. El servidor de pedidos vuelve a calcular el importe usando el precio web guardado, cuando existe, para impedir que el navegador envie un precio alterado.
+- Alternativas descartadas: reutilizar proveedor como marca, porque mezcla datos operativos con informacion comercial; duplicar productos para tener precios distintos, porque fragmentaria stock, historial y SEO.
+
+### Edicion de Catalogo compacta y apta para modo noche
+- Fecha: 2026-07-11.
+- Decision: reducir el espacio de galeria de imagenes, mantener miniaturas visibles y convertir las recomendaciones SEO en un panel desplegable cerrado inicialmente.
+- Motivo: la ficha debe priorizar los datos que se editan con frecuencia y conservar una jerarquia clara en pantallas chicas o con modo noche.
+- Alcance: SEO conserva sus campos y validaciones al abrirse; solo cambia su presentacion. Sus colores se adaptan especificamente al tema oscuro, sin fondos claros ajenos a la interfaz.
+- Alternativas descartadas: ocultar por completo SEO, porque se perderian recomendaciones utiles al publicar; conservar la galeria y SEO siempre expandidos, porque desplazan datos mas operativos y alargan innecesariamente la ficha.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

@@ -7,8 +7,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - User: usuario con rol.
 - Customer: cliente reutilizable para ventas y presupuestos, con contacto y notas.
 - Supplier: proveedor reutilizable para productos, compras y gastos.
-- Product: producto base con categoria, proveedor, descripcion y estado publicable.
-- Variant: variante vendible con SKU, codigo de barra, stock, costo y precio.
+- Product: producto base con categoria, proveedor historico para compras, marca comercial opcional, descripcion y estado publicable.
+- Variant: variante vendible con SKU, codigo de barra, stock, costo, precio interno y precio web opcional.
 - Category: lista administrable de categorias para productos y reportes.
 - Sale: venta con comprobante interno, pago, total, margen, fecha/hora, cliente y turno asociado en ventas nuevas.
 - SaleLine: lineas de venta.
@@ -38,7 +38,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - PurchaseReceipt genera PurchaseLine, StockMovement de ingreso y Expense de categoria Reposicion.
 - OnlineOrder descuenta stock mediante lineas conectadas a Variant y queda como pedido interno, no como factura fiscal.
 - Product se edita visualmente desde Catalogo; Variant y StockMovement sostienen cantidades, costos y precios operativos.
-- Product puede tener varias imagenes para galeria publicable.
+- Product puede tener varias imagenes para galeria publicable. La marca no reemplaza al proveedor: proveedor sostiene compras y costos; marca se usa en Catalogo y puede mostrarse al cliente.
+- Variant usa `webPrice` solamente cuando fue configurado en Catalogo; si no existe, la web usa `price`. El pedido web recalcula este valor en PostgreSQL antes de guardarse.
 - CashClosure resume ventas y gastos del dia para control interno.
 - SupplierPayment permite construir saldo por proveedor junto con PurchaseReceipt.
 - CapitalEntry no reemplaza ventas, gastos ni caja; permite ver estructura de capital y deuda del negocio solo para dueño.

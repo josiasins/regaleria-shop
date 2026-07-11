@@ -3079,24 +3079,23 @@ function Expenses() {
 
 function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId: string | null; onEditProduct: (productId: string) => void; onBack: () => void }) {
   const products = useStore((state) => state.products);
-  const suppliers = useStore((state) => state.suppliers).filter((supplier) => !supplier.deletedAt);
   const categories = useStore((state) => state.categories);
   const activeRole = useStore((state) => state.activeRole);
-  const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
   const updateProductDetails = useStore((state) => state.updateProductDetails);
   const deleteProduct = useStore((state) => state.deleteProduct);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("todas");
-  const [supplierFilter, setSupplierFilter] = useState("todos");
+  const [brandFilter, setBrandFilter] = useState("todas");
   const [webFilter, setWebFilter] = useState("todos");
+  const brands = useMemo(() => Array.from(new Set(products.map((product) => product.brand?.trim()).filter((brand): brand is string => Boolean(brand)))).sort(), [products]);
   const publishableProducts = products.filter((product) => product.publishable);
   const filteredProducts = products.filter((product) => {
-    const text = `${product.name} ${product.category} ${product.supplier} ${product.description} ${product.variants.map((variant) => `${variant.name} ${variant.sku} ${variant.barcode}`).join(" ")}`.toLowerCase();
+    const text = `${product.name} ${product.category} ${product.brand ?? ""} ${product.description} ${product.variants.map((variant) => `${variant.name} ${variant.sku} ${variant.barcode}`).join(" ")}`.toLowerCase();
     return (
       (!query.trim() || text.includes(query.trim().toLowerCase())) &&
       (categoryFilter === "todas" || product.category === categoryFilter) &&
-      (supplierFilter === "todos" || product.supplier === supplierFilter) &&
+      (brandFilter === "todas" || product.brand === brandFilter) &&
       (webFilter === "todos" || (webFilter === "publicables" ? product.publishable : !product.publishable))
     );
   });
@@ -3105,10 +3104,8 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
     return (
       <ProductEditor
         product={editingProduct}
-        suppliers={suppliers}
         categories={categories}
         canDelete={activeRole === "dueno" || activeRole === "administrador"}
-        canSeeSupplier={canSeeSupplier}
         onSave={updateProductDetails}
         onDelete={(productId) => deleteProduct(productId, activeRole)}
         onBack={onBack}
@@ -3148,12 +3145,12 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
             <option key={category} value={category}>{category}</option>
           ))}
         </select>
-        {canSeeSupplier && <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)}>
-          <option value="todos">Todos los proveedores</option>
-          {suppliers.map((supplier) => (
-            <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
+        <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}>
+          <option value="todas">Todas las marcas</option>
+          {brands.map((brand) => (
+            <option key={brand} value={brand}>{brand}</option>
           ))}
-        </select>}
+        </select>
         <select value={webFilter} onChange={(event) => setWebFilter(event.target.value)}>
           <option value="todos">Todos los estados</option>
           <option value="publicables">Web publica</option>
@@ -3162,7 +3159,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
       </div>
       <div className={clsx("catalog-grid", viewMode === "list" && "list-view")}>
         {filteredProducts.map((product) => (
-          <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} showSupplier={canSeeSupplier} />
+          <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} />
         ))}
       </div>
     </section>
@@ -3741,7 +3738,7 @@ function PublicShop() {
 
   const addToCart = (product: Product, variant: Product["variants"][number]) => {
     if (variant.stock < 1) return;
-    setCart((current) => mergeLine(current, buildUiSaleLine(product, variant, 1)));
+    setCart((current) => mergeLine(current, buildUiSaleLine(product, variant, 1, publicVariantPrice(variant))));
     setOrderMessage(`${product.name} se agregó al carrito.`);
   };
   const updateCartQuantity = (variantId: string, nextQuantity: number) => {
@@ -3925,7 +3922,7 @@ function PublicShop() {
           <div className="store-product-grid">
             {visibleProducts.map((product) => {
               const available = product.variants.filter((variant) => variant.stock > 0);
-              const startingPrice = Math.min(...product.variants.map((variant) => variant.price));
+              const startingPrice = Math.min(...product.variants.map(publicVariantPrice));
               return (
                 <article className="store-product-card" key={product.id}>
                   <button className="store-product-image" onClick={() => setSelectedProductId(product.id)}>
@@ -3988,8 +3985,8 @@ function StoreProductDetail({ product, onBack, onAdd }: { product: Product; onBa
         <span>{product.category}</span>
         <h1>{product.name}</h1>
         <p>{product.description}</p>
-        <label>Elegí una opción<select value={variantId} onChange={(event) => setVariantId(event.target.value)}>{product.variants.map((item) => <option key={item.id} value={item.id} disabled={item.stock < 1}>{item.name} · {formatMoney(item.price)}{item.stock < 1 ? " · Sin stock" : ""}</option>)}</select></label>
-        {variant && <><strong className="store-detail-price">{formatMoney(variant.price)}</strong><small>{variant.stock > 0 ? `${variant.stock} disponible(s)` : "Sin stock"}</small></>}
+        <label>Elegí una opción<select value={variantId} onChange={(event) => setVariantId(event.target.value)}>{product.variants.map((item) => <option key={item.id} value={item.id} disabled={item.stock < 1}>{item.name} · {formatMoney(publicVariantPrice(item))}{item.stock < 1 ? " · Sin stock" : ""}</option>)}</select></label>
+        {variant && <><strong className="store-detail-price">{formatMoney(publicVariantPrice(variant))}</strong><small>{variant.stock > 0 ? `${variant.stock} disponible(s)` : "Sin stock"}</small></>}
         <button className="store-primary-button large" onClick={() => variant && onAdd(product, variant)} disabled={!variant || variant.stock < 1}><ShoppingCartSimple size={20} /> Agregar al carrito</button>
       </div>
     </main>
@@ -4021,19 +4018,21 @@ function SeoGuidance({
   ];
   const score = checks.filter((check) => check.ok).length;
   return (
-    <section className="seo-guidance">
-      <div className="seo-heading">
+    <details className="seo-guidance">
+      <summary className="seo-heading">
         <div><strong>SEO para la web</strong><span>{score}/4 recomendaciones cumplidas</span></div>
         <span className={clsx("seo-score", score >= 3 && "good")}>{score >= 3 ? "Bien preparado" : "A mejorar"}</span>
+      </summary>
+      <div className="seo-content">
+        <label>Título SEO<input value={seoTitle} onChange={(event) => onTitleChange(event.target.value)} placeholder={name ? `${name} | Regaleria Shop` : "Nombre del producto | Regaleria Shop"} /><small>{titleValue.length}/60</small></label>
+        <label>Descripción SEO<textarea value={seoDescription} onChange={(event) => onDescriptionChange(event.target.value)} placeholder={description || "Resumen claro del producto, beneficio y ocasión de regalo."} /><small>{descriptionValue.length}/160</small></label>
+        <div className="seo-checks">{checks.map((check) => <span className={clsx(check.ok && "complete")} key={check.text}><CheckCircle size={15} /> {check.text}</span>)}</div>
       </div>
-      <label>Título SEO<input value={seoTitle} onChange={(event) => onTitleChange(event.target.value)} placeholder={name ? `${name} | Regaleria Shop` : "Nombre del producto | Regaleria Shop"} /><small>{titleValue.length}/60</small></label>
-      <label>Descripción SEO<textarea value={seoDescription} onChange={(event) => onDescriptionChange(event.target.value)} placeholder={description || "Resumen claro del producto, beneficio y ocasión de regalo."} /><small>{descriptionValue.length}/160</small></label>
-      <div className="seo-checks">{checks.map((check) => <span className={clsx(check.ok && "complete")} key={check.text}><CheckCircle size={15} /> {check.text}</span>)}</div>
-    </section>
+    </details>
   );
 }
 
-function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Product; onEdit: () => void; viewMode: "grid" | "list"; showSupplier: boolean }) {
+function ProductCard({ product, onEdit, viewMode }: { product: Product; onEdit: () => void; viewMode: "grid" | "list" }) {
   const [imageIndex, setImageIndex] = useState(0);
   const totalStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
   const prices = product.variants.map((variant) => variant.price).filter((price) => price > 0);
@@ -4065,7 +4064,7 @@ function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Pro
         </div>
         <div className="catalog-meta">
           <span className="chip">{product.category}</span>
-          {showSupplier && <span className="chip">{product.supplier}</span>}
+          <span className="chip">{product.brand?.trim() || "Sin marca"}</span>
           <span className={clsx("chip", product.publishable && "success")}>{product.publishable ? "Web publica" : "Interno"}</span>
           <span className="chip">Stock {totalStock}</span>
         </div>
@@ -4076,19 +4075,15 @@ function ProductCard({ product, onEdit, viewMode, showSupplier }: { product: Pro
 
 function ProductEditor({
   product,
-  suppliers,
   categories,
   canDelete,
-  canSeeSupplier,
   onSave,
   onDelete,
   onBack
 }: {
   product: Product;
-  suppliers: Supplier[];
   categories: string[];
   canDelete: boolean;
-  canSeeSupplier: boolean;
   onSave: (input: ProductUpdateInput) => Promise<boolean>;
   onDelete: (productId: string) => Promise<boolean>;
   onBack: () => void;
@@ -4102,7 +4097,7 @@ function ProductEditor({
   const [draft, setDraft] = useState({
     name: product.name,
     category: product.category,
-    supplier: product.supplier,
+    brand: product.brand ?? "",
     description: product.description,
     imageUrl: product.imageUrl,
     imageUrls: product.imageUrls?.length ? product.imageUrls : [product.imageUrl],
@@ -4111,12 +4106,18 @@ function ProductEditor({
     seoDescription: product.seoDescription ?? "",
     publishable: product.publishable
   });
+  const [priceDrafts, setPriceDrafts] = useState(() => product.variants.map((variant) => ({
+    variantId: variant.id,
+    price: variant.price,
+    usesWebPrice: variant.webPrice !== undefined,
+    webPrice: variant.webPrice ?? variant.price
+  })));
 
   useEffect(() => {
     setDraft({
       name: product.name,
       category: product.category,
-      supplier: product.supplier,
+      brand: product.brand ?? "",
       description: product.description,
       imageUrl: product.imageUrl,
       imageUrls: product.imageUrls?.length ? product.imageUrls : [product.imageUrl],
@@ -4125,12 +4126,15 @@ function ProductEditor({
       seoDescription: product.seoDescription ?? "",
       publishable: product.publishable
     });
+    setPriceDrafts(product.variants.map((variant) => ({
+      variantId: variant.id,
+      price: variant.price,
+      usesWebPrice: variant.webPrice !== undefined,
+      webPrice: variant.webPrice ?? variant.price
+    })));
     setSelectedImage(0);
   }, [product]);
 
-  const supplierOptions = suppliers.some((supplier) => supplier.name === product.supplier)
-    ? suppliers
-    : [{ id: "current_supplier", name: product.supplier, phone: "", email: "", note: "", createdAt: "", syncStatus: "sincronizado" as const }, ...suppliers];
   const categoryOptions = categories.includes(product.category) ? categories : [product.category, ...categories];
   const totalStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
   const gallery = draft.imageUrls.filter(Boolean);
@@ -4139,7 +4143,17 @@ function ProductEditor({
   const save = async () => {
     const imageUrls = gallery.length ? gallery : [draft.imageUrl].filter(Boolean);
     setSaveStatus("Guardando en la nube...");
-    const saved = await onSave({ productId: product.id, ...draft, imageUrl: imageUrls[0] || draft.imageUrl, imageUrls });
+    const saved = await onSave({
+      productId: product.id,
+      ...draft,
+      imageUrl: imageUrls[0] || draft.imageUrl,
+      imageUrls,
+      pricing: priceDrafts.map((pricing) => ({
+        variantId: pricing.variantId,
+        price: Math.max(pricing.price, 0),
+        webPrice: pricing.usesWebPrice ? Math.max(pricing.webPrice, 0) : null
+      }))
+    });
     if (saved) {
       onBack();
       return;
@@ -4193,6 +4207,9 @@ function ProductEditor({
       return;
     }
     setDeleteStatus("No se pudo eliminar el producto. Intenta nuevamente.");
+  };
+  const updatePriceDraft = (variantId: string, update: Partial<(typeof priceDrafts)[number]>) => {
+    setPriceDrafts((current) => current.map((pricing) => pricing.variantId === variantId ? { ...pricing, ...update } : pricing));
   };
 
   return (
@@ -4286,19 +4303,41 @@ function ProductEditor({
                   ))}
                 </select>
               </label>
-              {canSeeSupplier && <label>
-                Proveedor
-                <select value={draft.supplier} onChange={(event) => setDraft({ ...draft, supplier: event.target.value })}>
-                  {supplierOptions.map((supplier) => (
-                    <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
-                  ))}
-                </select>
-              </label>}
+              <label>
+                Marca
+                <input value={draft.brand} onChange={(event) => setDraft({ ...draft, brand: event.target.value })} placeholder="Ej: Stanley, Oreiro" />
+              </label>
             </div>
             <label>
               Descripcion publicable
               <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Descripcion corta para la web" />
             </label>
+            <section className="pricing-editor" aria-label="Precios del producto">
+              <div className="pricing-heading">
+                <div><strong>Precios</strong><span>El precio interno se usa en caja; el web solo cambia cuando lo activás.</span></div>
+              </div>
+              {product.variants.map((variant) => {
+                const pricing = priceDrafts.find((item) => item.variantId === variant.id);
+                if (!pricing) return null;
+                return (
+                  <div className="variant-price-row" key={variant.id}>
+                    <div className="variant-price-identity"><strong>{variant.name}</strong><span>{variant.sku || "Sin codigo"}</span></div>
+                    <label>
+                      Precio interno
+                      <input aria-label={`Precio interno - ${variant.name}`} type="number" min="0" value={pricing.price} onChange={(event) => updatePriceDraft(variant.id, { price: Number(event.target.value) || 0 })} />
+                    </label>
+                    <label className="price-web-toggle">
+                      <input aria-label={`Usar precio web - ${variant.name}`} type="checkbox" checked={pricing.usesWebPrice} onChange={(event) => updatePriceDraft(variant.id, { usesWebPrice: event.target.checked, webPrice: event.target.checked ? pricing.webPrice || pricing.price : pricing.webPrice })} />
+                      Precio distinto en web
+                    </label>
+                    {pricing.usesWebPrice && <label>
+                      Precio web
+                      <input aria-label={`Precio web - ${variant.name}`} type="number" min="0" value={pricing.webPrice} onChange={(event) => updatePriceDraft(variant.id, { webPrice: Number(event.target.value) || 0 })} />
+                    </label>}
+                  </div>
+                );
+              })}
+            </section>
             <SeoGuidance
               name={draft.name}
               description={draft.description}
@@ -4314,7 +4353,7 @@ function ProductEditor({
           </div>
           <div className="catalog-meta">
             <span className="chip">{draft.category}</span>
-            {canSeeSupplier && <span className="chip">{draft.supplier}</span>}
+            <span className="chip">{draft.brand.trim() || "Sin marca"}</span>
             <span className={clsx("chip", draft.publishable && "success")}>{draft.publishable ? "Web publica" : "Interno"}</span>
           <span className="chip">Stock {totalStock}</span>
           </div>
@@ -4727,14 +4766,18 @@ function variantOptions(products: Product[]) {
   );
 }
 
-function buildUiSaleLine(product: Product, variant: Product["variants"][number], quantity: number): SaleLine {
+function publicVariantPrice(variant: Product["variants"][number]) {
+  return variant.webPrice ?? variant.price;
+}
+
+function buildUiSaleLine(product: Product, variant: Product["variants"][number], quantity: number, unitPrice = variant.price): SaleLine {
   return {
     productId: product.id,
     variantId: variant.id,
     name: `${product.name} - ${variant.name}`,
     sku: variant.sku,
     quantity,
-    unitPrice: variant.price,
+    unitPrice,
     unitCost: variant.cost
   };
 }

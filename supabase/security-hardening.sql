@@ -337,7 +337,7 @@ begin
     end if;
 
     current_stock := (variant_data->>'stock')::integer;
-    unit_price := (variant_data->>'price')::numeric;
+    unit_price := coalesce((variant_data->>'webPrice')::numeric, (variant_data->>'price')::numeric);
     unit_cost := (variant_data->>'cost')::numeric;
 
     if current_stock < requested_quantity then

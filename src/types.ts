@@ -13,6 +13,8 @@ export interface Variant {
   lowStockAt: number;
   cost: number;
   price: number;
+  /** Precio opcional exclusivo para la tienda publica. Sin valor, usa el precio interno. */
+  webPrice?: number;
 }
 
 export interface Product {
@@ -20,6 +22,7 @@ export interface Product {
   name: string;
   category: string;
   supplier: string;
+  brand?: string;
   description: string;
   publishable: boolean;
   imageUrl: string;
@@ -40,7 +43,8 @@ export interface ProductUpdateInput {
   productId: string;
   name: string;
   category: string;
-  supplier: string;
+  supplier?: string;
+  brand?: string;
   description: string;
   imageUrl: string;
   imageUrls?: string[];
@@ -48,6 +52,11 @@ export interface ProductUpdateInput {
   seoTitle?: string;
   seoDescription?: string;
   publishable: boolean;
+  pricing?: Array<{
+    variantId: string;
+    price: number;
+    webPrice: number | null;
+  }>;
 }
 
 export interface VariantCreateInput {

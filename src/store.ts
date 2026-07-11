@@ -909,11 +909,13 @@ export const useStore = create<AppState>((set, get) => ({
     if (!input.name.trim()) return false;
     const current = get().products.find((item) => item.id === input.productId);
     if (!current) return false;
+    const pricingByVariant = new Map(input.pricing?.map((pricing) => [pricing.variantId, pricing]));
     const product: Product = {
       ...current,
       name: input.name.trim(),
       category: input.category.trim() || "Sin categoria",
-      supplier: input.supplier.trim() || "Sin proveedor",
+      supplier: input.supplier?.trim() || current.supplier,
+      brand: input.brand?.trim() || undefined,
       description: input.description.trim(),
       imageUrl: input.imageUrl.trim() || current.imageUrl,
       imageUrls: input.imageUrls?.length ? input.imageUrls.map((url) => url.trim()).filter(Boolean) : current.imageUrls,
@@ -921,6 +923,15 @@ export const useStore = create<AppState>((set, get) => ({
       seoTitle: input.seoTitle?.trim(),
       seoDescription: input.seoDescription?.trim(),
       publishable: input.publishable,
+      variants: current.variants.map((variant) => {
+        const pricing = pricingByVariant.get(variant.id);
+        if (!pricing) return variant;
+        return {
+          ...variant,
+          price: Math.max(pricing.price, 0),
+          webPrice: pricing.webPrice === null ? undefined : Math.max(pricing.webPrice, 0)
+        };
+      }),
       syncStatus: "sincronizado"
     };
     const saved = await saveCloudProduct(product);

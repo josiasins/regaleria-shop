@@ -420,6 +420,33 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
   });
 
+  it("keeps supplier data while saving brand and separate catalog prices", async () => {
+    const user = userEvent.setup();
+    const originalProduct = useStore.getState().products[0];
+    const originalSupplier = originalProduct.supplier;
+    const variant = originalProduct.variants[0];
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
+    await user.clear(screen.getByLabelText("Marca"));
+    await user.type(screen.getByLabelText("Marca"), "Marca de prueba");
+    await user.clear(screen.getByLabelText(`Precio interno - ${variant.name}`));
+    await user.type(screen.getByLabelText(`Precio interno - ${variant.name}`), "15400");
+    expect(screen.getByLabelText(`Usar precio web - ${variant.name}`)).not.toBeChecked();
+    await user.click(screen.getByLabelText(`Usar precio web - ${variant.name}`));
+    await user.clear(screen.getByLabelText(`Precio web - ${variant.name}`));
+    await user.type(screen.getByLabelText(`Precio web - ${variant.name}`), "14900");
+    expect(screen.getByText("Título SEO")).not.toBeVisible();
+    await user.click(screen.getByText("SEO para la web"));
+    expect(screen.getByText("Título SEO")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Guardar producto/i }));
+
+    const saved = useStore.getState().products.find((product) => product.id === originalProduct.id);
+    expect(saved).toMatchObject({ supplier: originalSupplier, brand: "Marca de prueba" });
+    expect(saved?.variants.find((item) => item.id === variant.id)).toMatchObject({ price: 15400, webPrice: 14900 });
+  });
+
   it("allows the owner to delete a product after confirmation", async () => {
     const user = userEvent.setup();
     render(<App />);

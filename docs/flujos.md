@@ -344,3 +344,13 @@
 7. La persona revisa fotos, descripcion y visibilidad web.
 8. Al guardar producto se actualiza la ficha publicable con URLs internas estables.
 9. En una etapa futura, el almacenamiento pasara a nube/S3 cuando exista backend productivo.
+
+## Edicion comercial de producto
+
+1. Desde Catalogo se abre `Editar` en la ficha del producto.
+2. Se actualizan producto, categoria, marca, descripcion, imagenes y visibilidad web; proveedor no se modifica desde esta pantalla.
+3. Cada variante muestra su precio interno actual.
+4. La persona puede activar `Precio distinto en web`; recien entonces carga el precio exclusivo de la tienda publica.
+5. Si la casilla queda desactivada, la web conserva el precio interno para esa variante.
+6. Al guardar, se conserva proveedor, historial y stock; se actualizan solo los datos comerciales y los precios elegidos.
+7. SEO permanece cerrado para reducir ruido visual y se abre solo cuando se quiere completar titulo, descripcion o revisar recomendaciones.
