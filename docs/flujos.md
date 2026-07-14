@@ -1,27 +1,26 @@
 # Flujos Clave
 
-## Venta rapida
-
-1. Debe existir un turno de caja abierto.
-2. El vendedor selecciona o escanea producto.
-3. Ingresa cantidad y medio de pago.
-4. El sistema valida stock disponible.
-5. Se crea venta con comprobante interno, fecha, hora, cliente consumidor final y turno asociado.
-6. Se descuenta stock.
-7. Se genera movimiento de stock tipo venta.
-8. La venta queda sincronizada o pendiente, segun conectividad futura.
-
-## Venta detallada
+## Registrar venta en mostrador
 
 1. Debe existir un turno de caja abierto.
 2. Se elige Consumidor final, un cliente existente o se crea un cliente rapido.
 3. Se cargan varias lineas en un carrito de venta.
 4. Se aplican descuentos.
-5. Se registra medio de pago.
+5. Se define el estado de cobro: pagada, pago parcial o pendiente. Si hay dinero recibido, se indica medio e importe.
 6. El sistema valida stock disponible por cada variante.
 7. Se crea comprobante interno con fecha, hora, cliente y turno asociado.
-8. Se descuenta stock y se generan movimientos tipo venta.
-9. Se puede emitir comprobante interno PDF.
+8. Se descuenta stock y se generan movimientos tipo venta, independientemente de que el pago quede pendiente.
+9. El cobro inicial, cuando existe, guarda importe, medio, turno y fecha/hora.
+10. Se puede emitir comprobante interno PDF.
+
+## Cobro posterior de venta pendiente
+
+1. Debe existir un turno abierto para registrar el dinero recibido.
+2. En Mostrador > Cobros pendientes se selecciona la venta y se muestra el saldo real.
+3. Se ingresa el importe, medio de pago y una nota opcional.
+4. El sistema agrega un evento de cobro, sin editar ni duplicar la venta original.
+5. La venta cambia a pago parcial o pagada cuando corresponde; la accion queda en auditoria.
+6. El cierre de turno toma este cobro por la fecha/turno del cobro, aunque la venta se haya originado antes.
 
 ## Presupuesto
 
@@ -178,9 +177,9 @@
 1. Ventas muestra si hay turno abierto o si falta abrirlo.
 2. El cajero declara efectivo inicial y puede agregar una nota del turno.
 3. El turno queda pendiente de sincronizacion como dato operativo.
-4. No se puede cobrar si no hay turno abierto.
-5. Cada venta queda asociada al turno abierto.
-6. Ventas recientes muestra solo las ventas del turno.
+4. No se puede registrar una venta ni un cobro posterior si no hay turno abierto.
+5. Cada venta queda asociada al turno que la originó y cada cobro al turno donde se recibió el dinero.
+6. Ventas recientes muestra las ventas originadas en el turno; los totales de caja muestran todos los cobros recibidos dentro del turno.
 7. Al cerrar turno se declara el efectivo contado.
 8. El sistema muestra efectivo esperado, diferencia, medios de pago y detalle de ventas.
 9. Este turno no reemplaza caja central ni cierre diario; solo controla la caja fisica de mostrador.

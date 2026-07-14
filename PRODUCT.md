@@ -20,6 +20,7 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 - Primero operacion diaria: cobrar, buscar, cargar stock y cerrar caja debe ser rapido.
 - La edicion aparece bajo demanda; las pantallas principales priorizan lectura y escaneo.
 - Cada cambio importante deja historial o estado de sincronizacion.
+- Los datos operativos ya registrados se preservan entre versiones: una mejora no puede reiniciarlos, reemplazarlos por demo ni alterar su significado. Las correcciones y cobros agregan historial auditable.
 - El sistema es online en V1, pero conserva base para offline parcial.
 - Los datos repetibles, como categorias, clientes y proveedores, se administran como listas reutilizables.
 - La IA queda limitada a precarga documental de compras; las imágenes de producto se gestionan manualmente.

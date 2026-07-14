@@ -2,6 +2,26 @@
 
 Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas descartadas.
 
+## 2026-07-14
+
+### Preservacion obligatoria de datos operativos
+- Decision: declarar como regla permanente que una mejora, deploy o cambio de interfaz no puede borrar, reiniciar, sustituir por datos demo ni reinterpretar silenciosamente ventas, turnos, pagos, compras, gastos, capital, stock o auditorias ya registradas.
+- Motivo: la operacion real depende de que cada comprobante y movimiento conserve continuidad entre dispositivos, recargas y versiones publicadas.
+- Implementacion: se incorporo `docs/reglas-datos.md`; los cambios deben conservar compatibilidad, persistir en Supabase y agregar eventos/auditoria en vez de pisar historia.
+- Alternativas descartadas: reconstruir el estado desde fixtures durante actualizaciones, porque rompe confianza; borrar y volver a cargar datos para simplificar cambios, porque elimina evidencia operativa.
+
+### Cobros parciales y pendientes en mostrador
+- Decision: reemplazar el cobro unico de una venta por un historial de cobros; una venta detallada puede quedar pagada, con pago parcial o pendiente, y recibe pagos posteriores desde Mostrador.
+- Motivo: cobrar en partes es una operacion real y debe impactar caja por el dinero recibido en cada turno, sin alterar el comprobante ni perder el saldo.
+- Implementacion: cada cobro guarda importe, medio, fecha/hora, turno y nota opcional; la accion queda auditada. Las ventas previas sin lista de cobros conservan compatibilidad y se interpretan como pagadas por el total historico.
+- Alternativas descartadas: editar un unico campo de total pagado, porque borra la secuencia de cobros; duplicar ventas por cada cuota, porque distorsiona stock, margen y comprobantes.
+
+### Mostrador unificado y jerarquia visual
+- Decision: retirar Caja rapida de la interfaz y dejar un unico flujo de Registrar venta con varias lineas, cliente, descuento y estado de cobro. Se ajusta la jerarquia transversal de paneles, tabs, estados y acciones para temas claro y noche.
+- Motivo: dos flujos de venta competian visualmente, duplicaban logica y hacian mas dificil operar y auditar. La revision de diseño detecto que paneles, estados y acciones tenian contraste/peso demasiado parecidos.
+- Implementacion: los controles activos tienen acento claro, los estados se expresan como chips semanticos y los paneles nocturnos pierden sombras decorativas para priorizar contenido, total y accion principal.
+- Alternativas descartadas: conservar ambos flujos con cambios menores, porque mantenia dos caminos de caja; cambiar solo Compras, porque el problema de jerarquia era transversal.
+
 ## 2026-07-04
 
 ### Historial de stock completo y consultable

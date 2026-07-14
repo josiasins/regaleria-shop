@@ -3,6 +3,7 @@ export type SyncStatus = "sincronizado" | "pendiente" | "con_conflicto" | "fallo
 export type TransferStatus = "pendiente" | "confirmado" | "rechazado";
 export type StockMovementType = "ingreso" | "venta" | "ajuste" | "devolucion" | "perdida_rotura";
 export type PaymentMethod = "efectivo" | "transferencia" | "tarjeta" | "otro";
+export type SalePaymentStatus = "pagada" | "parcial" | "pendiente";
 
 export interface Variant {
   id: string;
@@ -130,6 +131,15 @@ export interface SaleLine {
   unitCost: number;
 }
 
+export interface SalePayment {
+  id: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  createdAt: string;
+  shiftId?: string;
+  note?: string;
+}
+
 export interface Sale {
   id: string;
   receiptNumber: string;
@@ -139,6 +149,10 @@ export interface Sale {
   lines: SaleLine[];
   discount: number;
   paymentMethod: PaymentMethod;
+  /** Las ventas anteriores sin este campo se interpretan como pagadas por su total historico. */
+  paymentStatus?: SalePaymentStatus;
+  paidAmount?: number;
+  payments?: SalePayment[];
   internalNote?: string;
   total: number;
   margin: number;
@@ -153,6 +167,8 @@ export interface SaleDraftInput {
   lines: SaleLine[];
   discount: number;
   paymentMethod: PaymentMethod;
+  paymentStatus?: SalePaymentStatus;
+  initialPaymentAmount?: number;
   internalNote?: string;
 }
 
@@ -397,7 +413,7 @@ export interface CashShiftAuditUpdateInput {
 }
 
 export type SalesAuditEntity = "venta" | "turno";
-export type SalesAuditAction = "correccion" | "eliminacion" | "restauracion";
+export type SalesAuditAction = "correccion" | "cobro" | "eliminacion" | "restauracion";
 
 export interface SalesAuditEntry {
   id: string;

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "./App";
-import { resetStore, useStore } from "./store";
+import { resetStore, salePaidAmount, salePaymentStatus, useStore } from "./store";
 
 describe("Regaleria app", () => {
   beforeEach(() => {
@@ -18,18 +18,19 @@ describe("Regaleria app", () => {
     expect(screen.getByText("Decisiones sugeridas")).toBeInTheDocument();
   });
 
-  it("requires an open shift before creating a quick sale", async () => {
+  it("requires an open shift before registering a sale", async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Ventas/i }));
-    expect(screen.getByRole("button", { name: /Cobrar/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Registrar venta/i })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Turnos" }));
     await user.clear(screen.getByLabelText("Efectivo inicial"));
     await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
 
-    await user.click(screen.getByRole("button", { name: /Cobrar/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
     expect(screen.getByText("CI-000003")).toBeInTheDocument();
     expect(screen.getByText(/Consumidor final/i)).toBeInTheDocument();
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
@@ -183,10 +184,40 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Nuevo cliente"), "Rocio mostrador");
     await user.click(screen.getByRole("button", { name: /Agregar/i }));
     expect((await screen.findAllByText(/MAT-PREM-NEG/i)).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /Cerrar venta/i }));
+    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
 
     expect((await screen.findAllByText(/Rocio mostrador/i)).length).toBeGreaterThan(0);
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
+  });
+
+  it("keeps historical sales intact and records later partial collections", () => {
+    const historicalSale = useStore.getState().sales[0];
+    expect(salePaymentStatus(historicalSale)).toBe("pagada");
+    expect(salePaidAmount(historicalSale)).toBe(historicalSale.total);
+
+    const state = useStore.getState();
+    const shift = state.openCashShift(2000, "dueno", "Cobro de pendientes");
+    const product = state.products[0];
+    const variant = product.variants[0];
+    const partialSale = useStore.getState().addDetailedSale({
+      shiftId: shift?.id ?? "",
+      customerName: "Cliente con saldo",
+      lines: [{ productId: product.id, variantId: variant.id, name: `${product.name} - ${variant.name}`, sku: variant.sku, quantity: 1, unitPrice: variant.price, unitCost: variant.cost }],
+      discount: 0,
+      paymentMethod: "efectivo",
+      paymentStatus: "parcial",
+      initialPaymentAmount: 1000
+    });
+
+    expect(partialSale).toMatchObject({ paymentStatus: "parcial", paidAmount: 1000 });
+    const completed = useStore.getState().addSalePayment(partialSale?.id ?? "", {
+      amount: Math.max((partialSale?.total ?? 0) - 1000, 0),
+      paymentMethod: "transferencia",
+      shiftId: shift?.id,
+      requestedBy: "dueno"
+    });
+    expect(completed).toMatchObject({ paymentStatus: "pagada", paidAmount: partialSale?.total });
+    expect(useStore.getState().salesAuditEntries[0]).toMatchObject({ entityType: "venta", action: "cobro" });
   });
 
   it("can close a shift with the current shift sales detail", async () => {
@@ -199,7 +230,8 @@ describe("Regaleria app", () => {
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
 
     await user.click(screen.getByRole("button", { name: "Mostrador" }));
-    await user.click(screen.getByRole("button", { name: /Cobrar/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
     await user.click(screen.getByRole("button", { name: "Turnos" }));
     expect(screen.getByText(/Efectivo esperado/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Cerrar turno/i }));
@@ -218,7 +250,8 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
     await user.click(screen.getByRole("button", { name: "Mostrador" }));
-    await user.click(screen.getByRole("button", { name: /Cobrar/i }));
+    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
 
     await user.click(screen.getByRole("button", { name: "Auditoria" }));
     await user.type(screen.getByLabelText("Motivo"), "Error de carga");

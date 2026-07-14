@@ -36,6 +36,7 @@ import type {
   SaleAuditUpdateInput,
   SaleDraftInput,
   SaleLine,
+  SalePayment,
   SalesAuditEntry,
   StockAdjustmentInput,
   StockBatchAdjustmentInput,
@@ -95,6 +96,7 @@ interface AppState {
   voidStockMovementBatch: (operationId: string, reason: string, requestedBy: Role) => boolean;
   addQuickSale: (variantId: string, quantity: number, paymentMethod: PaymentMethod, shiftId: string, discount?: number) => Sale | null;
   addDetailedSale: (input: SaleDraftInput & { shiftId: string }) => Sale | null;
+  addSalePayment: (saleId: string, input: { amount: number; paymentMethod: PaymentMethod; note?: string; shiftId?: string; requestedBy: Role }) => Sale | null;
   addQuote: (input: QuoteDraftInput) => Quote | null;
   addExpense: (expense: ExpenseDraftInput) => void;
   updateExpense: (id: string, expense: ExpenseDraftInput, requestedBy: Role) => boolean;
@@ -153,6 +155,42 @@ type OperationalStateFields = Pick<
 
 const money = (value: number) => Math.round(value * 100) / 100;
 const nextNumber = (prefix: string, count: number) => `${prefix}-${String(count + 1).padStart(6, "0")}`;
+const paymentMethodLabel: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  otro: "Otro"
+};
+
+function formatPaymentMethod(method: PaymentMethod) {
+  return paymentMethodLabel[method];
+}
+
+export function salePaymentEntries(sale: Sale): SalePayment[] {
+  // An explicit empty array is a new sale left pending. Older sales have no payments field.
+  if (sale.payments !== undefined) return sale.payments;
+  const historicalPaidAmount = sale.paidAmount ?? sale.total;
+  if (historicalPaidAmount <= 0) return [];
+  return [{
+    id: `historical_${sale.id}`,
+    amount: historicalPaidAmount,
+    paymentMethod: sale.paymentMethod,
+    createdAt: sale.createdAt,
+    shiftId: sale.shiftId,
+    note: "Pago historico"
+  }];
+}
+
+export function salePaidAmount(sale: Sale) {
+  return money(salePaymentEntries(sale).reduce((sum, payment) => sum + payment.amount, 0));
+}
+
+export function salePaymentStatus(sale: Sale) {
+  const paidAmount = salePaidAmount(sale);
+  if (paidAmount <= 0) return "pendiente" as const;
+  if (paidAmount < sale.total) return "parcial" as const;
+  return "pagada" as const;
+}
 
 function purchaseDateToIso(value: string | undefined, fallback = new Date().toISOString()) {
   if (!value) return fallback;
@@ -1320,6 +1358,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     const line = buildSaleLine(found.product, found.variant, quantity);
     const totals = saleTotals([line], discount);
+    const createdAt = new Date().toISOString();
     const sale: Sale = {
       id: `local_sale_${crypto.randomUUID()}`,
       receiptNumber: nextNumber("CI", get().sales.length),
@@ -1329,9 +1368,18 @@ export const useStore = create<AppState>((set, get) => ({
       lines: [line],
       discount,
       paymentMethod,
+      paymentStatus: "pagada",
+      paidAmount: totals.total,
+      payments: [{
+        id: `local_salepay_${crypto.randomUUID()}`,
+        amount: totals.total,
+        paymentMethod,
+        createdAt,
+        shiftId
+      }],
       total: totals.total,
       margin: totals.margin,
-      createdAt: new Date().toISOString(),
+      createdAt,
       syncStatus: "pendiente"
     };
     const movement: StockMovement = {
@@ -1367,6 +1415,17 @@ export const useStore = create<AppState>((set, get) => ({
     const shift = get().cashShifts.find((item) => item.id === input.shiftId && !item.closedAt);
     if (!shift || !cleanLines.length || !hasAvailableStock(get().products, cleanLines)) return null;
     const totals = saleTotals(cleanLines, input.discount);
+    const total = totals.total;
+    const initialPaymentAmount = input.paymentStatus === "pendiente" ? 0 : Math.min(Math.max(input.initialPaymentAmount ?? total, 0), total);
+    const initialPayment = initialPaymentAmount > 0
+      ? [{
+          id: `local_salepay_${crypto.randomUUID()}`,
+          amount: money(initialPaymentAmount),
+          paymentMethod: input.paymentMethod,
+          createdAt: new Date().toISOString(),
+          shiftId: input.shiftId
+        }]
+      : [];
     const sale: Sale = {
       id: `local_sale_${crypto.randomUUID()}`,
       receiptNumber: nextNumber("CI", get().sales.length),
@@ -1376,8 +1435,11 @@ export const useStore = create<AppState>((set, get) => ({
       lines: cleanLines,
       discount: input.discount,
       paymentMethod: input.paymentMethod,
+      paymentStatus: initialPaymentAmount >= total ? "pagada" : initialPaymentAmount > 0 ? "parcial" : "pendiente",
+      paidAmount: money(initialPaymentAmount),
+      payments: initialPayment,
       internalNote: input.internalNote?.trim(),
-      total: totals.total,
+      total,
       margin: totals.margin,
       createdAt: new Date().toISOString(),
       syncStatus: "pendiente"
@@ -1394,6 +1456,47 @@ export const useStore = create<AppState>((set, get) => ({
     }));
     syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
     return sale;
+  },
+  addSalePayment: (saleId, input) => {
+    const sale = get().sales.find((item) => item.id === saleId && !item.deletedAt);
+    const amount = money(input.amount);
+    if (!sale || amount <= 0) return null;
+    const paidAmount = salePaidAmount(sale);
+    const balance = money(sale.total - paidAmount);
+    if (amount > balance) return null;
+    const payment: SalePayment = {
+      id: `local_salepay_${crypto.randomUUID()}`,
+      amount,
+      paymentMethod: input.paymentMethod,
+      createdAt: new Date().toISOString(),
+      shiftId: input.shiftId,
+      note: input.note?.trim() || undefined
+    };
+    const payments = [...salePaymentEntries(sale), payment];
+    const nextPaidAmount = money(paidAmount + amount);
+    const updatedSale: Sale = {
+      ...sale,
+      payments,
+      paidAmount: nextPaidAmount,
+      paymentStatus: nextPaidAmount >= sale.total ? "pagada" : "parcial",
+      paymentMethod: payments.length === 1 ? payment.paymentMethod : "otro",
+      syncStatus: "pendiente"
+    };
+    const entry = makeAuditEntry({
+      entityType: "venta",
+      entityId: sale.id,
+      entityNumber: sale.receiptNumber,
+      action: "cobro",
+      reason: `Cobro ${formatPaymentMethod(payment.paymentMethod)} ${amount}`,
+      performedBy: input.requestedBy,
+      before: sale,
+      after: updatedSale
+    });
+    set((state) => ({
+      sales: state.sales.map((item) => (item.id === saleId ? updatedSale : item)),
+      salesAuditEntries: [entry, ...state.salesAuditEntries]
+    }));
+    return updatedSale;
   },
   addQuote: (input) => {
     const cleanLines = input.lines.filter((line) => line.quantity > 0);
@@ -1678,9 +1781,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
   closeCashDay: (note) => {
     const today = new Date().toISOString().slice(0, 10);
-    const todaySales = get().sales.filter((sale) => !sale.deletedAt && sale.createdAt.slice(0, 10) === today);
+    const activeSales = get().sales.filter((sale) => !sale.deletedAt);
     const todayExpenses = get().expenses.filter((expense) => !expense.deletedAt && expense.createdAt.slice(0, 10) === today);
-    const totalByPayment = (method: PaymentMethod) => money(todaySales.filter((sale) => sale.paymentMethod === method).reduce((sum, sale) => sum + sale.total, 0));
+    const totalByPayment = (method: PaymentMethod) => money(activeSales.flatMap(salePaymentEntries).filter((payment) => payment.paymentMethod === method && payment.createdAt.slice(0, 10) === today).reduce((sum, payment) => sum + payment.amount, 0));
     const closure: CashClosure = {
       id: `local_close_${crypto.randomUUID()}`,
       number: nextNumber("CAJA", get().cashClosures.length),
@@ -1716,8 +1819,11 @@ export const useStore = create<AppState>((set, get) => ({
   closeCashShift: (id, declaredClosingCash, closedBy, note) => {
     const shift = get().cashShifts.find((item) => item.id === id && !item.closedAt);
     if (!shift || declaredClosingCash < 0) return null;
-    const shiftSales = get().sales.filter((sale) => !sale.deletedAt && sale.shiftId === id);
-    const cashTotal = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
+    const cashTotal = get().sales
+      .filter((sale) => !sale.deletedAt)
+      .flatMap(salePaymentEntries)
+      .filter((payment) => payment.paymentMethod === "efectivo" && payment.shiftId === id)
+      .reduce((sum, payment) => sum + payment.amount, 0);
     const closedShift: CashShift = {
       ...shift,
       closedAt: new Date().toISOString(),
@@ -1743,6 +1849,7 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: input.createdAt || sale.createdAt,
       total: totals.total,
       margin: totals.margin,
+      paymentStatus: salePaymentStatus({ ...sale, total: totals.total }),
       syncStatus: "pendiente"
     };
     const entry = makeAuditEntry({
@@ -2066,6 +2173,9 @@ export const useStore = create<AppState>((set, get) => ({
       lines: quote.lines,
       discount: 0,
       paymentMethod: "transferencia",
+      paymentStatus: "pendiente",
+      paidAmount: 0,
+      payments: [],
       internalNote: quote.internalNote,
       total: totals.total,
       margin: totals.margin,

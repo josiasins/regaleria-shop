@@ -725,12 +725,12 @@ button.sync-pill {
 .sales-workspace,
 .module-workspace {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .audit-workspace {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .audit-grid {
@@ -792,8 +792,8 @@ button.sync-pill {
   min-height: 40px;
   border: 1px solid oklch(84% 0.024 150);
   border-radius: 8px;
-  background: oklch(98% 0.008 150);
-  color: oklch(28% 0.035 160);
+  background: oklch(97% 0.008 150);
+  color: oklch(34% 0.03 160);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -812,9 +812,98 @@ button.sync-pill {
 .sales-tab.active,
 .stock-tab.active,
 .module-tab.active {
-  background: oklch(30% 0.04 160);
-  border-color: oklch(30% 0.04 160);
+  background: oklch(43% 0.085 160);
+  border-color: oklch(43% 0.085 160);
   color: white;
+}
+
+.panel > h2 {
+  margin-bottom: 15px;
+  color: oklch(25% 0.028 160);
+  font-weight: 780;
+}
+
+.table-row strong,
+.data-list strong {
+  font-weight: 760;
+}
+
+.field-label {
+  color: oklch(42% 0.026 158);
+  font-size: 0.9rem;
+}
+
+.sale-payment-section {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid oklch(87% 0.02 150);
+  border-radius: 8px;
+  background: oklch(96% 0.012 150);
+}
+
+.payment-status-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.payment-status-control button {
+  min-height: 36px;
+  border: 1px solid oklch(82% 0.026 150);
+  border-radius: 7px;
+  background: oklch(99% 0.006 150);
+  color: oklch(36% 0.03 160);
+  padding: 0 11px;
+  font-weight: 760;
+}
+
+.payment-status-control button.active {
+  border-color: oklch(43% 0.085 160);
+  background: oklch(43% 0.085 160);
+  color: white;
+}
+
+.payment-state-summary,
+.pending-payment-balance {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 11px;
+  border: 1px solid oklch(84% 0.022 150);
+  border-radius: 7px;
+  background: oklch(99% 0.006 150);
+}
+
+.payment-state-summary span,
+.pending-payment-balance span,
+.sale-payment-total span {
+  color: oklch(52% 0.026 158);
+  font-size: 0.84rem;
+}
+
+.pending-payment-form {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.3fr) minmax(150px, 0.65fr) minmax(130px, 0.55fr) minmax(150px, 0.7fr) minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.pending-payment-note {
+  min-width: 0;
+}
+
+.pending-payment-form .audit-inline-message {
+  grid-column: 1 / -1;
+}
+
+.sale-payment-total {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
 }
 
 .shift-strip {
@@ -2589,14 +2678,62 @@ textarea:focus-visible {
 .theme-night .auth-card {
   background: oklch(23% 0.023 158);
   border-color: oklch(34% 0.028 158);
-  box-shadow: 0 14px 38px oklch(9% 0.02 160 / 0.24);
+  box-shadow: none;
 }
 
 .theme-night .purchase-receipt-sheet,
 .theme-night .purchase-receipt-list-row {
   background: oklch(23% 0.023 158);
   border-color: oklch(34% 0.028 158);
-  box-shadow: 0 14px 38px oklch(9% 0.02 160 / 0.24);
+  box-shadow: none;
+}
+
+.theme-night .panel > h2 {
+  color: oklch(94% 0.01 154);
+}
+
+.theme-night .sales-tab,
+.theme-night .stock-tab,
+.theme-night .module-tab {
+  background: oklch(21% 0.022 158);
+  border-color: oklch(35% 0.028 158);
+  color: oklch(79% 0.02 154);
+}
+
+.theme-night .sales-tab:hover,
+.theme-night .stock-tab:hover,
+.theme-night .module-tab:hover {
+  background: oklch(25% 0.03 158);
+  border-color: oklch(47% 0.055 158);
+}
+
+.theme-night .sales-tab.active,
+.theme-night .stock-tab.active,
+.theme-night .module-tab.active,
+.theme-night .payment-status-control button.active {
+  background: oklch(42% 0.09 158);
+  border-color: oklch(55% 0.095 158);
+  color: oklch(97% 0.008 154);
+}
+
+.theme-night .sale-payment-section {
+  background: oklch(21% 0.024 158);
+  border-color: oklch(35% 0.03 158);
+}
+
+.theme-night .field-label,
+.theme-night .payment-state-summary span,
+.theme-night .pending-payment-balance span,
+.theme-night .sale-payment-total span {
+  color: oklch(73% 0.018 154);
+}
+
+.theme-night .payment-status-control button,
+.theme-night .payment-state-summary,
+.theme-night .pending-payment-balance {
+  background: oklch(18% 0.02 160);
+  border-color: oklch(36% 0.028 158);
+  color: oklch(86% 0.016 154);
 }
 
 .theme-night .purchase-payment-entry,
@@ -2975,6 +3112,10 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .pending-payment-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .catalog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3142,6 +3283,10 @@ textarea:focus-visible {
 
   .compact-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pending-payment-form {
+    grid-template-columns: 1fr;
   }
 
   .editor-header {

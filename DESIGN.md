@@ -36,7 +36,7 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Vista lista para escaneo, vista cuadricula para inspeccion visual.
 - Modulos operativos densos, como Stock, usan acciones superiores para abrir subpantallas en lugar de mostrar todos los formularios juntos.
 - Ventas prioriza Mostrador; Turnos, Ventas del turno y Ayuda viven como vistas internas accesibles por botones superiores.
-- La pantalla de Mostrador muestra caja rapida y venta detallada en paralelo para comparar caminos de cobro sin mezclar control de turnos.
+- La pantalla de Mostrador ofrece un unico flujo de Registrar venta y un bloque de Cobros pendientes. Evitar caminos de caja duplicados: una venta puede quedar pagada, parcial o pendiente sin perder su comprobante.
 - Compras prioriza Factura o remito; Precarga, Compras recientes, Cuenta de proveedores y Registrar pago viven como vistas internas accesibles por botones superiores.
 - Personas prioriza listas de Clientes/Proveedores; alta y edicion viven como subvistas accesibles por botones superiores.
 - Presupuestos, Transferencias, Gastos y Configuracion siguen el mismo patron de vistas superiores para separar carga, consulta, resumen y administracion.
@@ -56,6 +56,8 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - No mostrar formularios completos si el usuario solo esta consultando.
 - Evitar tarjetas dentro de tarjetas.
 - Mantener botones y campos con radio de 7 u 8 px.
+- Jerarquia: titulo de pagina primero; accion activa o total financiero despues; encabezado de panel tercero; metadatos, estados y ayuda en menor contraste. No dar a todos los textos, botones o paneles el mismo peso visual.
+- Modo noche: evitar sombras decorativas en todos los paneles. El contraste se obtiene por superficie, borde, tipografia y color semantico, no por cajas compitiendo entre si.
 - Usar controles familiares: selects para categorias/proveedores, checkboxes para permisos, botones segmentados para vistas.
 - La busqueda global debe estar disponible arriba y ser enfocable con Ctrl/Cmd + K.
 - El selector Dia/Noche vive en la barra superior y debe recordar la preferencia con `localStorage`.

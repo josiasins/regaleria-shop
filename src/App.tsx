@@ -43,9 +43,9 @@ import { isCloudCatalogEnabled } from "./catalogCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { loadCurrentAppRole } from "./securityCloud";
-import { canSeeFinancials, useStore } from "./store";
+import { canSeeFinancials, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, StockMovementType, Supplier } from "./types";
+import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, SalePaymentStatus, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
 
 const sections = [
@@ -102,6 +102,13 @@ const roleLabels: Record<Role, string> = {
   administrador: "Administrador",
   encargado: "Encargado",
   cajero: "Cajero"
+};
+
+const paymentMethodLabels: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  otro: "Otro"
 };
 
 function toDateTimeLocal(iso?: string) {
@@ -715,8 +722,8 @@ function Sales() {
   const salesAuditEntries = useStore((state) => state.salesAuditEntries);
   const activeRole = useStore((state) => state.activeRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
-  const addQuickSale = useStore((state) => state.addQuickSale);
   const addDetailedSale = useStore((state) => state.addDetailedSale);
+  const addSalePayment = useStore((state) => state.addSalePayment);
   const openCashShift = useStore((state) => state.openCashShift);
   const closeCashShift = useStore((state) => state.closeCashShift);
   const updateSaleWithAudit = useStore((state) => state.updateSaleWithAudit);
@@ -728,9 +735,6 @@ function Sales() {
   const canDiscount = rolePermissions[activeRole].includes("descuentos");
   const isOwner = activeRole === "dueno";
   const [salesPage, setSalesPage] = useState<SalesPage>("mostrador");
-  const [variantId, setVariantId] = useState(products[0]?.variants[0]?.id ?? "");
-  const [quantity, setQuantity] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("efectivo");
   const [initialCash, setInitialCash] = useState(0);
   const [shiftNote, setShiftNote] = useState("");
   const [declaredClosingCash, setDeclaredClosingCash] = useState(0);
@@ -741,8 +745,15 @@ function Sales() {
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [detailDiscount, setDetailDiscount] = useState(0);
   const [detailPayment, setDetailPayment] = useState<PaymentMethod>("efectivo");
+  const [detailPaymentStatus, setDetailPaymentStatus] = useState<SalePaymentStatus>("pagada");
+  const [detailInitialPayment, setDetailInitialPayment] = useState(0);
   const [detailNote, setDetailNote] = useState("");
   const [detailLines, setDetailLines] = useState<SaleLine[]>([]);
+  const [pendingSaleId, setPendingSaleId] = useState("");
+  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0);
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState<PaymentMethod>("efectivo");
+  const [pendingPaymentNote, setPendingPaymentNote] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
   const [auditSaleId, setAuditSaleId] = useState(sales[0]?.id ?? "");
   const [auditShiftId, setAuditShiftId] = useState(cashShifts[0]?.id ?? "");
   const [saleAuditDraft, setSaleAuditDraft] = useState<SaleAuditUpdateInput>({
@@ -764,16 +775,24 @@ function Sales() {
   const [auditMessage, setAuditMessage] = useState("");
 
   const activeSales = sales.filter((sale) => !sale.deletedAt);
-  const selected = findProductVariant(products, variantId);
   const activeShift = cashShifts.find((shift) => !shift.closedAt);
   const displayedShift = activeShift ?? cashShifts[0];
   const shiftSales = displayedShift ? activeSales.filter((sale) => sale.shiftId === displayedShift.id) : [];
-  const shiftCashSales = shiftSales.filter((sale) => sale.paymentMethod === "efectivo").reduce((sum, sale) => sum + sale.total, 0);
-  const shiftTransferSales = shiftSales.filter((sale) => sale.paymentMethod === "transferencia").reduce((sum, sale) => sum + sale.total, 0);
-  const shiftCardSales = shiftSales.filter((sale) => sale.paymentMethod === "tarjeta").reduce((sum, sale) => sum + sale.total, 0);
-  const shiftOtherSales = shiftSales.filter((sale) => sale.paymentMethod === "otro").reduce((sum, sale) => sum + sale.total, 0);
+  const shiftPayments = displayedShift
+    ? activeSales.flatMap(salePaymentEntries).filter((payment) => payment.shiftId === displayedShift.id)
+    : [];
+  const shiftPaymentTotal = (method: PaymentMethod) => shiftPayments
+    .filter((payment) => payment.paymentMethod === method)
+    .reduce((sum, payment) => sum + payment.amount, 0);
+  const shiftCashSales = shiftPaymentTotal("efectivo");
+  const shiftTransferSales = shiftPaymentTotal("transferencia");
+  const shiftCardSales = shiftPaymentTotal("tarjeta");
+  const shiftOtherSales = shiftPaymentTotal("otro");
   const expectedClosingCash = (displayedShift?.initialCash ?? 0) + shiftCashSales;
   const activeCustomers = customers.filter((customer) => !customer.deletedAt);
+  const pendingSales = activeSales.filter((sale) => salePaymentStatus(sale) !== "pagada");
+  const pendingSale = pendingSales.find((sale) => sale.id === pendingSaleId) ?? pendingSales[0];
+  const pendingBalance = pendingSale ? Math.max(pendingSale.total - salePaidAmount(pendingSale), 0) : 0;
   const auditSale = activeSales.find((sale) => sale.id === auditSaleId);
   const auditShift = cashShifts.find((shift) => shift.id === auditShiftId);
   const deletedAuditEntries = salesAuditEntries.filter((entry) => entry.action === "eliminacion");
@@ -847,13 +866,13 @@ function Sales() {
       setSalesPage("recientes");
     }
   };
-  const submit = () => {
-    if (!activeShift) return;
-    const sale = addQuickSale(variantId, quantity, paymentMethod, activeShift.id);
-    if (sale) setSalesPage("recientes");
-  };
   const detailSelected = findProductVariant(products, detailVariantId);
   const detailTotal = saleLineTotal(detailLines) - detailDiscount;
+  const detailInitialPaymentAmount = detailPaymentStatus === "pagada"
+    ? Math.max(detailTotal, 0)
+    : detailPaymentStatus === "pendiente"
+      ? 0
+      : Math.min(Math.max(detailInitialPayment, 0), Math.max(detailTotal, 0));
   const addDetailLine = () => {
     if (!detailSelected || detailQuantity < 1 || detailSelected.variant.stock < detailQuantity) return;
     setDetailLines((current) => mergeLine(current, buildUiSaleLine(detailSelected.product, detailSelected.variant, detailQuantity)));
@@ -866,6 +885,8 @@ function Sales() {
       lines: detailLines,
       discount: detailDiscount,
       paymentMethod: detailPayment,
+      paymentStatus: detailPaymentStatus,
+      initialPaymentAmount: detailInitialPaymentAmount,
       internalNote: detailNote
     });
     if (sale) {
@@ -873,8 +894,44 @@ function Sales() {
       setNewCustomerName("");
       setDetailLines([]);
       setDetailDiscount(0);
+      setDetailPaymentStatus("pagada");
+      setDetailInitialPayment(0);
       setDetailNote("");
       setSalesPage("recientes");
+    }
+  };
+  const chooseDetailPaymentStatus = (status: SalePaymentStatus) => {
+    setDetailPaymentStatus(status);
+    if (status === "pendiente") setDetailInitialPayment(0);
+    if (status === "parcial") setDetailInitialPayment(0);
+  };
+  const choosePendingSale = (saleId: string) => {
+    const sale = pendingSales.find((item) => item.id === saleId);
+    setPendingSaleId(saleId);
+    setPendingPaymentAmount(sale ? Math.max(sale.total - salePaidAmount(sale), 0) : 0);
+    setPaymentMessage("");
+  };
+  const registerPendingPayment = () => {
+    if (!activeShift || !pendingSale || pendingPaymentAmount <= 0 || pendingPaymentAmount > pendingBalance) return;
+    const updated = addSalePayment(pendingSale.id, {
+      amount: pendingPaymentAmount,
+      paymentMethod: pendingPaymentMethod,
+      note: pendingPaymentNote,
+      shiftId: activeShift.id,
+      requestedBy: activeRole
+    });
+    if (!updated) {
+      setPaymentMessage("No se pudo registrar el cobro. Revisa el saldo y el turno abierto.");
+      return;
+    }
+    setPaymentMessage(updated.paymentStatus === "pagada" ? "Cobro registrado: la venta quedó pagada." : "Cobro parcial registrado y auditado.");
+    setPendingPaymentNote("");
+    const nextBalance = Math.max(updated.total - salePaidAmount(updated), 0);
+    setPendingPaymentAmount(nextBalance);
+    if (updated.paymentStatus === "pagada") {
+      const nextPending = pendingSales.find((sale) => sale.id !== updated.id);
+      setPendingSaleId(nextPending?.id ?? "");
+      setPendingPaymentAmount(nextPending ? Math.max(nextPending.total - salePaidAmount(nextPending), 0) : 0);
     }
   };
   const saveSaleAudit = async () => {
@@ -964,35 +1021,8 @@ function Sales() {
               <div className="empty-lines">No se puede vender sin un turno abierto. Abrilo desde Turnos y declara el efectivo inicial.</div>
             </Panel>
           )}
-        <div className="sales-register-grid">
-          <Panel title="Caja rapida">
-            <div className="form-grid">
-              <ProductVariantPicker label="Producto" searchLabel="Buscar producto" products={products} variantId={variantId} onChange={setVariantId} />
-              <label>
-                Cantidad
-                <input type="number" min={1} max={selected?.variant.stock ?? 1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
-              </label>
-              <label>
-                Medio de pago
-                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}>
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
-                  <option value="otro">Otro</option>
-                </select>
-              </label>
-            </div>
-            <div className="checkout-row">
-              <div>
-                <span>Total estimado</span>
-                <strong>{formatMoney((selected?.variant.price ?? 0) * quantity)}</strong>
-              </div>
-              <button className="primary-action" onClick={submit} disabled={!activeShift || !selected || selected.variant.stock < quantity}>
-                <ShoppingCartSimple size={19} /> Cobrar
-              </button>
-            </div>
-          </Panel>
-          <Panel title="Venta detallada">
+        <div className="sales-register-grid detailed-only">
+          <Panel title="Registrar venta">
             <div className="form-grid two">
               <label>
                 Cliente
@@ -1006,15 +1036,36 @@ function Sales() {
                   <option value="nuevo">Agregar cliente rapido</option>
                 </select>
               </label>
+            </div>
+            <div className="sale-payment-section">
+              <span className="field-label">Estado de cobro</span>
+              <div className="payment-status-control" role="group" aria-label="Estado de cobro de la venta">
+                <button type="button" className={clsx(detailPaymentStatus === "pagada" && "active")} onClick={() => chooseDetailPaymentStatus("pagada")}>Pagada</button>
+                <button type="button" className={clsx(detailPaymentStatus === "parcial" && "active")} onClick={() => chooseDetailPaymentStatus("parcial")}>Pago parcial</button>
+                <button type="button" className={clsx(detailPaymentStatus === "pendiente" && "active")} onClick={() => chooseDetailPaymentStatus("pendiente")}>Pendiente</button>
+              </div>
+              <div className="form-grid two compact">
               <label>
                 Medio de pago
-                <select value={detailPayment} onChange={(event) => setDetailPayment(event.target.value as PaymentMethod)}>
+                <select value={detailPayment} onChange={(event) => setDetailPayment(event.target.value as PaymentMethod)} disabled={detailPaymentStatus === "pendiente"}>
                   <option value="efectivo">Efectivo</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="tarjeta">Tarjeta</option>
                   <option value="otro">Otro</option>
                 </select>
               </label>
+              {detailPaymentStatus === "parcial" ? (
+                <label>
+                  Cobrado ahora
+                  <input type="number" min={0.01} max={Math.max(detailTotal, 0)} value={detailInitialPayment} onChange={(event) => setDetailInitialPayment(Number(event.target.value))} placeholder="Importe recibido" />
+                </label>
+              ) : (
+                <div className="payment-state-summary">
+                  <span>{detailPaymentStatus === "pagada" ? "Se cobra el total al confirmar" : "No se registra dinero al confirmar"}</span>
+                  <strong>{detailPaymentStatus === "pagada" ? formatMoney(Math.max(detailTotal, 0)) : formatMoney(0)}</strong>
+                </div>
+              )}
+              </div>
             </div>
             {customerChoice === "nuevo" && (
               <label>
@@ -1046,10 +1097,47 @@ function Sales() {
                 <span>Total final</span>
                 <strong>{formatMoney(Math.max(detailTotal, 0))}</strong>
               </div>
-              <button className="primary-action" onClick={submitDetailedSale} disabled={!activeShift || !detailLines.length || detailDiscount > saleLineTotal(detailLines)}>
-                <Receipt size={19} /> Cerrar venta
+              <button className="primary-action" onClick={submitDetailedSale} disabled={!activeShift || !detailLines.length || detailDiscount > saleLineTotal(detailLines) || (detailPaymentStatus === "parcial" && detailInitialPaymentAmount <= 0)}>
+                <Receipt size={19} /> {detailPaymentStatus === "pendiente" ? "Registrar venta pendiente" : detailPaymentStatus === "parcial" ? "Registrar pago parcial" : "Registrar venta"}
               </button>
             </div>
+          </Panel>
+          <Panel title="Cobros pendientes">
+            {pendingSales.length ? (
+              <div className="pending-payment-form">
+                <label>
+                  Venta pendiente
+                  <select value={pendingSale?.id ?? ""} onChange={(event) => choosePendingSale(event.target.value)}>
+                    {pendingSales.map((sale) => {
+                      const balance = Math.max(sale.total - salePaidAmount(sale), 0);
+                      return <option key={sale.id} value={sale.id}>{sale.receiptNumber} · {sale.customerName ?? "Consumidor final"} · Saldo {formatMoney(balance)}</option>;
+                    })}
+                  </select>
+                </label>
+                <div className="pending-payment-balance">
+                  <span>Saldo pendiente</span>
+                  <strong>{formatMoney(pendingBalance)}</strong>
+                </div>
+                <label>
+                  Cobro ahora
+                  <input type="number" min={0.01} max={pendingBalance} value={pendingPaymentAmount} onChange={(event) => setPendingPaymentAmount(Number(event.target.value))} />
+                </label>
+                <label>
+                  Medio de pago
+                  <select value={pendingPaymentMethod} onChange={(event) => setPendingPaymentMethod(event.target.value as PaymentMethod)}>
+                    {Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="pending-payment-note">
+                  Nota del cobro
+                  <input value={pendingPaymentNote} onChange={(event) => setPendingPaymentNote(event.target.value)} placeholder="Referencia o comprobante" />
+                </label>
+                <button className="primary-action" onClick={registerPendingPayment} disabled={!activeShift || !pendingSale || pendingPaymentAmount <= 0 || pendingPaymentAmount > pendingBalance}>
+                  <Wallet size={19} /> Registrar cobro
+                </button>
+                {paymentMessage && <span className="audit-inline-message" role="status">{paymentMessage}</span>}
+              </div>
+            ) : <div className="empty-lines">No hay ventas con saldo pendiente.</div>}
           </Panel>
         </div>
       </div>
@@ -1289,8 +1377,8 @@ function Sales() {
                   <span>{[sale.customerName ?? "Consumidor final", new Date(sale.createdAt).toLocaleString("es-AR"), sale.lines.map((line) => line.name).join(", ")].join(" · ")}</span>
                   {sale.internalNote && <span>{sale.internalNote}</span>}
                 </div>
-                <span>{sale.paymentMethod}</span>
-                <strong>{formatMoney(sale.total)}</strong>
+                <span className={clsx("payment-chip", salePaymentStatus(sale))}>{salePaymentStatus(sale) === "pagada" ? "Pagada" : salePaymentStatus(sale) === "parcial" ? "Pago parcial" : "Pendiente"}</span>
+                <div className="sale-payment-total"><span>{formatMoney(salePaidAmount(sale))} de {formatMoney(sale.total)}</span><strong>{formatMoney(sale.total)}</strong></div>
                 <button className="icon-button" title="Imprimir PDF" onClick={() => createReceiptPdf(sale)}>
                   <Printer size={18} />
                 </button>

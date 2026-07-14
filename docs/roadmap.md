@@ -30,8 +30,9 @@
 
 ## Etapa 3: Ventas y presupuestos
 
-- [x] Caja rapida.
+- [x] Caja rapida inicial, retirada de la interfaz en favor de un unico flujo detallado.
 - [x] Venta detallada con varias lineas, cliente, descuento y medio de pago.
+- [x] Venta pagada, pendiente o con pago parcial; cobros posteriores auditables desde Mostrador.
 - [x] Consumidor final como opcion de venta.
 - [x] Clientes como agenda editable y reutilizable.
 - [x] Presupuestos nuevos con varias lineas.

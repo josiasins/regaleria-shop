@@ -10,8 +10,9 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - Product: producto base con categoria, proveedor historico para compras, marca comercial opcional, descripcion y estado publicable.
 - Variant: variante vendible con SKU, codigo de barra, stock, costo, precio interno y precio web opcional.
 - Category: lista administrable de categorias para productos y reportes.
-- Sale: venta con comprobante interno, pago, total, margen, fecha/hora, cliente y turno asociado en ventas nuevas.
+- Sale: venta con comprobante interno, total, margen, fecha/hora, cliente y turno asociado. Conserva estado de pago, total cobrado y una coleccion de cobros para no perder pagos parciales o posteriores.
 - SaleLine: lineas de venta.
+- SalePayment: evento de cobro de una venta; conserva importe, medio de pago, fecha/hora, turno y nota opcional.
 - Quote: presupuesto sin descuento de stock hasta convertirse.
 - QuoteLine: lineas de presupuesto.
 - Transfer: comprobante manual de transferencia asociado a venta o presupuesto.
