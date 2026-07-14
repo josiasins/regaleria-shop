@@ -24,6 +24,7 @@ import {
   Printer,
   Receipt,
   ShoppingCartSimple,
+  SignOut,
   SquaresFour,
   Storefront,
   Sun,
@@ -417,7 +418,10 @@ function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <button className="auth-session-button" onClick={signOut}>Salir</button>
+      <button className="auth-session-button" type="button" onClick={signOut} title="Cerrar sesion" aria-label="Cerrar sesion">
+        <SignOut size={18} weight="bold" />
+        <span>Salir</span>
+      </button>
       {children}
     </>
   );
