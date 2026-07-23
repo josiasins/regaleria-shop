@@ -373,7 +373,30 @@
 
 ## Uso en pantallas chicas
 
-1. En tablet, el menu lateral se abre desde `Menu`; el encabezado conserva contexto arriba y herramientas debajo.
+1. En tablet, el menu lateral se abre desde el boton hamburguesa con el simbolo de la marca centrado; el encabezado conserva contexto arriba y herramientas debajo.
 2. Compras muestra los datos principales del comprobante en pares para mantener lectura y velocidad de carga.
 3. En celular, el formulario se ordena en una columna, con botones y campos a ancho completo.
 4. Las vistas internas de cada modulo se pueden desplazar de forma horizontal sin ocultar funciones.
+
+## Punto de venta simplificado
+
+1. Se abre `Ventas` y la subvista `Punto de venta`.
+2. Se busca por nombre, SKU o codigo y se puede filtrar por categoria.
+3. `Agregar` incorpora una unidad a la venta actual; desde el comprobante se aumenta, reduce o quita la linea.
+4. Se selecciona cliente, descuento permitido, estado de cobro y medio de pago.
+5. Una venta pagada, parcial o pendiente usa la misma accion de confirmacion existente y requiere turno abierto.
+6. Los cobros posteriores se registran desde `Cobros pendientes` sin alterar el comprobante original.
+
+## Productos y stock simplificado
+
+1. La vista principal lista producto, categoria, costo autorizado, precio, existencia y estado.
+2. La busqueda contempla nombre, descripcion, SKU y codigo; el filtro separa normal, bajo y agotado.
+3. `Ajustar` abre la operacion de stock existente con las variantes del producto precargadas, sin registrar cambios hasta confirmar.
+4. `Editar` abre la ficha comercial existente y conserva historial, proveedor y stock.
+
+## Clientes y cuentas
+
+1. La lista permite buscar por nombre, telefono o email y muestra el saldo pendiente calculado desde ventas activas.
+2. Al seleccionar un cliente, el panel de detalle muestra contacto, saldo y ventas asociadas.
+3. Crear un cliente lo selecciona al volver a la lista para continuar trabajando sobre el registro correcto.
+4. El dueño puede moverlo a Eliminados y restaurarlo; la baja sigue usando el historial existente.

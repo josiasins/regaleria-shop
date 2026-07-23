@@ -52,7 +52,7 @@ import type { Session } from "@supabase/supabase-js";
 const sections = [
   { id: "panel", label: "Panel", icon: ChartLineUp },
   { id: "ventas", label: "Ventas", icon: ShoppingCartSimple },
-  { id: "stock", label: "Stock", icon: Package },
+  { id: "stock", label: "Productos y stock", icon: Package },
   { id: "compras", label: "Compras", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "proveedores", label: "Proveedores", icon: Truck },
@@ -69,7 +69,7 @@ const sections = [
 
 type Section = (typeof sections)[number]["id"];
 type StockPage = "control" | "alta" | "movimiento" | "variante" | "importacion" | "historial";
-type SalesPage = "mostrador" | "turnos" | "recientes" | "auditoria" | "ayuda";
+type SalesPage = "mostrador" | "cobros" | "turnos" | "recientes" | "auditoria" | "ayuda";
 type PurchasePage = "factura" | "precarga" | "recientes" | "editar" | "eliminadas" | "historial" | "cuentas" | "pago";
 type PurchaseVatInputMode = "con_iva" | "sin_iva";
 type PurchaseReceiptView = "lista" | "comprobantes";
@@ -745,14 +745,14 @@ function Sales() {
   const [closingNote, setClosingNote] = useState("");
   const [customerChoice, setCustomerChoice] = useState("consumidor_final");
   const [newCustomerName, setNewCustomerName] = useState("");
-  const [detailVariantId, setDetailVariantId] = useState(products[0]?.variants[0]?.id ?? "");
-  const [detailQuantity, setDetailQuantity] = useState(1);
   const [detailDiscount, setDetailDiscount] = useState(0);
   const [detailPayment, setDetailPayment] = useState<PaymentMethod>("efectivo");
   const [detailPaymentStatus, setDetailPaymentStatus] = useState<SalePaymentStatus>("pagada");
   const [detailInitialPayment, setDetailInitialPayment] = useState(0);
   const [detailNote, setDetailNote] = useState("");
   const [detailLines, setDetailLines] = useState<SaleLine[]>([]);
+  const [salesProductQuery, setSalesProductQuery] = useState("");
+  const [salesCategory, setSalesCategory] = useState("todas");
   const [pendingSaleId, setPendingSaleId] = useState("");
   const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0);
   const [pendingPaymentMethod, setPendingPaymentMethod] = useState<PaymentMethod>("efectivo");
@@ -800,6 +800,19 @@ function Sales() {
   const auditSale = activeSales.find((sale) => sale.id === auditSaleId);
   const auditShift = cashShifts.find((shift) => shift.id === auditShiftId);
   const deletedAuditEntries = salesAuditEntries.filter((entry) => entry.action === "eliminacion");
+  const salesCategories = useMemo(
+    () => Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")),
+    [products]
+  );
+  const salesCatalogRows = useMemo(() => {
+    const normalizedQuery = salesProductQuery.trim().toLocaleLowerCase();
+    return products.flatMap((product) => product.variants
+      .filter((variant) => salesCategory === "todas" || product.category === salesCategory)
+      .filter((variant) => !normalizedQuery || productVariantSearchText(product, variant).includes(normalizedQuery))
+      .map((variant) => ({ product, variant }))
+    );
+  }, [products, salesCategory, salesProductQuery]);
+  const detailItemCount = detailLines.reduce((sum, line) => sum + line.quantity, 0);
 
   useEffect(() => {
     if (!isOwner && salesPage === "auditoria") setSalesPage("mostrador");
@@ -870,16 +883,21 @@ function Sales() {
       setSalesPage("recientes");
     }
   };
-  const detailSelected = findProductVariant(products, detailVariantId);
   const detailTotal = saleLineTotal(detailLines) - detailDiscount;
   const detailInitialPaymentAmount = detailPaymentStatus === "pagada"
     ? Math.max(detailTotal, 0)
     : detailPaymentStatus === "pendiente"
       ? 0
       : Math.min(Math.max(detailInitialPayment, 0), Math.max(detailTotal, 0));
-  const addDetailLine = () => {
-    if (!detailSelected || detailQuantity < 1 || detailSelected.variant.stock < detailQuantity) return;
-    setDetailLines((current) => mergeLine(current, buildUiSaleLine(detailSelected.product, detailSelected.variant, detailQuantity)));
+  const addSaleVariant = (product: Product, variant: Product["variants"][number]) => {
+    const currentQuantity = detailLines.find((line) => line.variantId === variant.id)?.quantity ?? 0;
+    if (variant.stock <= currentQuantity) return;
+    setDetailLines((current) => mergeLine(current, buildUiSaleLine(product, variant, 1)));
+  };
+  const changeDetailLineQuantity = (variantId: string, quantity: number) => {
+    const selected = findProductVariant(products, variantId);
+    if (!selected || quantity < 1 || quantity > selected.variant.stock) return;
+    setDetailLines((current) => current.map((line) => line.variantId === variantId ? { ...line, quantity } : line));
   };
   const submitDetailedSale = () => {
     const customerName = resolveCustomerName(activeCustomers, customerChoice, newCustomerName);
@@ -982,7 +1000,8 @@ function Sales() {
     finishAuditAction(ok, entityType === "venta" ? "Venta restaurada y stock aplicado nuevamente." : "Turno restaurado.");
   };
   const salesTabs: { id: SalesPage; label: string; icon: typeof Receipt }[] = [
-    { id: "mostrador", label: "Mostrador", icon: ShoppingCartSimple },
+    { id: "mostrador", label: "Punto de venta", icon: ShoppingCartSimple },
+    { id: "cobros", label: "Cobros pendientes", icon: CreditCard },
     { id: "turnos", label: "Turnos", icon: Wallet },
     { id: "recientes", label: "Ventas del turno", icon: ClockCounterClockwise },
     ...(isOwner ? [{ id: "auditoria" as const, label: "Auditoria", icon: PencilSimple }] : []),
@@ -1003,7 +1022,7 @@ function Sales() {
             );
           })}
         </div>
-        <Panel title="Estado de turno">
+        {salesPage !== "mostrador" && <Panel title="Estado de turno">
           <div className="shift-strip">
             <div>
               <span>{activeShift ? activeShift.number : displayedShift ? `${displayedShift.number} cerrado` : "Turno sin abrir"}</span>
@@ -1017,96 +1036,146 @@ function Sales() {
               <Wallet size={18} /> {activeShift ? "Ver turno" : "Ir a turno"}
             </button>
           </div>
-        </Panel>
+        </Panel>}
       {salesPage === "mostrador" && (
       <div className="sales-stack">
-          {!activeShift && (
-            <Panel title="Turno requerido">
-              <div className="empty-lines">No se puede vender sin un turno abierto. Abrilo desde Turnos y declara el efectivo inicial.</div>
-            </Panel>
+          {activeShift ? (
+            <div className="pos-active-shift">
+              <div><strong>{activeShift.number}</strong><span>Turno abierto · Efectivo inicial {formatMoney(activeShift.initialCash)}</span></div>
+              <button className="text-action" onClick={() => setSalesPage("turnos")}>Ver turno</button>
+            </div>
+          ) : (
+            <div className="pos-shift-warning">
+              <div><strong>Turno cerrado</strong><span>Abrí un turno y declará el efectivo inicial para poder confirmar ventas.</span></div>
+              <button className="secondary-action" onClick={() => setSalesPage("turnos")}><Wallet size={18} /> Abrir turno</button>
+            </div>
           )}
-        <div className="sales-register-grid detailed-only">
-          <Panel title="Registrar venta">
-            <div className="form-grid two">
+        <div className="pos-layout">
+          <section className="pos-catalog" aria-label="Catalogo para la venta">
+            <header className="pos-section-heading">
+              <div><span>Catálogo</span><h2>Productos</h2></div>
+              <strong>{salesCatalogRows.length} opciones</strong>
+            </header>
+            <div className="pos-product-filters">
+              <label className="search-field">
+                <MagnifyingGlass size={18} />
+                <input value={salesProductQuery} onChange={(event) => setSalesProductQuery(event.target.value)} placeholder="Buscar por producto, SKU o código" aria-label="Buscar producto para la venta" />
+              </label>
+              <label>
+                <span className="sr-only">Categoría</span>
+                <select value={salesCategory} onChange={(event) => setSalesCategory(event.target.value)} aria-label="Filtrar productos por categoría">
+                  <option value="todas">Todas las categorías</option>
+                  {salesCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="pos-product-table">
+              <div className="pos-product-head"><span>Producto</span><span>SKU</span><span>Stock</span><span>Precio</span><span /></div>
+              {salesCatalogRows.map(({ product, variant }) => {
+                const inCart = detailLines.find((line) => line.variantId === variant.id)?.quantity ?? 0;
+                return (
+                  <div className="pos-product-row" key={variant.id}>
+                    <div className="pos-product-name">
+                      {product.imageUrl ? <img src={product.imageUrl} alt="" /> : <span className="pos-product-placeholder"><Package size={18} /></span>}
+                      <div><strong>{product.name}{product.variants.length > 1 ? ` · ${variant.name}` : ""}</strong><span>{product.category}</span></div>
+                    </div>
+                    <span className="pos-sku">{variant.sku || variant.barcode || "Sin código"}</span>
+                    <span className={clsx("pos-stock", variant.stock <= variant.lowStockAt && "warning")}>{variant.stock}</span>
+                    <strong className="pos-price">{formatMoney(variant.price)}</strong>
+                    <button className="pos-add-button" onClick={() => addSaleVariant(product, variant)} disabled={!activeShift || variant.stock <= inCart} aria-label={`Agregar ${product.name} ${variant.name}`}>
+                      <PlusCircle size={18} /> <span>Agregar</span>
+                    </button>
+                  </div>
+                );
+              })}
+              {!salesCatalogRows.length && <div className="pos-empty-products">No hay productos que coincidan con la búsqueda.</div>}
+            </div>
+          </section>
+
+          <section className="pos-current-sale" aria-label="Venta actual">
+            <header className="pos-section-heading sale-heading">
+              <div><span>Comprobante interno</span><h2>Venta actual</h2></div>
+              <strong>{detailItemCount} {detailItemCount === 1 ? "artículo" : "artículos"}</strong>
+            </header>
+            <div className="pos-customer-row">
               <label>
                 Cliente
                 <select value={customerChoice} onChange={(event) => setCustomerChoice(event.target.value)}>
                   <option value="consumidor_final">Consumidor final</option>
-                  {activeCustomers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                  <option value="nuevo">Agregar cliente rapido</option>
+                  {activeCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                  <option value="nuevo">Agregar cliente rápido</option>
                 </select>
               </label>
+              {customerChoice === "nuevo" && (
+                <label>
+                  Nuevo cliente
+                  <input value={newCustomerName} onChange={(event) => setNewCustomerName(event.target.value)} placeholder="Nombre del cliente" />
+                </label>
+              )}
             </div>
-            <div className="sale-payment-section">
-              <span className="field-label">Estado de cobro</span>
+
+            <div className="pos-cart-area">
+              <CartLines
+                lines={detailLines}
+                onRemove={(variant) => setDetailLines((current) => current.filter((line) => line.variantId !== variant))}
+                onChangeQuantity={changeDetailLineQuantity}
+              />
+            </div>
+
+            <div className="pos-total-block">
+              <div><span>Subtotal</span><strong>{formatMoney(saleLineTotal(detailLines))}</strong></div>
+              <label>
+                Descuento
+                <input type="number" min={0} value={detailDiscount} disabled={!canDiscount} onChange={(event) => setDetailDiscount(Number(event.target.value))} />
+              </label>
+              <div className="pos-grand-total"><span>Total</span><strong>{formatMoney(Math.max(detailTotal, 0))}</strong></div>
+            </div>
+
+            <div className="pos-payment-block">
+              <span className="field-label">Estado del cobro</span>
               <div className="payment-status-control" role="group" aria-label="Estado de cobro de la venta">
                 <button type="button" className={clsx(detailPaymentStatus === "pagada" && "active")} onClick={() => chooseDetailPaymentStatus("pagada")}>Pagada</button>
                 <button type="button" className={clsx(detailPaymentStatus === "parcial" && "active")} onClick={() => chooseDetailPaymentStatus("parcial")}>Pago parcial</button>
                 <button type="button" className={clsx(detailPaymentStatus === "pendiente" && "active")} onClick={() => chooseDetailPaymentStatus("pendiente")}>Pendiente</button>
               </div>
-              <div className="form-grid two compact">
-              <label>
-                Medio de pago
-                <select value={detailPayment} onChange={(event) => setDetailPayment(event.target.value as PaymentMethod)} disabled={detailPaymentStatus === "pendiente"}>
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
-                  <option value="otro">Otro</option>
-                </select>
-              </label>
-              {detailPaymentStatus === "parcial" ? (
+              {detailPaymentStatus !== "pendiente" && (
+                <>
+                  <span className="field-label">Medio de pago</span>
+                  <div className="pos-payment-methods" role="group" aria-label="Medio de pago">
+                    {(Object.entries(paymentMethodLabels) as [PaymentMethod, string][]).map(([method, label]) => (
+                      <button key={method} type="button" className={clsx(detailPayment === method && "active")} onClick={() => setDetailPayment(method)}>{label}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {detailPaymentStatus === "parcial" && (
                 <label>
                   Cobrado ahora
                   <input type="number" min={0.01} max={Math.max(detailTotal, 0)} value={detailInitialPayment} onChange={(event) => setDetailInitialPayment(Number(event.target.value))} placeholder="Importe recibido" />
                 </label>
-              ) : (
-                <div className="payment-state-summary">
-                  <span>{detailPaymentStatus === "pagada" ? "Se cobra el total al confirmar" : "No se registra dinero al confirmar"}</span>
-                  <strong>{detailPaymentStatus === "pagada" ? formatMoney(Math.max(detailTotal, 0)) : formatMoney(0)}</strong>
-                </div>
               )}
-              </div>
+              <details className="pos-more-details">
+                <summary>Agregar nota interna</summary>
+                <label>
+                  Nota interna
+                  <input value={detailNote} onChange={(event) => setDetailNote(event.target.value)} placeholder="Dato para el equipo, no sale en comprobante" />
+                </label>
+              </details>
             </div>
-            {customerChoice === "nuevo" && (
-              <label>
-                Nuevo cliente
-                <input value={newCustomerName} onChange={(event) => setNewCustomerName(event.target.value)} placeholder="Nombre del cliente" />
-              </label>
-            )}
-            <div className="line-builder">
-              <ProductVariantPicker label="Producto" searchLabel="Buscar producto detallado" products={products} variantId={detailVariantId} onChange={setDetailVariantId} />
-              <label>
-                Cant.
-                <input type="number" min={1} value={detailQuantity} onChange={(event) => setDetailQuantity(Number(event.target.value))} />
-              </label>
-              <button className="secondary-action" onClick={addDetailLine} disabled={!detailSelected || detailSelected.variant.stock < detailQuantity}>
-                <PlusCircle size={18} /> Agregar
-              </button>
-            </div>
-            <CartLines lines={detailLines} onRemove={(variant) => setDetailLines((current) => current.filter((line) => line.variantId !== variant))} />
-            <label>
-              Nota interna
-              <input value={detailNote} onChange={(event) => setDetailNote(event.target.value)} placeholder="Dato para el equipo, no sale en comprobante" />
-            </label>
-            <div className="checkout-row">
-              <label>
-                Descuento
-                <input type="number" min={0} value={detailDiscount} disabled={!canDiscount} onChange={(event) => setDetailDiscount(Number(event.target.value))} />
-              </label>
-              <div>
-                <span>Total final</span>
-                <strong>{formatMoney(Math.max(detailTotal, 0))}</strong>
-              </div>
-              <button className="primary-action" onClick={submitDetailedSale} disabled={!activeShift || !detailLines.length || detailDiscount > saleLineTotal(detailLines) || (detailPaymentStatus === "parcial" && detailInitialPaymentAmount <= 0)}>
-                <Receipt size={19} /> {detailPaymentStatus === "pendiente" ? "Registrar venta pendiente" : detailPaymentStatus === "parcial" ? "Registrar pago parcial" : "Registrar venta"}
-              </button>
-            </div>
-          </Panel>
-          <Panel title="Cobros pendientes">
+
+            <button className="pos-confirm-sale" onClick={submitDetailedSale} disabled={!activeShift || !detailLines.length || detailDiscount > saleLineTotal(detailLines) || (detailPaymentStatus === "parcial" && detailInitialPaymentAmount <= 0)}>
+              <CheckCircle size={20} /> {detailPaymentStatus === "pendiente" ? "Confirmar venta pendiente" : detailPaymentStatus === "parcial" ? `Confirmar con pago parcial · ${formatMoney(detailInitialPaymentAmount)}` : `Confirmar venta · ${formatMoney(Math.max(detailTotal, 0))}`}
+            </button>
+          </section>
+        </div>
+      </div>
+      )}
+      {salesPage === "cobros" && (
+        <div className="sales-narrow-view">
+          <div className="command-header">
+            <div><span>Cuentas por cobrar</span><h2>Cobros pendientes</h2><p>{pendingSales.length} venta(s) con saldo.</p></div>
+          </div>
+          <Panel title="Registrar cobro">
             {pendingSales.length ? (
               <div className="pending-payment-form">
                 <label>
@@ -1118,10 +1187,7 @@ function Sales() {
                     })}
                   </select>
                 </label>
-                <div className="pending-payment-balance">
-                  <span>Saldo pendiente</span>
-                  <strong>{formatMoney(pendingBalance)}</strong>
-                </div>
+                <div className="pending-payment-balance"><span>Saldo pendiente</span><strong>{formatMoney(pendingBalance)}</strong></div>
                 <label>
                   Cobro ahora
                   <input type="number" min={0.01} max={pendingBalance} value={pendingPaymentAmount} onChange={(event) => setPendingPaymentAmount(Number(event.target.value))} />
@@ -1144,7 +1210,6 @@ function Sales() {
             ) : <div className="empty-lines">No hay ventas con saldo pendiente.</div>}
           </Panel>
         </div>
-      </div>
       )}
       {salesPage === "turnos" && (
         <div className="sales-turns-grid">
@@ -1447,6 +1512,7 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
   const canSeeSupplier = activeRole === "dueno" || activeRole === "administrador";
   const [stockPage, setStockPage] = useState<StockPage>("control");
   const [query, setQuery] = useState("");
+  const [stockStatusFilter, setStockStatusFilter] = useState<"todos" | "normal" | "bajo" | "agotado">("todos");
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyType, setHistoryType] = useState<StockMovementType | "todos">("todos");
   const [historyPeriod, setHistoryPeriod] = useState<"todos" | "7" | "30" | "90">("todos");
@@ -1583,10 +1649,17 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
     });
   }, [stockVariants]);
 
-  const filteredProducts = products.filter((product) => {
+  const inventoryRows = useMemo(() => products.map((product) => {
+    const totalStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
+    const totalCost = product.variants.reduce((sum, variant) => sum + variant.stock * variant.cost, 0);
+    const hasLowStock = product.variants.some((variant) => variant.stock > 0 && variant.stock <= variant.lowStockAt);
+    const status: "normal" | "bajo" | "agotado" = totalStock <= 0 ? "agotado" : hasLowStock ? "bajo" : "normal";
+    const primaryVariant = product.variants[0];
+    return { product, totalStock, totalCost, status, primaryVariant };
+  }), [products]);
+  const filteredInventoryRows = inventoryRows.filter(({ product, status }) => {
     const value = query.trim().toLowerCase();
-    if (!value) return true;
-    return (
+    const matchesQuery = !value || (
       product.name.toLowerCase().includes(value) ||
       product.category.toLowerCase().includes(value) ||
       product.supplier.toLowerCase().includes(value) ||
@@ -1595,7 +1668,9 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
         [variant.name, variant.sku, variant.barcode].some((field) => field.toLowerCase().includes(value))
       )
     );
+    return matchesQuery && (stockStatusFilter === "todos" || status === stockStatusFilter);
   });
+  const inventoryValuation = inventoryRows.reduce((sum, row) => sum + row.totalCost, 0);
 
   const submitProduct = async () => {
     if (!newProduct.name.trim() || !newProduct.sku.trim() || newProduct.price <= 0) return;
@@ -1745,12 +1820,20 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
       setStockPage("control");
     }
   };
+  const startProductAdjustment = (product: Product) => {
+    setBatchLines(product.variants.map((variant) => ({ id: crypto.randomUUID(), variantId: variant.id, actualStock: variant.stock })));
+    setBatchProductQueries({});
+    setBatchReason("");
+    setMovementStatus("");
+    setCorrectionOfOperationId(undefined);
+    setStockPage("movimiento");
+  };
   const stockTabs: { id: StockPage; label: string; icon: typeof Package }[] = [
-    { id: "control", label: "Control de stock", icon: Package },
-    { id: "alta", label: "Alta de producto", icon: PlusCircle },
-    { id: "movimiento", label: "Movimiento", icon: MinusCircle },
-    { id: "variante", label: "Variante", icon: PencilSimple },
-    { id: "importacion", label: "Importacion", icon: ListBullets },
+    { id: "control", label: "Productos", icon: Package },
+    { id: "alta", label: "Nuevo producto", icon: PlusCircle },
+    { id: "movimiento", label: "Ajustar stock", icon: MinusCircle },
+    { id: "variante", label: "Variantes", icon: PencilSimple },
+    { id: "importacion", label: "Importar", icon: ListBullets },
     { id: "historial", label: "Historial", icon: ClockCounterClockwise }
   ];
 
@@ -1769,41 +1852,54 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
           })}
         </div>
         {stockPage === "control" && (
-        <Panel title="Control de stock">
-          <label className="search-field">
-            <MagnifyingGlass size={17} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por producto, descripcion, SKU o codigo" />
-          </label>
-          <div className="stock-list">
-            {filteredProducts.map((product) => (
-              <article className="stock-item" key={product.id}>
-                <img src={product.imageUrl} alt="" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
-                <div>
-                  <strong>{product.name}</strong>
-                  <span>{product.category}{canSeeSupplier ? ` · ${product.supplier}` : ""}</span>
-                  <div className="variant-chips">
-                    {product.variants.map((variant) => (
-                      <span className={clsx("chip", variant.stock <= variant.lowStockAt && "warning")} key={variant.id}>
-                        <Barcode size={14} /> {variant.name}: {variant.stock} · {variant.sku}
-                      </span>
-                    ))}
-                  </div>
+        <div className="inventory-workspace">
+          <header className="command-header inventory-command-header">
+            <div>
+              <span>Inventario</span>
+              <h2>Productos y stock</h2>
+              <p>{products.length} producto(s){canSeeSupplier ? ` · Valorización a costo ${formatMoney(inventoryValuation)}` : ""}</p>
+            </div>
+          </header>
+          <div className="inventory-toolbar">
+            <label className="search-field">
+              <MagnifyingGlass size={17} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por producto, descripción, SKU o código" />
+            </label>
+            <label>
+              <span className="sr-only">Estado de stock</span>
+              <select value={stockStatusFilter} onChange={(event) => setStockStatusFilter(event.target.value as typeof stockStatusFilter)} aria-label="Filtrar por estado de stock">
+                <option value="todos">Todos los estados</option>
+                <option value="normal">Stock normal</option>
+                <option value="bajo">Stock bajo</option>
+                <option value="agotado">Agotado</option>
+              </select>
+            </label>
+            <strong>{filteredInventoryRows.length} resultados</strong>
+          </div>
+          <div className={clsx("inventory-table", canSeeSupplier && "can-see-cost") }>
+            <div className="inventory-row inventory-head">
+              <span>Producto</span><span>Categoría</span>{canSeeSupplier && <span>Costo</span>}<span>Precio</span><span>Stock</span><span>Estado</span><span />
+            </div>
+            {filteredInventoryRows.map(({ product, totalStock, totalCost, status, primaryVariant }) => (
+              <article className="inventory-row" key={product.id}>
+                <div className="inventory-product-cell">
+                  {product.imageUrl ? <img src={product.imageUrl} alt="" /> : <span className="inventory-image-placeholder"><Package size={18} /></span>}
+                  <div><strong>{product.name}</strong><span>{primaryVariant?.sku || primaryVariant?.barcode || "Sin código"}{product.variants.length > 1 ? ` · ${product.variants.length} variantes` : ""}</span></div>
                 </div>
-                <div className="stock-item-actions">
-                  <button
-                    className="icon-button"
-                    onClick={() => onEditProduct(product.id)}
-                    aria-label={`Editar ${product.name}`}
-                    title={`Editar ${product.name}`}
-                  >
-                    <PencilSimple size={18} />
-                  </button>
-                  <Status status={product.syncStatus} />
+                <span className="inventory-category">{product.category || "Sin categoría"}</span>
+                {canSeeSupplier && <span className="inventory-cost">{formatMoney(totalCost)}</span>}
+                <strong className="inventory-price">{formatMoney(primaryVariant?.price ?? 0)}</strong>
+                <span className="inventory-stock">{totalStock}</span>
+                <span className={clsx("inventory-status", status)}>{status === "normal" ? "Normal" : status === "bajo" ? "Stock bajo" : "Agotado"}</span>
+                <div className="inventory-actions">
+                  <button className="text-action" onClick={() => startProductAdjustment(product)}>Ajustar</button>
+                  <button className="icon-button" onClick={() => onEditProduct(product.id)} aria-label={`Editar ${product.name}`} title={`Editar ${product.name}`}><PencilSimple size={18} /></button>
                 </div>
               </article>
             ))}
+            {!filteredInventoryRows.length && <div className="inventory-empty">No hay productos que coincidan con los filtros.</div>}
           </div>
-        </Panel>
+        </div>
         )}
         {stockPage === "alta" && (
           <Panel title="Alta de producto">
@@ -2663,6 +2759,7 @@ function Purchases() {
 
 function Customers() {
   const customers = useStore((state) => state.customers);
+  const sales = useStore((state) => state.sales);
   const addCustomer = useStore((state) => state.addCustomer);
   const updateCustomer = useStore((state) => state.updateCustomer);
   const deleteCustomer = useStore((state) => state.deleteCustomer);
@@ -2672,12 +2769,35 @@ function Customers() {
   const [contactPage, setContactPage] = useState<ContactPage>("lista");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: "", phone: "", email: "", note: "" });
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const activeCustomers = customers.filter((customer) => !customer.deletedAt);
   const deletedCustomers = customers.filter((customer) => customer.deletedAt);
+  const activeSales = sales.filter((sale) => !sale.deletedAt);
+  const customerAccounts = useMemo(() => activeCustomers.map((customer) => {
+    const customerSales = activeSales.filter((sale) => (sale.customerName ?? "").trim().toLocaleLowerCase() === customer.name.trim().toLocaleLowerCase());
+    const balance = customerSales.reduce((sum, sale) => sum + Math.max(sale.total - salePaidAmount(sale), 0), 0);
+    return { customer, customerSales, balance };
+  }), [activeCustomers, activeSales]);
+  const filteredCustomerAccounts = customerAccounts.filter(({ customer }) => {
+    const value = customerQuery.trim().toLocaleLowerCase();
+    return !value || [customer.name, customer.phone, customer.email, customer.note].some((field) => field.toLocaleLowerCase().includes(value));
+  });
+  const selectedCustomerAccount = customerAccounts.find(({ customer }) => customer.id === selectedCustomerId) ?? filteredCustomerAccounts[0] ?? customerAccounts[0];
+  const totalCustomerBalance = customerAccounts.reduce((sum, account) => sum + account.balance, 0);
+
+  useEffect(() => {
+    if (!selectedCustomerId && activeCustomers[0]) setSelectedCustomerId(activeCustomers[0].id);
+  }, [activeCustomers, selectedCustomerId]);
 
   const submit = () => {
-    if (editingId) updateCustomer(editingId, draft);
-    else addCustomer(draft);
+    if (editingId) {
+      updateCustomer(editingId, draft);
+      setSelectedCustomerId(editingId);
+    } else {
+      const created = addCustomer(draft);
+      if (created) setSelectedCustomerId(created.id);
+    }
     setEditingId(null);
     setDraft({ name: "", phone: "", email: "", note: "" });
     setContactPage("lista");
@@ -2692,47 +2812,88 @@ function Customers() {
     setDraft({ name: "", phone: "", email: "", note: "" });
     setContactPage("nuevo");
   };
-  const tabs: { id: ContactPage; label: string; icon: typeof Users }[] = [
-    { id: "lista", label: "Clientes", icon: Users },
-    { id: "nuevo", label: "Nuevo cliente", icon: PlusCircle },
-    { id: "editar", label: "Editar cliente", icon: PencilSimple },
-    ...(isOwner ? [{ id: "eliminados" as const, label: "Eliminados", icon: Trash }] : [])
-  ];
-
   return (
     <section className="workspace">
       <div className="module-workspace">
-        <div className="module-topbar" aria-label="Secciones de clientes">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const disabled = tab.id === "editar" && !editingId;
-            return (
-              <button key={tab.id} className={clsx("module-tab", contactPage === tab.id && "active")} onClick={() => (tab.id === "nuevo" ? startNew() : setContactPage(tab.id))} disabled={disabled}>
-                <Icon size={18} weight="duotone" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
         {contactPage === "lista" && (
-        <Panel title="Clientes">
-          <ContactList contacts={activeCustomers} empty="Sin clientes cargados." onEdit={edit} onDelete={isOwner ? (customer) => deleteCustomer(customer.id, activeRole) : undefined} />
-        </Panel>
+          <div className="customers-workspace">
+            <header className="command-header customers-command-header">
+              <div>
+                <span>Personas</span>
+                <h2>Clientes y cuentas</h2>
+                <p>{activeCustomers.length} cliente(s) · Saldo pendiente total {formatMoney(totalCustomerBalance)}</p>
+              </div>
+              <div className="command-actions">
+                {isOwner && <button className="secondary-action" onClick={() => setContactPage("eliminados")}><Trash size={18} /> Eliminados</button>}
+                <button className="primary-action" onClick={startNew}><PlusCircle size={18} /> Nuevo cliente</button>
+              </div>
+            </header>
+            <div className="customers-layout">
+              <section className="customers-list-pane">
+                <label className="search-field">
+                  <MagnifyingGlass size={17} />
+                  <input value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="Buscar cliente, teléfono o email" aria-label="Buscar clientes" />
+                </label>
+                <div className="customers-table">
+                  <div className="customer-row customer-head"><span>Cliente</span><span>Contacto</span><span>Saldo</span><span /></div>
+                  {filteredCustomerAccounts.map(({ customer, balance }) => (
+                    <button className={clsx("customer-row", selectedCustomerAccount?.customer.id === customer.id && "selected")} key={customer.id} onClick={() => setSelectedCustomerId(customer.id)}>
+                      <span><strong>{customer.name}</strong><small>{customer.note || "Sin nota"}</small></span>
+                      <span>{customer.phone || customer.email || "Sin contacto"}</span>
+                      <strong className={clsx(balance > 0 ? "balance-due" : "balance-clear")}>{formatMoney(balance)}</strong>
+                      <span className="text-action">Ver cuenta</span>
+                    </button>
+                  ))}
+                  {!filteredCustomerAccounts.length && <div className="inventory-empty">No hay clientes que coincidan con la búsqueda.</div>}
+                </div>
+              </section>
+              <aside className="customer-detail-pane">
+                {selectedCustomerAccount ? (
+                  <>
+                    <header>
+                      <div><span>Cuenta del cliente</span><h3>{selectedCustomerAccount.customer.name}</h3></div>
+                      <button className="icon-button" onClick={() => edit(selectedCustomerAccount.customer)} aria-label={`Editar ${selectedCustomerAccount.customer.name}`}><PencilSimple size={18} /></button>
+                    </header>
+                    <div className="customer-balance-summary">
+                      <span>Saldo pendiente</span>
+                      <strong>{formatMoney(selectedCustomerAccount.balance)}</strong>
+                      <small>{selectedCustomerAccount.customer.phone || selectedCustomerAccount.customer.email || "Sin datos de contacto"}</small>
+                    </div>
+                    <div className="customer-detail-section">
+                      <strong>Ventas asociadas</strong>
+                      {selectedCustomerAccount.customerSales.slice(0, 6).map((sale) => (
+                        <div className="customer-sale-row" key={sale.id}>
+                          <span><strong>{sale.receiptNumber}</strong><small>{new Date(sale.createdAt).toLocaleDateString("es-AR")}</small></span>
+                          <span>{formatMoney(sale.total - salePaidAmount(sale))}</span>
+                        </div>
+                      ))}
+                      {!selectedCustomerAccount.customerSales.length && <p>Este cliente todavía no tiene ventas asociadas.</p>}
+                    </div>
+                    <button className="secondary-action full" onClick={() => edit(selectedCustomerAccount.customer)}><PencilSimple size={18} /> Editar cliente</button>
+                    {isOwner && <button className="secondary-action danger full" onClick={() => deleteCustomer(selectedCustomerAccount.customer.id, activeRole)}><Trash size={18} /> Mover a eliminados</button>}
+                  </>
+                ) : <div className="empty-lines">Seleccioná un cliente para ver su cuenta.</div>}
+              </aside>
+            </div>
+          </div>
         )}
         {contactPage === "nuevo" && (
-        <Panel title="Nuevo cliente">
-          <ContactForm draft={draft} setDraft={setDraft} primaryLabel={editingId ? "Guardar cliente" : "Crear cliente"} onSubmit={submit} />
-        </Panel>
+          <div className="customers-form-view">
+            <button className="secondary-action back-action" onClick={() => setContactPage("lista")}><ArrowLeft size={18} /> Volver a clientes</button>
+            <Panel title="Nuevo cliente"><ContactForm draft={draft} setDraft={setDraft} primaryLabel="Crear cliente" onSubmit={submit} /></Panel>
+          </div>
         )}
         {contactPage === "editar" && (
-        <Panel title="Editar cliente">
-          {editingId ? <ContactForm draft={draft} setDraft={setDraft} primaryLabel="Guardar cliente" onSubmit={submit} /> : <div className="empty-lines">Selecciona un cliente desde la lista para editarlo.</div>}
-        </Panel>
+          <div className="customers-form-view">
+            <button className="secondary-action back-action" onClick={() => setContactPage("lista")}><ArrowLeft size={18} /> Volver a clientes</button>
+            <Panel title="Editar cliente">{editingId ? <ContactForm draft={draft} setDraft={setDraft} primaryLabel="Guardar cliente" onSubmit={submit} /> : <div className="empty-lines">Seleccioná un cliente desde la lista para editarlo.</div>}</Panel>
+          </div>
         )}
         {contactPage === "eliminados" && isOwner && (
-        <Panel title="Clientes eliminados">
-          <ContactList contacts={deletedCustomers} empty="No hay clientes eliminados." onEdit={edit} restoreLabel="Restaurar" onRestore={(customer) => restoreCustomer(customer.id, activeRole)} />
-        </Panel>
+          <div className="customers-form-view">
+            <button className="secondary-action back-action" onClick={() => setContactPage("lista")}><ArrowLeft size={18} /> Volver a clientes</button>
+            <Panel title="Clientes eliminados"><ContactList contacts={deletedCustomers} empty="No hay clientes eliminados." onEdit={edit} restoreLabel="Restaurar" onRestore={(customer) => restoreCustomer(customer.id, activeRole)} /></Panel>
+          </div>
         )}
       </div>
     </section>
@@ -4887,9 +5048,9 @@ function getPurchasePaymentStates(receipts: PurchaseReceipt[], payments: { suppl
   return states;
 }
 
-function CartLines({ lines, onRemove }: { lines: SaleLine[]; onRemove: (variantId: string) => void }) {
+function CartLines({ lines, onRemove, onChangeQuantity }: { lines: SaleLine[]; onRemove: (variantId: string) => void; onChangeQuantity?: (variantId: string, quantity: number) => void }) {
   if (!lines.length) {
-    return <div className="empty-lines">Sin lineas cargadas.</div>;
+    return <div className="empty-lines cart-empty"><ShoppingCartSimple size={28} /><strong>La venta está vacía</strong><span>Agregá productos desde el catálogo.</span></div>;
   }
   return (
     <div className="cart-lines">
@@ -4899,6 +5060,13 @@ function CartLines({ lines, onRemove }: { lines: SaleLine[]; onRemove: (variantI
             <strong>{line.name}</strong>
             <span>{line.quantity} x {formatMoney(line.unitPrice)} · {line.sku}</span>
           </div>
+          {onChangeQuantity && (
+            <div className="cart-quantity" aria-label={`Cantidad de ${line.name}`}>
+              <button className="icon-button" type="button" onClick={() => onChangeQuantity(line.variantId, line.quantity - 1)} disabled={line.quantity <= 1} aria-label={`Restar ${line.name}`}><MinusCircle size={16} /></button>
+              <strong>{line.quantity}</strong>
+              <button className="icon-button" type="button" onClick={() => onChangeQuantity(line.variantId, line.quantity + 1)} aria-label={`Sumar ${line.name}`}><PlusCircle size={16} /></button>
+            </div>
+          )}
           <strong>{formatMoney(line.quantity * line.unitPrice)}</strong>
           <button className="icon-button" title="Quitar linea" onClick={() => onRemove(line.variantId)}>
             <Trash size={17} />

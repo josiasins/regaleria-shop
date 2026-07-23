@@ -34,9 +34,10 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Botones con icono para acciones concretas.
 - Inputs y selects consistentes, con edicion bajo demanda cuando la pantalla principal debe escalar.
 - Vista lista para escaneo, vista cuadricula para inspeccion visual.
-- Modulos operativos densos, como Stock, usan acciones superiores para abrir subpantallas en lugar de mostrar todos los formularios juntos.
-- Ventas prioriza Mostrador; Turnos, Ventas del turno y Ayuda viven como vistas internas accesibles por botones superiores.
-- La pantalla de Mostrador ofrece un unico flujo de Registrar venta y un bloque de Cobros pendientes. Evitar caminos de caja duplicados: una venta puede quedar pagada, parcial o pendiente sin perder su comprobante.
+- Modulos operativos densos, como Productos y stock, usan acciones superiores para abrir subpantallas en lugar de mostrar todos los formularios juntos.
+- Ventas prioriza Punto de venta; Cobros pendientes, Turnos, Ventas del turno, Auditoria y Ayuda viven como vistas internas accesibles por botones superiores.
+- Punto de venta usa dos areas coordinadas: catalogo buscable y venta actual. Cliente, lineas, descuento, estado de cobro, medio de pago y confirmacion permanecen en el contexto del comprobante.
+- Clientes usa patron maestro-detalle: lista escaneable a la izquierda y cuenta seleccionada a la derecha. Alta, edicion y eliminados se abren bajo demanda.
 - Compras prioriza Factura o remito; Precarga, Compras recientes, Cuenta de proveedores y Registrar pago viven como vistas internas accesibles por botones superiores.
 - Personas prioriza listas de Clientes/Proveedores; alta y edicion viven como subvistas accesibles por botones superiores.
 - Presupuestos, Transferencias, Gastos y Configuracion siguen el mismo patron de vistas superiores para separar carga, consulta, resumen y administracion.
@@ -54,6 +55,8 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 ## Reglas
 
 - No mostrar formularios completos si el usuario solo esta consultando.
+- Una pantalla operativa debe responder primero a una tarea. Las funciones relacionadas se agrupan como subvistas, no como paneles simultaneos con igual peso.
+- Un rediseño visual no puede cambiar acciones persistentes, validaciones, permisos ni contratos del store salvo decision separada y documentada.
 - Evitar tarjetas dentro de tarjetas.
 - Mantener botones y campos con radio de 7 u 8 px.
 - Jerarquia: titulo de pagina primero; accion activa o total financiero despues; encabezado de panel tercero; metadatos, estados y ayuda en menor contraste. No dar a todos los textos, botones o paneles el mismo peso visual.

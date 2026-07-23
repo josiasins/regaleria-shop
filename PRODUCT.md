@@ -18,9 +18,11 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 ## Principios
 
 - Primero operacion diaria: cobrar, buscar, cargar stock y cerrar caja debe ser rapido.
+- Simplificar significa reducir decisiones visuales y pasos de navegacion, no quitar controles necesarios ni crear caminos alternativos para la misma operacion.
 - La edicion aparece bajo demanda; las pantallas principales priorizan lectura y escaneo.
 - Cada cambio importante deja historial o estado de sincronizacion.
 - Los datos operativos ya registrados se preservan entre versiones: una mejora no puede reiniciarlos, reemplazarlos por demo ni alterar su significado. Las correcciones y cobros agregan historial auditable.
+- Los cambios de interfaz se mantienen separados de la logica persistente y deben probar que ventas, turnos, pagos, stock y auditoria conservan su comportamiento.
 - El sistema es online en V1, pero conserva base para offline parcial.
 - Los datos repetibles, como categorias, clientes y proveedores, se administran como listas reutilizables.
 - La IA queda limitada a precarga documental de compras; las imágenes de producto se gestionan manualmente.

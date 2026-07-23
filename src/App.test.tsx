@@ -22,15 +22,15 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Ventas/i }));
-    expect(screen.getByRole("button", { name: /Registrar venta/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Confirmar venta/i })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Turnos" }));
     await user.clear(screen.getByLabelText("Efectivo inicial"));
     await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
 
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
-    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
+    await user.click(screen.getAllByRole("button", { name: /^Agregar /i })[0]);
+    await user.click(screen.getByRole("button", { name: /Confirmar venta/i }));
     expect(screen.getByText("CI-000003")).toBeInTheDocument();
     expect(screen.getByText(/Consumidor final/i)).toBeInTheDocument();
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Stock/i }));
-    await user.click(screen.getByRole("button", { name: /Alta de producto/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo producto/i }));
 
     await user.type(screen.getByLabelText("Producto"), "Llavero inicial");
     await user.type(screen.getAllByLabelText("SKU")[0], "LLA-INI-001");
@@ -66,7 +66,7 @@ describe("Regaleria app", () => {
 
     expect(screen.getByText("Llavero inicial")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Movimiento" }));
+    await user.click(screen.getByRole("button", { name: "Ajustar stock" }));
     await user.clear(screen.getByLabelText("Stock real producto 1"));
     await user.type(screen.getByLabelText("Stock real producto 1"), "99");
     await user.type(screen.getByLabelText("Motivo de la operacion"), "Conteo de prueba");
@@ -129,7 +129,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Stock/i }));
-    await user.click(screen.getByRole("button", { name: /Alta de producto/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo producto/i }));
 
     await user.type(screen.getByLabelText("Producto"), "Agenda artesanal");
     await user.selectOptions(screen.getByLabelText("Categoria"), "__new");
@@ -154,7 +154,7 @@ describe("Regaleria app", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: /Stock/i }));
-    await user.click(screen.getByRole("button", { name: /Alta de producto/i }));
+    await user.click(screen.getByRole("button", { name: /Nuevo producto/i }));
 
     expect(screen.getByRole("option", { name: "Marroquineria" })).toBeInTheDocument();
     expect(screen.getAllByRole("option", { name: "Sin categoria" })).toHaveLength(1);
@@ -182,9 +182,9 @@ describe("Regaleria app", () => {
 
     await user.selectOptions(screen.getByLabelText("Cliente"), "nuevo");
     await user.type(screen.getByLabelText("Nuevo cliente"), "Rocio mostrador");
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
+    await user.click(screen.getAllByRole("button", { name: /^Agregar /i })[0]);
     expect((await screen.findAllByText(/MAT-PREM-NEG/i)).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
+    await user.click(screen.getByRole("button", { name: /Confirmar venta/i }));
 
     expect((await screen.findAllByText(/Rocio mostrador/i)).length).toBeGreaterThan(0);
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
@@ -229,9 +229,9 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
 
-    await user.click(screen.getByRole("button", { name: "Mostrador" }));
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
-    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
+    await user.click(screen.getByRole("button", { name: "Punto de venta" }));
+    await user.click(screen.getAllByRole("button", { name: /^Agregar /i })[0]);
+    await user.click(screen.getByRole("button", { name: /Confirmar venta/i }));
     await user.click(screen.getByRole("button", { name: "Turnos" }));
     expect(screen.getByText(/Efectivo esperado/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Cerrar turno/i }));
@@ -249,9 +249,9 @@ describe("Regaleria app", () => {
     await user.clear(screen.getByLabelText("Efectivo inicial"));
     await user.type(screen.getByLabelText("Efectivo inicial"), "10000");
     await user.click(screen.getByRole("button", { name: "Abrir turno" }));
-    await user.click(screen.getByRole("button", { name: "Mostrador" }));
-    await user.click(screen.getByRole("button", { name: /Agregar/i }));
-    await user.click(screen.getByRole("button", { name: /Registrar venta$/i }));
+    await user.click(screen.getByRole("button", { name: "Punto de venta" }));
+    await user.click(screen.getAllByRole("button", { name: /^Agregar /i })[0]);
+    await user.click(screen.getByRole("button", { name: /Confirmar venta/i }));
 
     await user.click(screen.getByRole("button", { name: "Auditoria" }));
     await user.type(screen.getByLabelText("Motivo"), "Error de carga");
@@ -420,7 +420,7 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Nombre"), "Cliente Mostrador");
     await user.type(screen.getByLabelText("Telefono"), "3511234567");
     await user.click(screen.getByRole("button", { name: /Crear cliente/i }));
-    expect(screen.getByText(/Cliente Mostrador/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Cliente Mostrador/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /Proveedores/i }));
     await user.click(screen.getByRole("button", { name: "Nuevo proveedor" }));
@@ -439,14 +439,14 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Nombre"), "Cliente a restaurar");
     await user.click(screen.getByRole("button", { name: /Crear cliente/i }));
 
-    await user.click(screen.getAllByRole("button", { name: /Borrar/i })[0]);
+    await user.click(screen.getByRole("button", { name: /Mover a eliminados/i }));
     expect(screen.queryByText("Cliente a restaurar")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Eliminados" }));
-    expect(screen.getByText("Cliente a restaurar")).toBeInTheDocument();
+    expect(screen.getAllByText("Cliente a restaurar").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /Restaurar/i }));
     expect(screen.getByText("No hay clientes eliminados.")).toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", { name: "Clientes" })[1]);
-    expect(screen.getByText("Cliente a restaurar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Volver a clientes/i }));
+    expect(screen.getAllByText("Cliente a restaurar").length).toBeGreaterThan(0);
   });
 
   it("lets administrators delete and restore suppliers with history", async () => {
@@ -576,7 +576,7 @@ describe("Regaleria app", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Stock/i }));
-    await user.click(screen.getByRole("button", { name: "Variante" }));
+    await user.click(screen.getByRole("button", { name: "Variantes" }));
     await user.click(screen.getByRole("button", { name: "Agregar nueva" }));
     await user.type(screen.getByLabelText("Nombre"), "Rojo");
     await user.type(screen.getByLabelText("SKU"), "MAT-PREM-ROJ");
@@ -688,12 +688,12 @@ describe("Regaleria app", () => {
     render(<App />);
     await user.click(screen.getByRole("button", { name: /Stock/i }));
 
-    await user.click(screen.getByRole("button", { name: "Importacion" }));
+    await user.click(screen.getByRole("button", { name: "Importar" }));
     await user.type(screen.getByLabelText("Productos"), "Agenda floral;Libreria;Casa Aroma;AGE-FLO-001;3500;1500;6");
     await user.click(screen.getByRole("button", { name: /Importar productos/i }));
     expect(screen.getByText("Agenda floral")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Variante" }));
+    await user.click(screen.getByRole("button", { name: "Variantes" }));
     await user.clear(screen.getByLabelText("SKU"));
     await user.type(screen.getByLabelText("SKU"), "MAT-EDIT-001");
     await user.click(screen.getByRole("button", { name: /Guardar variante/i }));

@@ -675,6 +675,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Motivo: la barra anterior se percibia como un menu aislado y no daba contexto de marca. El texto ocupaba espacio tactil sin agregar informacion necesaria.
 - Alcance: se reutiliza el SVG vectorial oficial `regaleria-shop-symbol.svg` de la carpeta de marca como fuente de una variante recortada de regalo para interfaz, transformada a blanco sobre superficies oscuras. Se elimina el logotipo tipografico duplicado del lateral. Se preservan el menu lateral, sus permisos y las operaciones actuales; solo cambia la presentacion y la accesibilidad conserva el nombre `Abrir menu`.
 - Alternativas descartadas: redibujar el icono desde la captura, porque podria introducir una version inconsistente; usar el icono PNG con volumen, porque no mantiene la lectura minima necesaria en una barra pequena.
+
+### Simplificacion operativa sin cambios de comportamiento
+- Fecha: 2026-07-22.
+- Decision: reorganizar Punto de venta, Productos y stock y Clientes con una estructura orientada a la tarea principal, conservando sin cambios las acciones, validaciones, permisos y persistencia existentes.
+- Motivo: las pantallas acumulaban controles con la misma jerarquia y obligaban a recorrer bloques separados para completar operaciones frecuentes. La nueva composicion reduce pasos visuales sin introducir otra forma de guardar datos.
+- Alcance: Punto de venta usa catalogo a la izquierda y venta actual a la derecha; Cobros pendientes vive como subvista. Stock pasa a llamarse `Productos y stock` y prioriza una tabla con busqueda, estado, precio, existencia y accesos a ajuste/edicion. Clientes usa lista y detalle de cuenta, seleccionando automaticamente el cliente recien creado. Tablet y celular conservan las mismas funciones mediante apilado, drawer y controles tactiles.
+- Regla de seguridad: este cambio es exclusivamente de interfaz. No modifica `store.ts`, contratos de sincronizacion, tablas, ventas, turnos, pagos, compras ni movimientos registrados.
+- Alternativas descartadas: reemplazar los flujos operativos junto con el rediseño, porque aumentaria el riesgo sobre datos que ya funcionan; ocultar funciones secundarias, porque simplificar no significa quitar capacidad.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.
