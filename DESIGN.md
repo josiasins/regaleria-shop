@@ -45,7 +45,8 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - El menu lateral pasa a drawer con boton hamburguesa en tablet y celular para no ocupar el primer scroll.
 - Bloques de IA documental con estado visible, resultado revisable y accion de aplicar separada de guardar.
 - Edicion de producto en vista dedicada cuando la tarea requiere imagenes, IA y datos publicables.
-- Galerias con imagen principal, miniaturas cuadradas y tiles `+` para sumar archivos.
+- Galerias con imagen principal, miniaturas cuadradas reordenables por arrastre y tiles `+` para sumar archivos. La primera miniatura siempre comunica la portada.
+- En escritorio, las listas extensas de Punto de venta, Productos y stock y Catalogo desplazan solo sus resultados; controles y paneles de trabajo conservan su posicion. En tablet y celular se mantienen limites de altura tactiles sin forzar una pantalla fija.
 - La tienda pública usa verde bosque, coral y amarillo suave; prioriza búsqueda, categorías, producto, precio, stock, envío y carrito.
 - El carrito público vive en una página propia, accesible desde el encabezado; nunca se agrega como bloque al final del catálogo.
 - La marca elegida usa logo dorado con caja, cinta y palabra `shop`; la fuente maestra es `public/brand/regaleria-shop-logo_NEW.af`, y las reglas completas viven en `docs/manual-marca.md`.

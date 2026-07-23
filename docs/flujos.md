@@ -351,8 +351,10 @@
 3. Cada variante muestra su precio interno actual.
 4. La persona puede activar `Precio distinto en web`; recien entonces carga el precio exclusivo de la tienda publica.
 5. Si la casilla queda desactivada, la web conserva el precio interno para esa variante.
-6. Al guardar, se conserva proveedor, historial y stock; se actualizan solo los datos comerciales y los precios elegidos.
-7. SEO permanece cerrado para reducir ruido visual y se abre solo cuando se quiere completar titulo, descripcion o revisar recomendaciones.
+6. Las miniaturas se pueden arrastrar para cambiar su posicion; la primera queda definida como portada. Con teclado se usa `Alt` mas flecha izquierda o derecha.
+7. El orden no se confirma hasta presionar `Guardar producto`.
+8. Al guardar, se conserva proveedor, historial y stock; se actualizan solo los datos comerciales, el orden de imagenes y los precios elegidos.
+9. SEO permanece cerrado para reducir ruido visual y se abre solo cuando se quiere completar titulo, descripcion o revisar recomendaciones.
 
 ## Revision de compras recientes
 
@@ -386,6 +388,7 @@
 4. Se selecciona cliente, descuento permitido, estado de cobro y medio de pago.
 5. Una venta pagada, parcial o pendiente usa la misma accion de confirmacion existente y requiere turno abierto.
 6. Los cobros posteriores se registran desde `Cobros pendientes` sin alterar el comprobante original.
+7. En escritorio, solo se desplaza la lista de productos; filtros y venta actual permanecen visibles.
 
 ## Productos y stock simplificado
 
@@ -393,6 +396,13 @@
 2. La busqueda contempla nombre, descripcion, SKU y codigo; el filtro separa normal, bajo y agotado.
 3. `Ajustar` abre la operacion de stock existente con las variantes del producto precargadas, sin registrar cambios hasta confirmar.
 4. `Editar` abre la ficha comercial existente y conserva historial, proveedor y stock.
+5. En escritorio, encabezado y filtros permanecen visibles mientras se desplaza unicamente la tabla de resultados.
+
+## Catalogo navegable
+
+1. Metricas, selector de vista y filtros permanecen visibles en escritorio.
+2. Solo la cuadricula o lista de resultados se desplaza.
+3. Abrir `Editar` conserva la ficha, las imagenes y el orden guardado del producto.
 
 ## Clientes y cuentas
 

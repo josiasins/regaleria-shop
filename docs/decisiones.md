@@ -683,6 +683,15 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - Alcance: Punto de venta usa catalogo a la izquierda y venta actual a la derecha; Cobros pendientes vive como subvista. Stock pasa a llamarse `Productos y stock` y prioriza una tabla con busqueda, estado, precio, existencia y accesos a ajuste/edicion. Clientes usa lista y detalle de cuenta, seleccionando automaticamente el cliente recien creado. Tablet y celular conservan las mismas funciones mediante apilado, drawer y controles tactiles.
 - Regla de seguridad: este cambio es exclusivamente de interfaz. No modifica `store.ts`, contratos de sincronizacion, tablas, ventas, turnos, pagos, compras ni movimientos registrados.
 - Alternativas descartadas: reemplazar los flujos operativos junto con el rediseño, porque aumentaria el riesgo sobre datos que ya funcionan; ocultar funciones secundarias, porque simplificar no significa quitar capacidad.
+
+### Orden visual de imagenes y desplazamiento interno
+- Fecha: 2026-07-23.
+- Decision: permitir reordenar por arrastre las imagenes existentes de un producto y limitar el desplazamiento a las listas de resultados en Punto de venta, Productos y stock y Catalogo.
+- Motivo: la primera imagen define la portada comercial y necesitaba poder elegirse sin volver a cargar archivos. En las pantallas operativas, desplazar toda la pagina hace perder filtros, contexto y la venta actual.
+- Alcance: el arrastre modifica solamente el orden del arreglo `imageUrls` ya existente y se persiste al usar `Guardar producto`; `imageUrl` queda alineada con la primera posicion. En escritorio permanecen fijos encabezados, filtros y panel de venta, mientras se desplazan los productos. Tablet y celular conservan el flujo adaptable.
+- Regla de seguridad: no se modifica el modelo de datos, la base de datos, el almacenamiento de archivos, ventas, turnos, pagos, stock ni sincronizacion. No se ejecutan migraciones ni escrituras sobre datos de produccion durante este cambio.
+- Accesibilidad: el orden tambien se puede cambiar con `Alt` y flechas izquierda/derecha, y las regiones desplazables reciben foco y nombre accesible.
+- Alternativas descartadas: guardar el orden en una tabla nueva, porque duplicaria un dato que ya existe; desplazar toda la pantalla, porque oculta controles necesarios; guardar automaticamente durante el arrastre, porque una accion accidental seria mas dificil de revisar.
 # 2026-06-19 - Carrito como pagina propia
 
 - **Decision:** el carrito reemplaza temporalmente la vista del catalogo y concentra productos, cantidades, entrega y confirmacion en una pagina dedicada.

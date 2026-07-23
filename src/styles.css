@@ -878,6 +878,12 @@ button.sync-pill {
 
 .pos-product-table {
   display: grid;
+  min-height: 0;
+  max-height: min(66dvh, 720px);
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .pos-product-head,
@@ -891,6 +897,9 @@ button.sync-pill {
 }
 
 .pos-product-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-height: 36px;
   background: oklch(96% 0.009 150);
   color: oklch(48% 0.024 158);
@@ -1140,6 +1149,14 @@ button.sync-pill {
   background: oklch(98% 0.007 150);
 }
 
+.inventory-table {
+  min-height: 0;
+  max-height: min(68dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .inventory-row {
   min-height: 66px;
   display: grid;
@@ -1155,6 +1172,9 @@ button.sync-pill {
 }
 
 .inventory-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-height: 40px;
   border-top: 0;
   background: oklch(95% 0.01 150);
@@ -2255,6 +2275,22 @@ label {
   gap: 18px;
 }
 
+.catalog-results-scroll {
+  min-height: 0;
+  max-height: min(68dvh, 780px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 1px 4px 8px 1px;
+}
+
+.pos-product-table:focus-visible,
+.inventory-table:focus-visible,
+.catalog-results-scroll:focus-visible {
+  outline: 3px solid oklch(72% 0.07 156);
+  outline-offset: 2px;
+}
+
 .filter-row {
   display: grid;
   grid-template-columns: minmax(240px, 1.2fr) repeat(3, minmax(150px, 0.8fr));
@@ -2815,6 +2851,29 @@ label {
   color: oklch(42% 0.04 160);
 }
 
+.image-tile[draggable="true"] {
+  cursor: grab;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.image-tile[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.image-tile.dragging {
+  opacity: 0.48;
+}
+
+.image-tile.drag-target {
+  transform: translateY(-2px);
+  border-color: oklch(55% 0.11 156);
+  box-shadow: 0 0 0 3px oklch(76% 0.07 154 / 0.48);
+}
+
 .image-tile.active {
   border-color: oklch(48% 0.08 160);
   box-shadow: 0 0 0 3px oklch(78% 0.052 154 / 0.45);
@@ -2839,6 +2898,32 @@ label {
   color: oklch(98% 0.006 150);
   font-size: 0.72rem;
   font-weight: 850;
+}
+
+.drag-handle {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  left: 6px;
+  padding: 3px;
+  border-radius: 5px;
+  background: oklch(28% 0.025 158 / 0.72);
+  color: oklch(98% 0.006 150);
+  pointer-events: none;
+}
+
+.image-order-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: oklch(47% 0.027 158);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.image-order-help svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .add-tile {
@@ -3770,6 +3855,14 @@ textarea:focus-visible {
   border-color: oklch(34% 0.026 158);
 }
 
+.theme-night .image-order-help {
+  color: oklch(72% 0.02 154);
+}
+
+.theme-night .drag-handle {
+  background: oklch(14% 0.018 158 / 0.82);
+}
+
 .theme-night .pos-product-row:hover,
 .theme-night .customer-row:not(.customer-head):hover,
 .theme-night .customer-row.selected {
@@ -3825,6 +3918,67 @@ textarea:focus-visible {
 
 .theme-night .pos-shift-warning span {
   color: oklch(82% 0.055 76);
+}
+
+@media (min-width: 1181px) {
+  .sales-pos-page,
+  .stock-control-page,
+  .catalog-browser-page {
+    height: calc(100dvh - 104px);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sales-pos-page .sales-workspace,
+  .sales-pos-page .sales-stack,
+  .stock-control-page .stock-workspace,
+  .stock-control-page .inventory-workspace {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .sales-pos-page .sales-workspace,
+  .stock-control-page .stock-workspace {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sales-pos-page .sales-stack {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sales-pos-page .pos-layout {
+    min-height: 0;
+    height: 100%;
+    align-items: stretch;
+  }
+
+  .sales-pos-page .pos-catalog {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .sales-pos-page .pos-product-table,
+  .stock-control-page .inventory-table,
+  .catalog-browser-page .catalog-results-scroll {
+    max-height: none;
+  }
+
+  .sales-pos-page .pos-current-sale {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .stock-control-page .inventory-workspace {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .catalog-browser-page {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 1180px) {
@@ -4644,7 +4798,8 @@ textarea:focus-visible {
 
   .inventory-table,
   .inventory-table.can-see-cost {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .inventory-head {

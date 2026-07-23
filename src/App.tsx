@@ -6,6 +6,7 @@ import {
   CheckCircle,
   ClockCounterClockwise,
   CreditCard,
+  DotsSixVertical,
   FileText,
   Gear,
   GlobeHemisphereWest,
@@ -1009,7 +1010,7 @@ function Sales() {
   ];
 
   return (
-    <section className="workspace">
+    <section className={clsx("workspace", salesPage === "mostrador" && "sales-pos-page")}>
       <div className="sales-workspace">
         <div className="sales-topbar" aria-label="Secciones de ventas">
           {salesTabs.map((tab) => {
@@ -1069,7 +1070,7 @@ function Sales() {
                 </select>
               </label>
             </div>
-            <div className="pos-product-table">
+            <div className="pos-product-table" tabIndex={0} aria-label="Lista desplazable de productos para la venta">
               <div className="pos-product-head"><span>Producto</span><span>SKU</span><span>Stock</span><span>Precio</span><span /></div>
               {salesCatalogRows.map(({ product, variant }) => {
                 const inCart = detailLines.find((line) => line.variantId === variant.id)?.quantity ?? 0;
@@ -1838,7 +1839,7 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
   ];
 
   return (
-    <section className="workspace">
+    <section className={clsx("workspace", stockPage === "control" && "stock-control-page")}>
       <div className="stock-workspace">
         <div className="stock-topbar" aria-label="Secciones de stock">
           {stockTabs.map((tab) => {
@@ -1876,7 +1877,7 @@ function Stock({ onEditProduct }: { onEditProduct: (productId: string) => void }
             </label>
             <strong>{filteredInventoryRows.length} resultados</strong>
           </div>
-          <div className={clsx("inventory-table", canSeeSupplier && "can-see-cost") }>
+          <div className={clsx("inventory-table", canSeeSupplier && "can-see-cost")} tabIndex={0} aria-label="Lista desplazable de productos y stock">
             <div className="inventory-row inventory-head">
               <span>Producto</span><span>Categoría</span>{canSeeSupplier && <span>Costo</span>}<span>Precio</span><span>Stock</span><span>Estado</span><span />
             </div>
@@ -3450,7 +3451,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
   }
 
   return (
-    <section className="workspace">
+    <section className="workspace catalog-browser-page">
       <div className="metric-grid compact-metrics">
         <Metric label="Productos totales" value={String(products.length)} icon={<Package size={24} />} />
         <Metric label="Publicables" value={String(publishableProducts.length)} icon={<Storefront size={24} />} />
@@ -3493,10 +3494,12 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
           <option value="internos">Internos</option>
         </select>
       </div>
-      <div className={clsx("catalog-grid", viewMode === "list" && "list-view")}>
-        {filteredProducts.map((product) => (
-          <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} />
-        ))}
+      <div className="catalog-results-scroll" tabIndex={0} aria-label="Resultados desplazables del catalogo">
+        <div className={clsx("catalog-grid", viewMode === "list" && "list-view")}>
+          {filteredProducts.map((product) => (
+            <ProductCard key={product.id} product={product} onEdit={() => onEditProduct(product.id)} viewMode={viewMode} />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -4426,6 +4429,8 @@ function ProductEditor({
 }) {
   const [imageStatus, setImageStatus] = useState("Seleccioná una o varias imágenes JPG, PNG o WebP.");
   const [selectedImage, setSelectedImage] = useState(0);
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -4469,6 +4474,8 @@ function ProductEditor({
       webPrice: variant.webPrice ?? variant.price
     })));
     setSelectedImage(0);
+    setDraggedImageIndex(null);
+    setDragOverImageIndex(null);
   }, [product]);
 
   const categoryOptions = categories.includes(product.category) ? categories : [product.category, ...categories];
@@ -4511,6 +4518,22 @@ function ProductEditor({
       return { ...current, imageUrl: next[0] ?? "", imageUrls: next };
     });
     setSelectedImage(0);
+  };
+  const reorderImages = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= gallery.length || toIndex >= gallery.length) return;
+    setDraft((current) => {
+      const next = current.imageUrls.filter(Boolean);
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return { ...current, imageUrl: next[0] ?? "", imageUrls: next };
+    });
+    setSelectedImage((current) => {
+      if (current === fromIndex) return toIndex;
+      if (fromIndex < current && current <= toIndex) return current - 1;
+      if (toIndex <= current && current < fromIndex) return current + 1;
+      return current;
+    });
+    setImageStatus("Orden actualizado. Guardá el producto para confirmar.");
   };
   const loadProductPhotos = async (files?: FileList | null) => {
     if (!files?.length) return;
@@ -4600,8 +4623,51 @@ function ProductEditor({
           </div>
           <div className="image-tile-grid">
             {gallery.map((url, index) => (
-              <button className={clsx("image-tile", selectedImage === index && "active")} key={`${url}-${index}`} onClick={() => setSelectedImage(index)} title={`Ver imagen ${index + 1}`}>
+              <button
+                type="button"
+                className={clsx(
+                  "image-tile",
+                  selectedImage === index && "active",
+                  draggedImageIndex === index && "dragging",
+                  dragOverImageIndex === index && draggedImageIndex !== index && "drag-target"
+                )}
+                key={`${url}-${index}`}
+                draggable
+                aria-grabbed={draggedImageIndex === index}
+                aria-label={`Imagen ${index + 1} de ${gallery.length}. Arrastrá para ordenar.`}
+                onClick={() => setSelectedImage(index)}
+                onKeyDown={(event) => {
+                  if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+                  event.preventDefault();
+                  const targetIndex = event.key === "ArrowLeft" ? index - 1 : index + 1;
+                  reorderImages(index, targetIndex);
+                }}
+                onDragStart={(event) => {
+                  setDraggedImageIndex(index);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", String(index));
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverImageIndex(index);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const transferredIndex = Number(event.dataTransfer.getData("text/plain"));
+                  const sourceIndex = draggedImageIndex ?? transferredIndex;
+                  reorderImages(sourceIndex, index);
+                  setDraggedImageIndex(null);
+                  setDragOverImageIndex(null);
+                }}
+                onDragEnd={() => {
+                  setDraggedImageIndex(null);
+                  setDragOverImageIndex(null);
+                }}
+                title={`Ver imagen ${index + 1}. Arrastrá para cambiar su posición.`}
+              >
                 <img src={url} alt="" />
+                <DotsSixVertical className="drag-handle" size={18} weight="bold" aria-hidden="true" />
                 <span>{index + 1}</span>
               </button>
             ))}
@@ -4612,6 +4678,12 @@ function ProductEditor({
               </label>
             ))}
           </div>
+          {gallery.length > 1 && (
+            <p className="image-order-help">
+              <DotsSixVertical size={18} weight="bold" />
+              Arrastrá las miniaturas para cambiar el orden. La primera imagen se usa como portada.
+            </p>
+          )}
           <div className="image-actions">
             <label className="secondary-action">
               <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => loadProductPhotos(event.target.files)} />

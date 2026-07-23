@@ -494,6 +494,39 @@ describe("Regaleria app", () => {
     expect(screen.getByText(/Sincronizando/i)).toBeInTheDocument();
   });
 
+  it("reorders product images and keeps the first one as the cover", async () => {
+    const user = userEvent.setup();
+    const originalProduct = useStore.getState().products[0];
+    const originalImages = [...(originalProduct.imageUrls ?? [])];
+    expect(originalImages).toHaveLength(2);
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
+    const firstImage = screen.getByRole("button", { name: "Imagen 1 de 2. Arrastrá para ordenar." });
+    fireEvent.keyDown(firstImage, { key: "ArrowRight", altKey: true });
+    expect(screen.getByText(/Orden actualizado/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Guardar producto/i }));
+
+    const saved = useStore.getState().products.find((product) => product.id === originalProduct.id);
+    expect(saved?.imageUrls).toEqual([originalImages[1], originalImages[0]]);
+    expect(saved?.imageUrl).toBe(originalImages[1]);
+  });
+
+  it("uses dedicated scroll regions for operational product results", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Ventas/i }));
+    expect(screen.getByLabelText("Lista desplazable de productos para la venta")).toHaveClass("pos-product-table");
+
+    await user.click(screen.getByRole("button", { name: /Productos y stock/i }));
+    expect(screen.getByLabelText("Lista desplazable de productos y stock")).toHaveClass("inventory-table");
+
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    expect(screen.getByLabelText("Resultados desplazables del catalogo")).toHaveClass("catalog-results-scroll");
+  });
+
   it("keeps supplier data while saving brand and separate catalog prices", async () => {
     const user = userEvent.setup();
     const originalProduct = useStore.getState().products[0];
