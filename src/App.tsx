@@ -45,6 +45,7 @@ import { isCloudCatalogEnabled } from "./catalogCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { loadCurrentAppRole } from "./securityCloud";
+import { StorefrontShop, StorefrontStudio } from "./StorefrontExperience";
 import { canSeeFinancials, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, SalePaymentStatus, StockMovementType, Supplier } from "./types";
@@ -433,7 +434,7 @@ function PublicSite() {
 
   return (
     <main className="public-site">
-      <PublicShop />
+      <StorefrontShop />
     </main>
   );
 }
@@ -583,7 +584,7 @@ function InternalApp() {
         {section === "tesoreria" && <Treasury />}
         {section === "capital" && <Capital />}
         {section === "catalogo" && <Catalog editingProductId={editingProductId} onEditProduct={setEditingProductId} onBack={() => setEditingProductId(null)} />}
-        {section === "web" && <PublicShop />}
+        {section === "web" && <StorefrontStudio />}
         {section === "reportes" && <Reports />}
         {section === "sistema" && <System />}
       </main>
@@ -4034,7 +4035,7 @@ function System() {
   );
 }
 
-function PublicShop() {
+function LegacyPublicShop() {
   const products = useStore((state) => state.products);
   const catalogStatus = useStore((state) => state.catalogStatus);
   const onlineOrders = useStore((state) => state.onlineOrders);

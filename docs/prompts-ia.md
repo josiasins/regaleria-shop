@@ -80,3 +80,23 @@ Foto ecommerce realista de {producto}. Sin texto, sin logos, producto reconocibl
 - Prompts de imagen cortos y separados por variante.
 - La descripcion queda limitada con `max_output_tokens`.
 - Las imagenes se guardan como archivos locales, no como base64 en la ficha.
+
+## Composicion lifestyle de productos
+
+La persona selecciona dos o tres productos con foto, una escena y un detalle opcional. El sistema usa las imagenes originales como referencias de alta fidelidad.
+
+```text
+Crear una fotografia lifestyle horizontal usando exactamente estos productos de referencia: {nombres}.
+Integrarlos juntos en {escena}.
+Conservar forma, materiales, colores y detalles reconocibles de cada producto.
+Luz natural suave, fotografia ecommerce premium, composicion limpia, sin texto, sin logos agregados, sin personas.
+Indicacion adicional: {detalle opcional}.
+```
+
+### Optimizacion aplicada
+
+- Se admiten solo dos o tres referencias por generacion.
+- El modo inicial usa calidad `low`; `medium` queda para la imagen final.
+- La salida es horizontal `1536x1024`.
+- La imagen se guarda en Storage y la interfaz conserva solo su URL.
+- La generacion nunca publica sola: primero se revisa y despues se elige `Usar en portada` o `Usar como bloque lifestyle`.

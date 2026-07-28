@@ -25,8 +25,9 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 - Los cambios de interfaz se mantienen separados de la logica persistente y deben probar que ventas, turnos, pagos, stock y auditoria conservan su comportamiento.
 - El sistema es online en V1, pero conserva base para offline parcial.
 - Los datos repetibles, como categorias, clientes y proveedores, se administran como listas reutilizables.
-- La IA queda limitada a precarga documental de compras; las imágenes de producto se gestionan manualmente.
+- La IA puede asistir la precarga documental y crear composiciones lifestyle a partir de dos o tres fotos reales. Nunca registra stock ni publica una imagen sin confirmacion humana.
 - La tienda pública debe funcionar como ecommerce real: categorías dinámicas, búsqueda, ficha de producto, carrito, pedidos persistentes y comunicaciones.
+- La presentacion de la tienda publica se administra aparte de los datos operativos. Cambiar una portada, una categoria visual o una coleccion no modifica productos, precios, stock ni pedidos.
 
 ## Anti-referencias
 

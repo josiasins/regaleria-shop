@@ -6,6 +6,7 @@ import { resetStore, salePaidAmount, salePaymentStatus, useStore } from "./store
 
 describe("Regaleria app", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/");
     window.localStorage.clear();
     window.sessionStorage.clear();
     resetStore();
@@ -637,8 +638,8 @@ describe("Regaleria app", () => {
 
   it("can create an online order from the public shop", async () => {
     const user = userEvent.setup();
+    window.history.replaceState({}, "", "/?preview=public");
     render(<App />);
-    await user.click(screen.getByRole("button", { name: /Web publica/i }));
 
     await user.click(screen.getAllByRole("button", { name: "Agregar" })[0]);
     expect(screen.queryByRole("heading", { name: "Carrito" })).not.toBeInTheDocument();
@@ -649,8 +650,12 @@ describe("Regaleria app", () => {
     await user.type(screen.getByLabelText("Teléfono"), "3515551234");
     await user.click(screen.getByRole("button", { name: /Confirmar pedido/i }));
 
-    expect(await screen.findByText("WEB-000001")).toBeInTheDocument();
-    expect(screen.getByText(/Comprador Web/i)).toBeInTheDocument();
+    expect(await screen.findByText(/WEB-000001/)).toBeInTheDocument();
+    expect(useStore.getState().onlineOrders[0]).toMatchObject({
+      number: "WEB-000001",
+      customerName: "Comprador Web",
+      customerEmail: "comprador@example.com"
+    });
   });
 
   it("can show and clear the offline sync queue", async () => {

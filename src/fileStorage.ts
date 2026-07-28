@@ -47,3 +47,17 @@ export async function uploadProductImage(productId: string, productName: string,
   await uploadBusinessFile("product-images", path, file);
   return getPublicBusinessFileUrl("product-images", path);
 }
+
+export async function uploadStorefrontImage(slot: string, file: File) {
+  if (!productImageTypes.has(file.type)) {
+    throw new Error("Formato no compatible. Usa una imagen JPG, PNG o WebP.");
+  }
+  if (file.size > maxProductImageBytes) {
+    throw new Error("La imagen supera los 8 MB. Reduce su tamaño e intenta nuevamente.");
+  }
+
+  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `storefront/${safeFilePart(slot)}-${crypto.randomUUID()}.${extension}`;
+  await uploadBusinessFile("product-images", path, file);
+  return getPublicBusinessFileUrl("product-images", path);
+}

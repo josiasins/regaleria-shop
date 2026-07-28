@@ -410,3 +410,23 @@
 2. Al seleccionar un cliente, el panel de detalle muestra contacto, saldo y ventas asociadas.
 3. Crear un cliente lo selecciona al volver a la lista para continuar trabajando sobre el registro correcto.
 4. El dueño puede moverlo a Eliminados y restaurarlo; la baja sigue usando el historial existente.
+
+## Editar y publicar la vidriera
+
+1. Dueño o administrador abre `Web publica`.
+2. `Vista previa` muestra la misma tienda que ve el cliente, usando un borrador local.
+3. `Portada` cambia anuncio, titulo, textos, productos vinculados e imagenes.
+4. `Categorias` incorpora automaticamente las categorias reales del catalogo; permite cambiar su presentacion, visibilidad y orden sin borrar productos.
+5. `Colecciones` arma filas con todos los productos publicados o una seleccion manual.
+6. Los cambios permanecen como borrador hasta usar `Guardar y publicar`.
+7. PostgreSQL guarda la nueva configuracion y una entrada de historial con antes, despues, usuario y fecha.
+
+## Generar una imagen lifestyle
+
+1. Dueño o administrador abre `Web publica > Lifestyle`.
+2. Selecciona dos o tres productos publicados que tengan imagen.
+3. Elige escena, calidad y una indicacion opcional.
+4. `Generar escena` envia solamente esas referencias y el prompt al proveedor.
+5. La imagen vuelve como resultado para revision; no cambia la web por si sola.
+6. Se puede usar en portada o en el bloque lifestyle del borrador.
+7. `Guardar y publicar` confirma el cambio visual y deja historial.

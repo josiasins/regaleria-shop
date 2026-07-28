@@ -31,6 +31,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - FileAsset: registro de archivos guardados en Storage, asociado a productos, compras, transferencias o gastos.
 - BackupRun: registro de ejecuciones de backup.
 - AuditLog: registro de acciones importantes.
+- StorefrontSettings: configuracion unica de la vidriera publica; guarda portada, categorias visuales, colecciones y bloque lifestyle.
+- StorefrontSettingsHistory: copia antes/despues de cada publicacion visual, con usuario y fecha.
 
 ## Relaciones clave
 
@@ -48,6 +50,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - BusinessProfile alimenta Configuracion > Operativa y define `regaleriashop.com` como web publica y `sistema.regaleriashop.com` como sistema interno.
 - FileAsset separa imagenes publicas de producto de comprobantes privados de compras, transferencias y gastos.
 - BackupRun permite auditar si los respaldos se ejecutaron correctamente.
+- StorefrontSettings referencia productos y categorias por identificador, pero no es dueña de esos datos. Si cambia el catalogo, la normalizacion agrega las nuevas categorias sin borrar configuraciones existentes.
+- StorefrontSettingsHistory permite auditar cambios comerciales sin mezclar esa historia con ventas, stock, compras o caja.
 
 ## Offline futuro
 

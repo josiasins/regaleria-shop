@@ -709,3 +709,28 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Decision:** registrar el pedido web y descontar sus variantes dentro de una unica funcion transaccional de PostgreSQL.
 - **Motivo:** el comprador anonimo no debe tener permisos generales para editar productos, pero la tienda necesita impedir sobreventas y confirmar pedido y stock como una sola operacion.
 - **Alternativas descartadas:** descontar stock desde el navegador despues de crear el pedido, porque puede fallar por permisos o conectividad y dejar datos inconsistentes.
+
+# 2026-07-28 - Vidriera ecommerce editable y separada de la operacion
+
+- **Decision:** rediseñar la tienda publica con portada comercial, promocion secundaria, categorias fotograficas, colecciones, ficha, catalogo y carrito responsive. La configuracion visual vive en `storefront_settings` y cada publicacion genera una copia en `storefront_settings_history`.
+- **Motivo:** la tienda anterior resolvia el pedido, pero no permitia construir una portada comercial ni cambiar textos, imagenes u orden sin editar codigo.
+- **Seguridad de datos:** la migracion es aditiva. No modifica `public_catalog_products`, `operational_state`, ventas, turnos, compras, pagos ni stock. Antes y despues se verificaron 45 productos, los 45 publicados.
+- **Permisos:** la tienda puede leer la configuracion; solo dueño y administrador pueden guardarla. El procedimiento `save_storefront_settings` valida el rol en PostgreSQL y registra usuario, fecha, antes y despues.
+- **Respaldo:** se creo `backups/regaleria-before-storefront-20260728-172947.dump`. Luego se corrigio el selector de `pg_dump`, se genero `backups/regaleria-20260728-180632.dump` y se valido su indice con `pg_restore`.
+- **Alternativas descartadas:** guardar diseño dentro de cada producto, porque mezcla responsabilidades; permitir edicion directa anonima, por seguridad; publicar automaticamente cada cambio de campo, porque impide revisar la portada completa.
+
+# 2026-07-28 - Composicion lifestyle asistida
+
+- **Decision:** incorporar una herramienta para elegir dos o tres productos con foto y generar una escena horizontal mediante `gpt-image-2`.
+- **Motivo:** las categorias y campañas necesitan imagenes contextuales que muestren combinaciones reales de productos.
+- **Control:** la generacion usa calidad baja como borrador y calidad media como final. El resultado queda en revision y solo se incorpora al borrador al elegir `Usar en portada` o `Usar como bloque lifestyle`; publicar sigue siendo una accion separada.
+- **Seguridad:** la clave de OpenAI permanece en servidor o secreto de Supabase. La funcion Edge valida sesion y rol antes de descargar referencias o generar archivos.
+- **Alternativas descartadas:** generar desde nombres sin referencias, porque puede deformar el producto; publicar automaticamente, porque una imagen generada necesita aprobacion humana.
+
+# 2026-07-28 - Publicacion visual en tiempo real
+
+- **Decision:** la tienda publica escucha cambios de `storefront_settings` por Supabase Realtime y vuelve a normalizar la configuracion contra el catalogo vigente.
+- **Motivo:** un cambio confirmado en el editor debe llegar a las pestañas publicas abiertas sin recargar, y una categoria nueva del catalogo debe incorporarse sin perder textos, imagenes, visibilidad u orden ya configurados.
+- **Seguridad de datos:** la suscripcion es de solo lectura para la tienda anonima. La escritura conserva el procedimiento protegido `save_storefront_settings`, control de rol e historial antes/despues.
+- **Verificacion:** se refresco la cache PostgREST con `notify pgrst, 'reload schema'`; la API anonima respondio `HTTP 200`. La prueba automatizada comprueba que una categoria nueva se agrega y que la configuracion de una categoria existente permanece intacta.
+- **Alternativas descartadas:** refresco periodico corto, porque agrega consultas innecesarias; reemplazar la lista completa con categorias del catalogo, porque borraria decisiones editoriales.

@@ -93,6 +93,13 @@
 - [x] Checkout con retiro o envío.
 - [x] Pedidos web persistentes en Supabase.
 - [x] Cola de correos de bienvenida, confirmación y aviso interno.
+- [x] Portada comercial responsive con promocion, categorias fotograficas y colecciones.
+- [x] Editor interno de textos, imagenes, visibilidad y orden de categorias/secciones.
+- [x] Historial auditable de publicaciones visuales y actualizacion publica en tiempo real.
+- [ ] Publicar y revisar en produccion la nueva vidriera despues de la aprobacion local.
+- [x] Rediseño responsive con portada comercial, categorias fotograficas y colecciones.
+- [x] Editor interno de portada, textos, imagenes, categorias visuales y colecciones.
+- [x] Configuracion visual persistente y auditada sin modificar datos operativos.
 - [ ] Activar envío efectivo por Resend con dominio remitente verificado.
 - [ ] Futuro: estados de pedido mas completos.
 - [ ] Futuro: metodos de entrega o retiro.
@@ -169,6 +176,8 @@
 - [ ] Futuro: migrar almacenamiento de imagenes a nube/S3 cuando haya backend productivo.
 - [x] Base para Supabase Storage con buckets de imagenes y comprobantes.
 - [ ] Futuro: historial de confianza, correcciones y aprendizaje por proveedor.
+- [x] Herramienta lifestyle con dos o tres productos, borrador economico y aprobacion humana.
+- [ ] Desplegar y configurar la funcion Edge de composicion lifestyle en produccion.
 
 ### Etapa 14: Produccion online
 

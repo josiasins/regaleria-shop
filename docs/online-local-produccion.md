@@ -208,6 +208,31 @@ Buckets previstos en Supabase Storage:
 
 El SQL inicial esta en `supabase/storage.sql`.
 
+## Configuracion visual de la tienda
+
+- `supabase/storefront.sql` crea la configuracion publica y su historial auditable.
+- La tienda anonima tiene lectura de `storefront_settings`.
+- Solo dueño y administrador ejecutan `save_storefront_settings`.
+- La web abierta escucha cambios de `storefront_settings` mediante Supabase Realtime. Al publicar desde el sistema interno, otras pestañas reciben la nueva portada sin recargar.
+- `supabase/functions/generate-lifestyle` genera composiciones con la clave guardada como secreto de Supabase, nunca en el navegador.
+- La funcion Edge requiere `OPENAI_API_KEY` y admite `OPENAI_LIFESTYLE_IMAGE_MODEL`, cuyo valor recomendado es `gpt-image-2`.
+
+Despues de aplicar `supabase/storefront.sql` por una conexion SQL directa, refrescar la cache de la API:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+Despliegue pendiente de la funcion lifestyle:
+
+```bash
+npx supabase login
+npx supabase secrets set OPENAI_API_KEY
+npx supabase functions deploy generate-lifestyle --project-ref nxfdxhixvgogxjenrfhr
+```
+
+El editor visual, las tablas y la tienda funcionan aunque esa funcion todavia no este desplegada. Solo queda inactiva la generacion lifestyle en produccion.
+
 # Sincronizacion Entre Sistema Y Web
 
 El sistema interno y la web publica usan `public.public_catalog_products` en Supabase como fuente comun del catalogo.

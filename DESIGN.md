@@ -47,7 +47,9 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Edicion de producto en vista dedicada cuando la tarea requiere imagenes, IA y datos publicables.
 - Galerias con imagen principal, miniaturas cuadradas reordenables por arrastre y tiles `+` para sumar archivos. La primera miniatura siempre comunica la portada.
 - En escritorio, las listas extensas de Punto de venta, Productos y stock y Catalogo desplazan solo sus resultados; controles y paneles de trabajo conservan su posicion. En tablet y celular se mantienen limites de altura tactiles sin forzar una pantalla fija.
-- La tienda pública usa verde bosque, coral y amarillo suave; prioriza búsqueda, categorías, producto, precio, stock, envío y carrito.
+- La tienda publica usa fondo blanco frio, celeste nube, carbon y coral de marca. El celeste organiza superficies comerciales, el coral identifica la accion principal y el carbon sostiene texto y cabecera.
+- La portada publica combina un hero comercial con producto real, una promocion secundaria, categorias fotograficas y filas de productos. No usa fondos decorativos abstractos.
+- En celular, la tienda publica usa cabecera compacta y navegacion inferior para Inicio, Buscar y Carrito. En tablet conserva la navegacion superior y apila promociones sin perder jerarquia.
 - El carrito público vive en una página propia, accesible desde el encabezado; nunca se agrega como bloque al final del catálogo.
 - La marca elegida usa logo dorado con caja, cinta y palabra `shop`; la fuente maestra es `public/brand/regaleria-shop-logo_NEW.af`, y las reglas completas viven en `docs/manual-marca.md`.
 - El sistema interno usa el simbolo compacto y la web publica puede usar el lockup completo cuando el espacio lo permite.
@@ -68,3 +70,5 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Atajos de mostrador deben ser pocos y memorables.
 - Las funciones de IA deben mostrar claramente cuando algo es sugerido y cuando ya fue aplicado al formulario.
 - La carga de imagenes debe ser visual; evitar textarea de URLs como mecanismo principal.
+- El editor de la vidriera usa borrador y publicacion explicita. La vista previa representa la misma interfaz que vera el cliente.
+- Las categorias visuales y colecciones se pueden reordenar, pero las categorias reales y los productos siguen perteneciendo al catalogo.

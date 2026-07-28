@@ -4,6 +4,7 @@ import OpenAI, { toFile } from "openai";
 
 const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+const lifestyleImageModel = process.env.OPENAI_LIFESTYLE_IMAGE_MODEL || "gpt-image-2";
 const generatedDir = path.resolve(process.cwd(), "public/generated/products");
 const maxRequestBytes = 15 * 1024 * 1024;
 
@@ -267,6 +268,57 @@ async function generateProductImages(payload) {
   };
 }
 
+function lifestylePrompt(payload) {
+  const names = payload.products.map((product) => product.name).join(", ");
+  const sceneLabels = {
+    hogar: "un hogar luminoso, contemporaneo y real",
+    regalo: "una presentacion de regalo cuidada, con papel y cinta discretos",
+    mesa: "una mesa editorial clara con composicion comercial",
+    tienda: "una vidriera de tienda de regalos ordenada y natural"
+  };
+  return [
+    `Crear una fotografia lifestyle horizontal usando exactamente estos productos de referencia: ${names}.`,
+    `Integrarlos juntos en ${sceneLabels[payload.scene] || sceneLabels.hogar}.`,
+    "Conservar forma, materiales, colores y detalles reconocibles de cada producto.",
+    "Luz natural suave, fotografia ecommerce premium, composicion limpia, sin texto, sin logos agregados, sin personas.",
+    payload.brief ? `Indicacion adicional: ${String(payload.brief).slice(0, 500)}.` : ""
+  ].filter(Boolean).join(" ");
+}
+
+async function generateLifestyle(payload) {
+  const products = Array.isArray(payload.products) ? payload.products.filter((product) => product?.imageUrl && product?.name).slice(0, 3) : [];
+  if (products.length < 2) throw new Error("Elegí al menos dos productos con imagen.");
+  const client = createClient();
+  if (!client) throw new Error("OPENAI_API_KEY no esta configurada.");
+
+  const inputImages = [];
+  for (const [index, product] of products.entries()) {
+    const response = await fetch(product.imageUrl);
+    if (!response.ok) throw new Error(`No se pudo leer la imagen de ${product.name}.`);
+    const contentType = response.headers.get("content-type") || "image/png";
+    inputImages.push(await toFile(Buffer.from(await response.arrayBuffer()), `producto-${index + 1}.png`, { type: contentType }));
+  }
+
+  const prompt = lifestylePrompt({ ...payload, products });
+  const result = await client.images.edit({
+    model: lifestyleImageModel,
+    image: inputImages,
+    prompt,
+    size: "1536x1024",
+    quality: payload.quality === "medium" ? "medium" : "low",
+    output_format: "png"
+  });
+  const item = result.data?.[0];
+  const imageUrl = await saveGeneratedImage({
+    productName: `lifestyle-${products.map((product) => product.name).join("-")}`,
+    variant: "composicion",
+    b64Json: item?.b64_json,
+    remoteUrl: item?.url
+  });
+  if (!imageUrl) throw new Error("OpenAI no devolvio una imagen.");
+  return { imageUrl, prompt, model: lifestyleImageModel };
+}
+
 export function registerOpenAiApi(server) {
   server.middlewares.use("/api/ai/purchase-preload", async (req, res) => {
     if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
@@ -292,6 +344,15 @@ export function registerOpenAiApi(server) {
       sendJson(res, 200, await saveUploadedProductImage(await readJson(req)));
     } catch (error) {
       sendApiError(res, error, "Error al guardar imagen");
+    }
+  });
+
+  server.middlewares.use("/api/ai/lifestyle", async (req, res) => {
+    if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
+    try {
+      sendJson(res, 200, await generateLifestyle(await readJson(req)));
+    } catch (error) {
+      sendApiError(res, error, "Error al generar la composicion");
     }
   });
 }

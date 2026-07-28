@@ -12,6 +12,8 @@ Ventas, turnos, cobros, compras, gastos, capital, movimientos de stock, clientes
 4. Los formatos nuevos mantienen compatibilidad con registros existentes. Cuando un dato historico no tenga un campo nuevo, se interpreta de manera estable y documentada, sin modificarlo al cargar.
 5. Una publicacion debe incluir compilacion y pruebas; no se permite ejecutar migraciones destructivas, sembrar datos demo ni llamar a funciones de reinicio sin instruccion explicita del dueño.
 6. Si un cambio exige transformar datos existentes, primero se documenta el plan de migracion, se conserva respaldo y se valida el resultado antes de ponerlo en produccion.
+7. La configuracion visual del ecommerce vive en tablas separadas. Sus altas, cambios o restauraciones no pueden escribir sobre `public_catalog_products` ni `operational_state`.
+8. Antes y despues de una migracion se comparan conteos de entidades criticas. El resultado se registra junto con la decision correspondiente.
 
 ## Caso particular: ventas y cobros
 
