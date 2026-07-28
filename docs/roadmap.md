@@ -96,7 +96,7 @@
 - [x] Portada comercial responsive con promocion, categorias fotograficas y colecciones.
 - [x] Editor interno de textos, imagenes, visibilidad y orden de categorias/secciones.
 - [x] Historial auditable de publicaciones visuales y actualizacion publica en tiempo real.
-- [ ] Publicar y revisar en produccion la nueva vidriera despues de la aprobacion local.
+- [x] Publicar y revisar en produccion la nueva vidriera despues de la aprobacion local.
 - [x] Rediseño responsive con portada comercial, categorias fotograficas y colecciones.
 - [x] Editor interno de portada, textos, imagenes, categorias visuales y colecciones.
 - [x] Configuracion visual persistente y auditada sin modificar datos operativos.

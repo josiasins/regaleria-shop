@@ -734,3 +734,11 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Seguridad de datos:** la suscripcion es de solo lectura para la tienda anonima. La escritura conserva el procedimiento protegido `save_storefront_settings`, control de rol e historial antes/despues.
 - **Verificacion:** se refresco la cache PostgREST con `notify pgrst, 'reload schema'`; la API anonima respondio `HTTP 200`. La prueba automatizada comprueba que una categoria nueva se agrega y que la configuracion de una categoria existente permanece intacta.
 - **Alternativas descartadas:** refresco periodico corto, porque agrega consultas innecesarias; reemplazar la lista completa con categorias del catalogo, porque borraria decisiones editoriales.
+
+# 2026-07-28 - Publicacion del rediseño ecommerce
+
+- **Decision:** publicar el commit `2552ec7` en GitHub Pages para `regaleriashop.com` y desplegar manualmente el mismo commit en Render para `sistema.regaleriashop.com`.
+- **Control de datos:** el despliegue no ejecuto migraciones ni escrituras manuales sobre ventas, turnos, pagos, compras, stock o catalogo. Antes de publicar se verificaron 45 productos y 45 publicados.
+- **Verificacion publica:** GitHub Actions termino correctamente; la portada productiva cargo seis categorias y 18 tarjetas de producto iniciales sin errores propios de la aplicacion.
+- **Verificacion interna:** Render sirvio el bundle nuevo; el sistema autenticado cargo 45 de 45 productos y mostró el editor con Vista previa, Portada, Categorias, Colecciones y Lifestyle.
+- **Observacion operativa:** al abrir otra pestaña interna se detecto un conflicto de version remota. El mecanismo existente rechazo la escritura atrasada, recargo la version remota y aplico el rebase seguro; no se forzo una sobrescritura.
