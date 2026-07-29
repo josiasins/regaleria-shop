@@ -237,6 +237,15 @@ En desarrollo local, `/api/ai/lifestyle` reutiliza `OPENAI_API_KEY` desde el ent
 
 La vista previa del editor comparte por `sessionStorage` unicamente el borrador visual y una copia de solo lectura del catalogo. No comparte ventas, turnos, compras, pagos ni otros datos operativos, y no permite confirmar pedidos reales desde el marco de previsualizacion.
 
+Para que esa vista previa funcione en Render sin permitir que sitios externos incrusten el sistema, las cabeceras del sitio interno deben conservar:
+
+```text
+X-Frame-Options: SAMEORIGIN
+Content-Security-Policy: ...; frame-ancestors 'self'
+```
+
+No volver a `DENY` o `frame-ancestors 'none'`, porque bloquearia tambien la vista previa del mismo dominio. No usar valores abiertos como `*`.
+
 # Sincronizacion Entre Sistema Y Web
 
 El sistema interno y la web publica usan `public.public_catalog_products` en Supabase como fuente comun del catalogo.

@@ -768,3 +768,11 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Modo noche:** el editor conserva la paleta clara propia del ecommerce dentro del sistema oscuro para que la vista de trabajo no cambie de significado ni vuelva a teñirse de verde.
 - **Alcance:** cambio exclusivo de interfaz. No modifica tablas, configuracion publicada, productos, categorias reales, precios, stock, ventas, turnos, compras, pagos ni historial.
 - **Criterio de aceptacion:** cada seccion debe identificar visualmente que se edita, mantener foco visible, apilar columnas en tablet y movil y conservar la publicacion como accion explicita.
+
+# 2026-07-29 - Vista previa interna con marco del mismo origen
+
+- **Decision:** cambiar en Render `X-Frame-Options` de `DENY` a `SAMEORIGIN` y `frame-ancestors` de `'none'` a `'self'`.
+- **Motivo:** la vista previa real de la tienda usa un marco dentro de `sistema.regaleriashop.com`; las cabeceras anteriores tambien bloqueaban ese uso legitimo.
+- **Seguridad:** sitios externos continúan sin poder incrustar el sistema. Solo una pagina servida por el mismo origen puede mostrarla en un marco.
+- **Alcance:** configuracion HTTP del sitio interno. No modifica base de datos, productos, precios, stock, ventas, turnos, compras, pagos ni configuracion publicada.
+- **Verificacion:** Render confirmo la actualizacion de cabeceras y la vista previa interna pudo volver a cargar la tienda sin relajar el resto de la politica de seguridad.
