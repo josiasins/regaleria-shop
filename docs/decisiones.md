@@ -776,3 +776,10 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Seguridad:** sitios externos continúan sin poder incrustar el sistema. Solo una pagina servida por el mismo origen puede mostrarla en un marco.
 - **Alcance:** configuracion HTTP del sitio interno. No modifica base de datos, productos, precios, stock, ventas, turnos, compras, pagos ni configuracion publicada.
 - **Verificacion:** Render confirmo la actualizacion de cabeceras y la vista previa interna pudo volver a cargar la tienda sin relajar el resto de la politica de seguridad.
+
+# 2026-07-29 - Sesion estable durante la vista previa
+
+- **Decision:** volver a consultar el rol interno solamente cuando cambia la identidad del usuario autenticado, no ante renovaciones o avisos repetidos de la misma sesion.
+- **Motivo:** el marco de vista previa inicia otra instancia del cliente de autenticacion en el mismo origen. Sus avisos validos hacian que la pantalla principal mostrara repetidamente `Verificando acceso`.
+- **Seguridad:** un cambio real de cuenta o un cierre de sesion sigue invalidando el rol y exige una nueva comprobacion. Las renovaciones del mismo usuario conservan la pantalla sin reducir controles.
+- **Alcance:** ciclo de autenticacion de la interfaz. No modifica sesiones almacenadas, usuarios autorizados, roles, base de datos ni datos operativos.

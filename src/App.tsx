@@ -38,7 +38,7 @@ import {
 import { clsx } from "clsx";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
@@ -284,10 +284,12 @@ function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [appRole, setAppRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(shouldRequireInternalLogin());
+  const observedUserId = useRef<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const requiresLogin = shouldRequireInternalLogin();
+  const sessionUserId = session?.user.id ?? null;
   const setRole = useStore((state) => state.setRole);
 
   useEffect(() => {
@@ -297,18 +299,21 @@ function AuthGate({ children }: { children: ReactNode }) {
     }
 
     supabase.auth.getSession().then(({ data }) => {
+      observedUserId.current = data.session?.user.id ?? null;
       setSession(data.session);
       setIsLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user.id ?? null;
+      if (observedUserId.current !== nextUserId) setAppRole(null);
+      observedUserId.current = nextUserId;
       setSession(nextSession);
-      setAppRole(null);
     });
     return () => data.subscription.unsubscribe();
   }, [requiresLogin]);
 
   useEffect(() => {
-    if (!requiresLogin || !session) return;
+    if (!requiresLogin || !sessionUserId) return;
     let alive = true;
     setIsLoading(true);
     loadCurrentAppRole().then((role) => {
@@ -320,7 +325,7 @@ function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [requiresLogin, session, setRole]);
+  }, [requiresLogin, sessionUserId, setRole]);
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
