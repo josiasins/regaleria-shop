@@ -5482,6 +5482,126 @@ label {
   background: oklch(98% 0.008 150);
 }
 
+.catalog-premium-tool {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid oklch(81% 0.025 238);
+  border-radius: 8px;
+  background: oklch(97% 0.012 238);
+}
+
+.catalog-premium-header,
+.catalog-premium-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.catalog-premium-header > div,
+.catalog-premium-footer > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.catalog-premium-header h3,
+.catalog-premium-header p,
+.catalog-premium-footer strong,
+.catalog-premium-footer span {
+  margin: 0;
+}
+
+.catalog-premium-header h3 {
+  font-size: 1.05rem;
+}
+
+.catalog-premium-header p,
+.catalog-premium-footer span {
+  color: oklch(48% 0.025 238);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.catalog-premium-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: oklch(42% 0.095 238);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.catalog-premium-badge {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: oklch(90% 0.052 78);
+  color: oklch(42% 0.085 65);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.catalog-premium-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.catalog-premium-grid figure {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.catalog-premium-grid figcaption {
+  color: oklch(38% 0.025 238);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.catalog-premium-image {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  aspect-ratio: 1;
+  max-height: 360px;
+  border: 1px solid oklch(83% 0.018 238);
+  border-radius: 8px;
+  background: white;
+}
+
+.catalog-premium-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.catalog-premium-image.empty {
+  border-style: dashed;
+  background: oklch(94% 0.012 238);
+}
+
+.catalog-premium-image span {
+  max-width: 250px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: oklch(50% 0.026 238);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.catalog-premium-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .editor-main-image {
   display: grid;
   place-items: center;
@@ -6064,10 +6184,30 @@ textarea:focus-visible {
 .theme-night .catalog-item,
 .theme-night .editor-media,
 .theme-night .editor-details,
+.theme-night .catalog-premium-tool,
 .theme-night .auth-card {
   background: oklch(23% 0.023 158);
   border-color: oklch(34% 0.028 158);
   box-shadow: none;
+}
+
+.theme-night .catalog-premium-header p,
+.theme-night .catalog-premium-footer span,
+.theme-night .catalog-premium-grid figcaption {
+  color: oklch(73% 0.02 154);
+}
+
+.theme-night .catalog-premium-eyebrow {
+  color: oklch(78% 0.075 230);
+}
+
+.theme-night .catalog-premium-image.empty {
+  border-color: oklch(40% 0.025 158);
+  background: oklch(20% 0.018 158);
+}
+
+.theme-night .catalog-premium-image.empty span {
+  color: oklch(70% 0.02 154);
 }
 
 .theme-night .purchase-receipt-sheet,
@@ -6885,6 +7025,7 @@ textarea:focus-visible {
   .shop-grid,
   .catalog-grid,
   .product-editor-layout,
+  .catalog-premium-grid,
   .filter-row,
   .settings-grid {
     grid-template-columns: 1fr;
@@ -6918,9 +7059,20 @@ textarea:focus-visible {
   }
 
   .delete-product-zone,
-  .delete-confirm-actions {
+  .delete-confirm-actions,
+  .catalog-premium-header,
+  .catalog-premium-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .catalog-premium-actions {
+    justify-content: stretch;
+  }
+
+  .catalog-premium-actions .primary-action,
+  .catalog-premium-actions .secondary-action {
+    flex: 1 1 220px;
   }
 }
 
@@ -7319,6 +7471,16 @@ textarea:focus-visible {
   .editor-media,
   .editor-details {
     padding: 14px;
+  }
+
+  .catalog-premium-tool {
+    padding: 14px;
+  }
+
+  .catalog-premium-actions .primary-action,
+  .catalog-premium-actions .secondary-action {
+    width: 100%;
+    flex-basis: 100%;
   }
 
   .editor-header .secondary-action,

@@ -5,6 +5,7 @@ import OpenAI, { toFile } from "openai";
 const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 const lifestyleImageModel = process.env.OPENAI_LIFESTYLE_IMAGE_MODEL || "gpt-image-2";
+const catalogImageModel = process.env.OPENAI_CATALOG_IMAGE_MODEL || "gpt-image-2";
 const generatedDir = path.resolve(process.cwd(), "public/generated/products");
 const publicDir = path.resolve(process.cwd(), "public");
 const maxRequestBytes = 15 * 1024 * 1024;
@@ -159,6 +160,46 @@ async function imageRequest(client, prompt, baseImage) {
     quality: "medium",
     output_format: "png"
   });
+}
+
+function catalogImagePrompt(payload) {
+  return [
+    "Editar la fotografía de referencia como una fotografía comercial premium para catálogo y ecommerce.",
+    `El único sujeto es el producto llamado ${String(payload.productName || "Producto").slice(0, 160)}.`,
+    payload.brand ? `La marca declarada es ${String(payload.brand).slice(0, 100)}.` : "",
+    "Representar exactamente el mismo producto de referencia. Preservar sin cambios su forma, color, materiales, proporciones, textura, logo, etiqueta, grabado, impresión y cualquier marca visible.",
+    "No rediseñar, corregir, traducir, reemplazar ni inventar texto o identidad de marca. Si un detalle no es legible, conservarlo visualmente sin reconstruirlo.",
+    "Quitar solamente el entorno original y presentar el producto completamente visible, centrado y con escala comercial equilibrada en formato cuadrado 1:1.",
+    "Usar fondo blanco puro e infinito, recorte limpio y una sombra de contacto suave y físicamente plausible.",
+    "Mejorar únicamente encuadre, separación, balance de blancos, exposición e iluminación suave de estudio. Mantener una perspectiva natural de lente normal y el producto íntegramente nítido.",
+    "Conservar microtexturas, reflejos y variaciones tonales reales. Resultado fotográfico objetivo, sin apariencia de render o CGI.",
+    "No agregar accesorios, decoraciones, personas, manos, texto, marcas de agua, logos, claims ni elementos que no existan en la referencia.",
+    "Evitar plástico artificial, suavizado excesivo, HDR, halos, reflejos imposibles, bokeh artificial y simetría rígida."
+  ].filter(Boolean).join(" ");
+}
+
+async function generateCatalogImage(payload) {
+  const client = createClient();
+  if (!client) throw new Error("OPENAI_API_KEY no está configurada.");
+  if (!payload.imageUrl) throw new Error("Seleccioná una imagen de referencia.");
+  const imageFile = await lifestyleReferenceFile(payload.imageUrl, 0);
+  const result = await client.images.edit({
+    model: catalogImageModel,
+    image: imageFile,
+    prompt: catalogImagePrompt(payload),
+    size: "1024x1024",
+    quality: "medium",
+    output_format: "png"
+  });
+  const item = result.data?.[0];
+  const imageUrl = await saveGeneratedImage({
+    productName: payload.productName,
+    variant: "premium-catalogo",
+    b64Json: item?.b64_json,
+    remoteUrl: item?.url
+  });
+  if (!imageUrl) throw new Error("OpenAI no devolvió una imagen.");
+  return { imageUrl, model: catalogImageModel };
 }
 
 function fallbackPurchase(products) {
@@ -375,6 +416,15 @@ export function registerOpenAiApi(server) {
       sendJson(res, 200, await saveUploadedProductImage(await readJson(req)));
     } catch (error) {
       sendApiError(res, error, "Error al guardar imagen");
+    }
+  });
+
+  server.middlewares.use("/api/ai/catalog-image", async (req, res) => {
+    if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
+    try {
+      sendJson(res, 200, await generateCatalogImage(await readJson(req)));
+    } catch (error) {
+      sendApiError(res, error, "Error al generar la foto premium");
     }
   });
 

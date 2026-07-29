@@ -100,3 +100,27 @@ Indicacion adicional: {detalle opcional}.
 - La salida es horizontal `1536x1024`.
 - La imagen se guarda en Storage y la interfaz conserva solo su URL.
 - La generacion nunca publica sola: primero se revisa y despues se elige `Usar en portada` o `Usar como bloque lifestyle`.
+
+## Foto premium para catalogo
+
+La herramienta usa una sola foto elegida en la galeria del producto y genera una sola propuesta cuadrada. El nombre y la marca declarada se agregan como contexto, pero la imagen original es la referencia visual obligatoria.
+
+```text
+Editar la fotografia de referencia como una fotografia comercial premium para catalogo y ecommerce.
+Representar exactamente el mismo producto de referencia.
+Preservar sin cambios forma, color, materiales, proporciones, textura, logo, etiqueta, grabado, impresion y cualquier marca visible.
+No rediseñar, corregir, traducir, reemplazar ni inventar texto o identidad de marca.
+Quitar solamente el entorno original.
+Mostrar el producto completo y centrado, en formato 1:1, con fondo blanco puro e infinito y sombra de contacto suave.
+Mejorar solamente encuadre, separacion, balance de blancos, exposicion e iluminacion suave de estudio.
+No agregar accesorios, decoraciones, personas, manos, texto, marcas de agua, logos ni claims.
+Evitar suavizado excesivo, HDR, halos, reflejos imposibles, bokeh artificial y apariencia de render o CGI.
+```
+
+### Control y costo
+
+- Una referencia y una salida por clic.
+- Resolucion `1024x1024`, calidad `medium`, formato PNG.
+- La propuesta se guarda como archivo; no se escriben base64 ni prompts en la ficha.
+- Generar, incorporar al borrador y guardar el producto son pasos separados.
+- La foto original siempre se conserva y la interfaz exige revisar marcas y etiquetas.

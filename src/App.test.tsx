@@ -1,8 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { generateCatalogProductImage } from "./catalogImageCloud";
 import { resetStore, salePaidAmount, salePaymentStatus, useStore } from "./store";
+
+vi.mock("./catalogImageCloud", () => ({
+  generateCatalogProductImage: vi.fn()
+}));
 
 describe("Regaleria app", () => {
   beforeEach(() => {
@@ -10,6 +15,7 @@ describe("Regaleria app", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     resetStore();
+    vi.mocked(generateCatalogProductImage).mockReset();
   });
 
   it("shows the dashboard and operational metrics", () => {
@@ -512,6 +518,29 @@ describe("Regaleria app", () => {
     const saved = useStore.getState().products.find((product) => product.id === originalProduct.id);
     expect(saved?.imageUrls).toEqual([originalImages[1], originalImages[0]]);
     expect(saved?.imageUrl).toBe(originalImages[1]);
+  });
+
+  it("reviews a premium catalog image before saving it to the product", async () => {
+    const user = userEvent.setup();
+    const originalProduct = useStore.getState().products[0];
+    const originalImages = [...(originalProduct.imageUrls ?? [])];
+    const premiumUrl = "https://example.com/producto-premium.png";
+    vi.mocked(generateCatalogProductImage).mockResolvedValue({ imageUrl: premiumUrl, model: "gpt-image-2" });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Catalogo/i }));
+    await user.click(screen.getAllByRole("button", { name: /^Editar$/i })[0]);
+    await user.click(screen.getByRole("button", { name: "Generar foto premium" }));
+
+    expect(await screen.findByRole("img", { name: /Propuesta premium para/i })).toHaveAttribute("src", premiumUrl);
+    expect(useStore.getState().products.find((product) => product.id === originalProduct.id)?.imageUrls).toEqual(originalImages);
+
+    await user.click(screen.getByRole("button", { name: "Agregar a galería" }));
+    expect(screen.getByText(/todavía no está guardado/i)).toBeInTheDocument();
+    expect(useStore.getState().products.find((product) => product.id === originalProduct.id)?.imageUrls).toEqual(originalImages);
+
+    await user.click(screen.getByRole("button", { name: /Guardar producto/i }));
+    expect(useStore.getState().products.find((product) => product.id === originalProduct.id)?.imageUrls).toEqual([...originalImages, premiumUrl]);
   });
 
   it("uses dedicated scroll regions for operational product results", async () => {

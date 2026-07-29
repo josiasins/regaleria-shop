@@ -783,3 +783,14 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Motivo:** el marco de vista previa inicia otra instancia del cliente de autenticacion en el mismo origen. Sus avisos validos hacian que la pantalla principal mostrara repetidamente `Verificando acceso`.
 - **Seguridad:** un cambio real de cuenta o un cierre de sesion sigue invalidando el rol y exige una nueva comprobacion. Las renovaciones del mismo usuario conservan la pantalla sin reducir controles.
 - **Alcance:** ciclo de autenticacion de la interfaz. No modifica sesiones almacenadas, usuarios autorizados, roles, base de datos ni datos operativos.
+
+# 2026-07-29 - Foto premium de catalogo con aprobacion humana
+
+- **Decision:** agregar al editor de producto una herramienta de una sola propuesta para centrar, iluminar y presentar la imagen seleccionada sobre fondo blanco mediante `gpt-image-2`.
+- **Fidelidad:** el prompt exige conservar forma, color, materiales, proporciones, logos, etiquetas, grabados y texto visible. La interfaz recuerda que el resultado debe revisarse porque una generacion no puede garantizar identidad perfecta por si sola.
+- **Control de datos:** generar solo crea un archivo nuevo. La propuesta no reemplaza la foto original, no cambia la portada y no actualiza el producto. Primero se elige `Agregar a galeria` o `Usar como portada`, y el cambio se confirma despues con `Guardar producto`.
+- **Permisos:** solo dueño y administrador ven la herramienta; la funcion Edge vuelve a validar sesion y rol antes de llamar a OpenAI.
+- **Almacenamiento:** produccion guarda la propuesta en el bucket publico `product-images`; desarrollo local la guarda en `public/generated/products`. La ficha conserva solamente la URL cuando el usuario la aprueba y guarda.
+- **Seguridad:** `OPENAI_API_KEY` permanece en servidor o en secretos de Supabase. La funcion acepta referencias alojadas solamente en el proyecto de Supabase o en el host publico de imagenes admitido.
+- **Verificacion:** la suite aprobo 45 pruebas, la compilacion de produccion termino correctamente y una generacion real con `gpt-image-2` devolvio un PNG 1:1. El archivo de prueba se descarto sin asociarlo a un producto.
+- **Alternativas descartadas:** reemplazo automatico, porque puede alterar una etiqueta; dos o tres variantes por clic, porque incrementan costo y revision; guardar base64 dentro del producto, porque vuelve pesada la ficha y la sincronizacion.

@@ -47,6 +47,7 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Bloques de IA documental con estado visible, resultado revisable y accion de aplicar separada de guardar.
 - Edicion de producto en vista dedicada cuando la tarea requiere imagenes, IA y datos publicables.
 - Galerias con imagen principal, miniaturas cuadradas reordenables por arrastre y tiles `+` para sumar archivos. La primera miniatura siempre comunica la portada.
+- La herramienta `Foto premium para catalogo` compara la imagen seleccionada con una propuesta 1:1 sobre fondo blanco. Generar, incorporar al borrador y guardar son tres acciones separadas.
 - En escritorio, las listas extensas de Punto de venta, Productos y stock y Catalogo desplazan solo sus resultados; controles y paneles de trabajo conservan su posicion. En tablet y celular se mantienen limites de altura tactiles sin forzar una pantalla fija.
 - La tienda publica usa fondo blanco frio, celeste nube, carbon y coral de marca. El celeste organiza superficies comerciales, el coral identifica la accion principal y el carbon sostiene texto y cabecera.
 - La portada publica combina un hero comercial con producto real, una promocion secundaria, categorias fotograficas y filas de productos. No usa fondos decorativos abstractos.
@@ -70,6 +71,7 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - El selector Dia/Noche vive en la barra superior y debe recordar la preferencia con `localStorage`.
 - Atajos de mostrador deben ser pocos y memorables.
 - Las funciones de IA deben mostrar claramente cuando algo es sugerido y cuando ya fue aplicado al formulario.
+- Una foto generada nunca reemplaza la original ni cambia la portada por si sola. Antes de aplicarla se deben revisar logos, etiquetas, color y forma; despues se guarda con la accion general del producto.
 - La carga de imagenes debe ser visual; evitar textarea de URLs como mecanismo principal.
 - El editor de la vidriera usa borrador y publicacion explicita. La vista previa representa la misma interfaz que vera el cliente.
 - La vista previa de la vidriera abre en movil y usa anchos reales de 390 px, 820 px y escritorio; no simular dispositivos reduciendo visualmente una interfaz de escritorio.

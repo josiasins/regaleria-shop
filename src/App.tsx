@@ -26,6 +26,7 @@ import {
   Receipt,
   ShoppingCartSimple,
   SignOut,
+  Sparkle,
   SquaresFour,
   Storefront,
   Sun,
@@ -42,6 +43,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled } from "./catalogCloud";
+import { generateCatalogProductImage } from "./catalogImageCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { loadCurrentAppRole } from "./securityCloud";
@@ -3449,6 +3451,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
         product={editingProduct}
         categories={categories}
         canDelete={activeRole === "dueno" || activeRole === "administrador"}
+        canGeneratePremium={activeRole === "dueno" || activeRole === "administrador"}
         onSave={updateProductDetails}
         onDelete={(productId) => deleteProduct(productId, activeRole)}
         onBack={onBack}
@@ -4422,6 +4425,7 @@ function ProductEditor({
   product,
   categories,
   canDelete,
+  canGeneratePremium,
   onSave,
   onDelete,
   onBack
@@ -4429,6 +4433,7 @@ function ProductEditor({
   product: Product;
   categories: string[];
   canDelete: boolean;
+  canGeneratePremium: boolean;
   onSave: (input: ProductUpdateInput) => Promise<boolean>;
   onDelete: (productId: string) => Promise<boolean>;
   onBack: () => void;
@@ -4439,6 +4444,9 @@ function ProductEditor({
   const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
   const [isSavingImage, setIsSavingImage] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [premiumImageUrl, setPremiumImageUrl] = useState("");
+  const [premiumImageStatus, setPremiumImageStatus] = useState("");
+  const [isGeneratingPremium, setIsGeneratingPremium] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState("");
   const [draft, setDraft] = useState({
@@ -4482,6 +4490,9 @@ function ProductEditor({
     setSelectedImage(0);
     setDraggedImageIndex(null);
     setDragOverImageIndex(null);
+    setPremiumImageUrl("");
+    setPremiumImageStatus("");
+    setIsGeneratingPremium(false);
   }, [product]);
 
   const categoryOptions = categories.includes(product.category) ? categories : [product.category, ...categories];
@@ -4576,6 +4587,42 @@ function ProductEditor({
   const updatePriceDraft = (variantId: string, update: Partial<(typeof priceDrafts)[number]>) => {
     setPriceDrafts((current) => current.map((pricing) => pricing.variantId === variantId ? { ...pricing, ...update } : pricing));
   };
+  const generatePremiumImage = async () => {
+    if (!mainImage) {
+      setPremiumImageStatus("Seleccioná primero una imagen del producto.");
+      return;
+    }
+    setIsGeneratingPremium(true);
+    setPremiumImageUrl("");
+    setPremiumImageStatus("Generando una propuesta. Puede tardar hasta dos minutos.");
+    try {
+      const result = await generateCatalogProductImage({
+        productId: product.id,
+        productName: draft.name || product.name,
+        brand: draft.brand,
+        imageUrl: mainImage
+      });
+      setPremiumImageUrl(result.imageUrl);
+      setPremiumImageStatus("Propuesta lista. Revisá logos, etiquetas y colores antes de usarla.");
+    } catch (error) {
+      setPremiumImageStatus(error instanceof Error ? error.message : "No se pudo generar la foto premium.");
+    } finally {
+      setIsGeneratingPremium(false);
+    }
+  };
+  const addPremiumToGallery = (useAsCover = false) => {
+    if (!premiumImageUrl) return;
+    setDraft((current) => {
+      const existing = current.imageUrls.filter(Boolean).filter((url) => url !== premiumImageUrl);
+      const next = useAsCover ? [premiumImageUrl, ...existing] : [...existing, premiumImageUrl];
+      setSelectedImage(useAsCover ? 0 : next.length - 1);
+      return { ...current, imageUrl: next[0] ?? current.imageUrl, imageUrls: next };
+    });
+    setImageStatus(useAsCover
+      ? "Propuesta usada como portada en el borrador. Guardá el producto para confirmar."
+      : "Propuesta agregada a la galería del borrador. Guardá el producto para confirmar.");
+    setPremiumImageStatus("La imagen original se conserva. Este cambio todavía no está guardado.");
+  };
 
   return (
     <section className="workspace product-editor-page">
@@ -4585,7 +4632,7 @@ function ProductEditor({
           <span>Editar producto</span>
           <h2>{product.name}</h2>
         </div>
-        <button className="primary-action" onClick={save} disabled={!draft.name.trim() || isSavingImage}>
+        <button className="primary-action" onClick={save} disabled={!draft.name.trim() || isSavingImage || isGeneratingPremium}>
           <CheckCircle size={18} /> Guardar producto
         </button>
         {saveStatus && <span className="muted-text">{saveStatus}</span>}
@@ -4773,6 +4820,55 @@ function ProductEditor({
           </div>
         </section>
       </div>
+      {canGeneratePremium && (
+        <section className="catalog-premium-tool" aria-labelledby="catalog-premium-title">
+          <header className="catalog-premium-header">
+            <div>
+              <span className="catalog-premium-eyebrow"><Sparkle size={16} weight="fill" /> Asistente de imagen</span>
+              <h3 id="catalog-premium-title">Foto premium para catálogo</h3>
+              <p>Centra el producto, mejora la iluminación y crea un fondo blanco sin reemplazar la foto original.</p>
+            </div>
+            <span className="catalog-premium-badge">Revisión obligatoria</span>
+          </header>
+          <div className="catalog-premium-grid">
+            <figure>
+              <figcaption>Imagen seleccionada</figcaption>
+              <div className="catalog-premium-image">
+                {mainImage ? <img src={mainImage} alt={`Imagen original de ${draft.name}`} /> : <span>Seleccioná una imagen</span>}
+              </div>
+            </figure>
+            <figure>
+              <figcaption>Propuesta premium</figcaption>
+              <div className={clsx("catalog-premium-image", !premiumImageUrl && "empty")}>
+                {premiumImageUrl
+                  ? <img src={premiumImageUrl} alt={`Propuesta premium para ${draft.name}`} />
+                  : <span><Sparkle size={26} /> El resultado aparecerá acá para que lo revises.</span>}
+              </div>
+            </figure>
+          </div>
+          <div className="catalog-premium-footer">
+            <div>
+              <strong>La IA no publica ni guarda automáticamente.</strong>
+              <span>{premiumImageStatus || "Elegí la foto correcta arriba y generá una sola propuesta lista para catálogo."}</span>
+            </div>
+            <div className="catalog-premium-actions">
+              {premiumImageUrl && (
+                <>
+                  <button className="secondary-action" type="button" onClick={() => addPremiumToGallery(false)}>
+                    <PlusCircle size={18} /> Agregar a galería
+                  </button>
+                  <button className="secondary-action" type="button" onClick={() => addPremiumToGallery(true)}>
+                    <CheckCircle size={18} /> Usar como portada
+                  </button>
+                </>
+              )}
+              <button className="primary-action" type="button" onClick={generatePremiumImage} disabled={!mainImage || isGeneratingPremium}>
+                <Sparkle size={18} weight="fill" /> {isGeneratingPremium ? "Generando..." : premiumImageUrl ? "Generar otra propuesta" : "Generar foto premium"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
     </section>
   );
 }
