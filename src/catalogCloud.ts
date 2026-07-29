@@ -27,6 +27,10 @@ function catalogRow(product: Product) {
 
 export async function loadCloudCatalog() {
   if (!isCloudCatalogEnabled()) return [];
+  return loadPublicCatalogSnapshot();
+}
+
+export async function loadPublicCatalogSnapshot() {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("public_catalog_products")

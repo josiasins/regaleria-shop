@@ -1,6 +1,14 @@
 import type { Product } from "./types";
 
 export type StorefrontProductRule = "seleccion" | "todos";
+export type StorefrontViewport = "desktop" | "tablet" | "mobile";
+
+export interface StorefrontImagePosition {
+  x: number;
+  y: number;
+}
+
+export type StorefrontImagePositions = Record<StorefrontViewport, StorefrontImagePosition>;
 
 export interface StorefrontHero {
   eyebrow: string;
@@ -39,6 +47,7 @@ export interface StorefrontLifestyle {
   title: string;
   description: string;
   imageUrl: string;
+  imagePositions: StorefrontImagePositions;
   ctaLabel: string;
   productIds: string[];
 }
@@ -78,6 +87,28 @@ function firstProductImage(products: readonly Product[], category?: string) {
 
 function productImage(products: readonly Product[], productId: string) {
   return products.find((product) => product.id === productId)?.imageUrl ?? "";
+}
+
+export function createDefaultStorefrontImagePositions(): StorefrontImagePositions {
+  return {
+    desktop: { x: 50, y: 50 },
+    tablet: { x: 50, y: 50 },
+    mobile: { x: 50, y: 50 }
+  };
+}
+
+function normalizePosition(value: Partial<StorefrontImagePosition> | null | undefined): StorefrontImagePosition {
+  const clamp = (number: unknown) => Math.min(100, Math.max(0, Number.isFinite(Number(number)) ? Number(number) : 50));
+  return { x: clamp(value?.x), y: clamp(value?.y) };
+}
+
+function normalizeImagePositions(value: Partial<StorefrontImagePositions> | null | undefined): StorefrontImagePositions {
+  const defaults = createDefaultStorefrontImagePositions();
+  return {
+    desktop: normalizePosition(value?.desktop ?? defaults.desktop),
+    tablet: normalizePosition(value?.tablet ?? defaults.tablet),
+    mobile: normalizePosition(value?.mobile ?? defaults.mobile)
+  };
 }
 
 export function createDefaultStorefrontSettings(products: readonly Product[]): StorefrontSettings {
@@ -133,6 +164,7 @@ export function createDefaultStorefrontSettings(products: readonly Product[]): S
       title: "Armá un regalo con intención",
       description: "Combiná piezas que se acompañan y creá una presentación única.",
       imageUrl: "",
+      imagePositions: createDefaultStorefrontImagePositions(),
       ctaLabel: "Ver la selección",
       productIds: []
     },
@@ -183,7 +215,11 @@ export function normalizeStorefrontSettings(value: Partial<StorefrontSettings> |
     hero,
     categories,
     sections: value.sections?.length ? value.sections : defaults.sections,
-    lifestyle: { ...defaults.lifestyle, ...(value.lifestyle ?? {}) },
+    lifestyle: {
+      ...defaults.lifestyle,
+      ...(value.lifestyle ?? {}),
+      imagePositions: normalizeImagePositions(value.lifestyle?.imagePositions)
+    },
     updatedAt: value.updatedAt || defaults.updatedAt
   };
 }

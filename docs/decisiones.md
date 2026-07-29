@@ -742,3 +742,29 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Verificacion publica:** GitHub Actions termino correctamente; la portada productiva cargo seis categorias y 18 tarjetas de producto iniciales sin errores propios de la aplicacion.
 - **Verificacion interna:** Render sirvio el bundle nuevo; el sistema autenticado cargo 45 de 45 productos y mostró el editor con Vista previa, Portada, Categorias, Colecciones y Lifestyle.
 - **Observacion operativa:** al abrir otra pestaña interna se detecto un conflicto de version remota. El mecanismo existente rechazo la escritura atrasada, recargo la version remota y aplico el rebase seguro; no se forzo una sobrescritura.
+
+# 2026-07-29 - Fondo neutro continuo en el ecommerce
+
+- **Decision:** usar `#FCFDFD` como fondo base de toda la tienda publica y limitar los fondos operativos a la estructura del sistema interno.
+- **Motivo:** una regla global de la interfaz administrativa alcanzaba los elementos `<main>` de la tienda y dejaba visible un recuadro verde heredado alrededor de portada, catalogo, carrito y ficha.
+- **Alcance:** solo cambia presentacion. No se modifican productos, categorias, stock, pedidos, ventas, turnos, pagos, configuracion publicada ni base de datos.
+- **Alternativas descartadas:** tapar el verde en cada pagina publica por separado, porque mantendria una regla global fragil y podria reaparecer al crear nuevas vistas.
+
+# 2026-07-29 - Vista previa real y encuadre responsive de Lifestyle
+
+- **Decision:** abrir la vista previa del editor en movil por defecto y renderizar la tienda dentro de un marco aislado con anchos reales de movil, tablet y PC. Separar visualmente `Vista previa` de las herramientas editables `Portada`, `Categorias`, `Colecciones` y `Lifestyle`.
+- **Motivo:** limitar el ancho de un componente dentro de la pagina no activaba correctamente todos los puntos de quiebre y los botones superiores no comunicaban con claridad cuales superficies eran editables.
+- **Lifestyle:** organizar el trabajo en tres pasos: seleccionar dos o tres productos, generar con IA o subir una imagen propia y definir un encuadre independiente para movil, tablet y escritorio. Los encuadres se guardan como porcentajes dentro de `storefront_settings`.
+- **Compatibilidad:** las configuraciones anteriores reciben automaticamente un encuadre centrado `50/50` en los tres dispositivos. No se crea una tabla ni se modifica catalogo, stock, ventas, turnos, compras, pagos u operaciones.
+- **Control editorial:** una imagen generada sigue siendo una propuesta. Solo se incorpora al borrador al elegir `Usar en Lifestyle` o `Usar en portada`, y publicar continua siendo una accion separada de dueño o administrador.
+- **Conexion local:** el editor puede leer una copia publica del catalogo para seleccionar productos y alimentar su vista previa aun cuando el modo operativo local no este conectado. Esta lectura no habilita escrituras ni reemplaza el estado del sistema.
+- **Verificacion:** `gpt-image-2` genero correctamente una composicion economica usando dos productos publicos y el archivo quedo local, sin aplicarse ni publicarse. La suite aprobo 44 pruebas y la compilacion de produccion termino correctamente.
+- **Alternativas descartadas:** una sola posicion de imagen para todos los dispositivos, porque puede ocultar productos en movil; publicar al generar, porque elimina la revision humana; conectar todo el estado operativo local solo para obtener productos, porque ampliaria innecesariamente el riesgo sobre datos reales.
+
+# 2026-07-29 - Lenguaje visual del editor de vidriera
+
+- **Decision:** presentar Portada, Categorias, Colecciones y Lifestyle como modulos de edicion reconocibles, con superficie blanco frio, borde, encabezado, icono de lapiz y estado `Editable`. El lienzo del editor adopta los neutros, celeste `#CBE9F6`, coral `#F45D50` y tinta `#1A2226` de la tienda publica.
+- **Motivo:** el fondo verde heredado del sistema interno y los campos sin agrupacion hacian dificil distinguir estructura, contenido editable y acciones de publicacion.
+- **Modo noche:** el editor conserva la paleta clara propia del ecommerce dentro del sistema oscuro para que la vista de trabajo no cambie de significado ni vuelva a teñirse de verde.
+- **Alcance:** cambio exclusivo de interfaz. No modifica tablas, configuracion publicada, productos, categorias reales, precios, stock, ventas, turnos, compras, pagos ni historial.
+- **Criterio de aceptacion:** cada seccion debe identificar visualmente que se edita, mantener foco visible, apilar columnas en tablet y movil y conservar la publicacion como accion explicita.

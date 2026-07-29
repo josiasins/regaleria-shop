@@ -42,4 +42,47 @@ describe("storefront settings", () => {
     });
     expect(useStore.getState().products).toEqual(originalProducts);
   });
+
+  it("adds centered responsive crops to legacy lifestyle settings", () => {
+    const products = structuredClone(useStore.getState().products);
+    const defaults = createDefaultStorefrontSettings(products);
+    const legacyLifestyle = {
+      ...defaults.lifestyle,
+      imageUrl: "https://example.com/lifestyle.jpg"
+    };
+    delete (legacyLifestyle as Partial<typeof legacyLifestyle>).imagePositions;
+
+    const normalized = normalizeStorefrontSettings({
+      ...defaults,
+      lifestyle: legacyLifestyle
+    } as typeof defaults, products);
+
+    expect(normalized.lifestyle.imagePositions).toEqual({
+      desktop: { x: 50, y: 50 },
+      tablet: { x: 50, y: 50 },
+      mobile: { x: 50, y: 50 }
+    });
+  });
+
+  it("preserves and bounds responsive lifestyle crops", () => {
+    const products = structuredClone(useStore.getState().products);
+    const defaults = createDefaultStorefrontSettings(products);
+    const normalized = normalizeStorefrontSettings({
+      ...defaults,
+      lifestyle: {
+        ...defaults.lifestyle,
+        imagePositions: {
+          desktop: { x: 20, y: 80 },
+          tablet: { x: -15, y: 115 },
+          mobile: { x: 64, y: 37 }
+        }
+      }
+    }, products);
+
+    expect(normalized.lifestyle.imagePositions).toEqual({
+      desktop: { x: 20, y: 80 },
+      tablet: { x: 0, y: 100 },
+      mobile: { x: 64, y: 37 }
+    });
+  });
 });

@@ -233,6 +233,10 @@ npx supabase functions deploy generate-lifestyle --project-ref nxfdxhixvgogxjenr
 
 El editor visual, las tablas y la tienda funcionan aunque esa funcion todavia no este desplegada. Solo queda inactiva la generacion lifestyle en produccion.
 
+En desarrollo local, `/api/ai/lifestyle` reutiliza `OPENAI_API_KEY` desde el entorno del servidor de Vite. La prueba del 2026-07-29 confirmo una generacion real con `gpt-image-2`; la clave no se entrega al navegador. Las referencias pueden ser imagenes publicas, archivos locales dentro de `public/` o datos de imagen validos.
+
+La vista previa del editor comparte por `sessionStorage` unicamente el borrador visual y una copia de solo lectura del catalogo. No comparte ventas, turnos, compras, pagos ni otros datos operativos, y no permite confirmar pedidos reales desde el marco de previsualizacion.
+
 # Sincronizacion Entre Sistema Y Web
 
 El sistema interno y la web publica usan `public.public_catalog_products` en Supabase como fuente comun del catalogo.

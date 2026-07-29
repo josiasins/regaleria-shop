@@ -4,32 +4,46 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  CrosshairSimple,
+  Desktop,
+  DeviceMobile,
+  DeviceTablet,
+  Eye,
   Heart,
   House,
   Image,
+  ImagesSquare,
   ListMagnifyingGlass,
   MagnifyingGlass,
   Minus,
   Package,
+  PencilSimple,
   Plus,
   ShoppingBag,
   ShoppingCartSimple,
   Sparkle,
+  SpinnerGap,
+  SquaresFour,
+  Stack,
   Trash,
   Truck,
   UploadSimple
 } from "@phosphor-icons/react";
 import { clsx } from "clsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { loadPublicCatalogSnapshot } from "./catalogCloud";
 import { uploadStorefrontImage } from "./fileStorage";
 import { formatMoney } from "./receipt";
 import {
+  createDefaultStorefrontImagePositions,
   createDefaultStorefrontSettings,
   normalizeStorefrontSettings,
   productsForStorefrontSection,
   type StorefrontCategoryCard,
+  type StorefrontImagePositions,
   type StorefrontSection,
-  type StorefrontSettings
+  type StorefrontSettings,
+  type StorefrontViewport
 } from "./storefront";
 import {
   canEditStorefront,
@@ -43,8 +57,27 @@ import type { Product, SaleLine } from "./types";
 
 type StorePage = "home" | "catalog" | "cart";
 type StudioPage = "vista" | "portada" | "categorias" | "secciones" | "lifestyle";
+type PreviewMode = StorefrontViewport;
 
 const cartStorageKey = "regaleria-public-cart-v1";
+const storefrontPreviewStorageKey = "regaleria-storefront-studio-preview-v1";
+const storefrontPreviewMessage = "regaleria-storefront-preview";
+
+function loadStudioPreviewPayload() {
+  if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("studioPreview") !== "1") return {};
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(storefrontPreviewStorageKey) ?? "null");
+    if (parsed?.settings?.version === 1) {
+      return {
+        settings: parsed.settings as StorefrontSettings,
+        products: Array.isArray(parsed.products) ? parsed.products as Product[] : []
+      };
+    }
+    return parsed?.version === 1 ? { settings: parsed as StorefrontSettings, products: [] } : {};
+  } catch {
+    return {};
+  }
+}
 
 function publicPrice(variant: Product["variants"][number]) {
   return variant.webPrice ?? variant.price;
@@ -216,15 +249,21 @@ function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: (
 }
 
 export function StorefrontShop({ settingsOverride, embedded = false }: { settingsOverride?: StorefrontSettings; embedded?: boolean }) {
-  const products = useStore((state) => state.products);
+  const storeProducts = useStore((state) => state.products);
   const addOnlineOrder = useStore((state) => state.addOnlineOrder);
+  const studioPreview = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("studioPreview") === "1";
+  const initialStudioPreview = useMemo(loadStudioPreviewPayload, []);
+  const [studioPreviewSettings, setStudioPreviewSettings] = useState<StorefrontSettings | undefined>(initialStudioPreview.settings);
+  const [studioPreviewProducts, setStudioPreviewProducts] = useState<Product[]>(initialStudioPreview.products ?? []);
+  const products = studioPreview && studioPreviewProducts.length ? studioPreviewProducts : storeProducts;
   const publishable = useMemo(() => products.filter((product) => product.publishable), [products]);
-  const settings = useStorefrontSettings(products, settingsOverride);
+  const settings = useStorefrontSettings(products, settingsOverride ?? studioPreviewSettings);
+  const isEmbedded = embedded || studioPreview;
   const [storePage, setStorePage] = useState<StorePage>("home");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Todos");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [cart, setCart] = useState<SaleLine[]>(() => embedded ? [] : loadCart());
+  const [cart, setCart] = useState<SaleLine[]>(() => isEmbedded ? [] : loadCart());
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerContact, setCustomerContact] = useState("");
@@ -241,16 +280,27 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
   });
 
   useEffect(() => {
-    if (embedded) return;
+    if (!studioPreview) return;
+    const receivePreview = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== storefrontPreviewMessage || event.data.settings?.version !== 1) return;
+      setStudioPreviewSettings(event.data.settings as StorefrontSettings);
+      if (Array.isArray(event.data.products)) setStudioPreviewProducts(event.data.products as Product[]);
+    };
+    window.addEventListener("message", receivePreview);
+    return () => window.removeEventListener("message", receivePreview);
+  }, [studioPreview]);
+
+  useEffect(() => {
+    if (isEmbedded) return;
     try {
       window.localStorage.setItem(cartStorageKey, JSON.stringify(cart));
     } catch {
       // El carrito sigue disponible durante la sesion si el navegador bloquea storage.
     }
-  }, [cart, embedded]);
+  }, [cart, isEmbedded]);
 
   useEffect(() => {
-    if (embedded) return;
+    if (isEmbedded) return;
     const title = selectedProduct
       ? selectedProduct.seoTitle || `${selectedProduct.name} | Regaleria Shop`
       : storePage === "cart"
@@ -259,7 +309,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
           ? `${category} | Regaleria Shop`
           : "Regaleria Shop | Regalos, deco y accesorios";
     document.title = title;
-  }, [category, embedded, selectedProduct, storePage]);
+  }, [category, isEmbedded, selectedProduct, storePage]);
 
   const goHome = () => {
     setStorePage("home");
@@ -302,6 +352,10 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
   };
 
   const submitOrder = async () => {
+    if (isEmbedded) {
+      setMessage("Esta es una vista previa. Los pedidos reales se confirman en la tienda publicada.");
+      return;
+    }
     setMessage("Registrando pedido...");
     const order = await addOnlineOrder({
       customerName,
@@ -325,9 +379,17 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
 
   const heroImage = settings.hero.imageUrl || publishable.find((product) => product.id === settings.hero.productId)?.imageUrl;
   const promoImage = settings.hero.promoImageUrl || publishable.find((product) => product.id === settings.hero.promoProductId)?.imageUrl;
+  const lifestyleStyle = {
+    "--sf-lifestyle-desktop-x": `${settings.lifestyle.imagePositions.desktop.x}%`,
+    "--sf-lifestyle-desktop-y": `${settings.lifestyle.imagePositions.desktop.y}%`,
+    "--sf-lifestyle-tablet-x": `${settings.lifestyle.imagePositions.tablet.x}%`,
+    "--sf-lifestyle-tablet-y": `${settings.lifestyle.imagePositions.tablet.y}%`,
+    "--sf-lifestyle-mobile-x": `${settings.lifestyle.imagePositions.mobile.x}%`,
+    "--sf-lifestyle-mobile-y": `${settings.lifestyle.imagePositions.mobile.y}%`
+  } as CSSProperties;
 
   return (
-    <section className={clsx("sf-store", embedded && "sf-embedded")}>
+    <section className={clsx("sf-store", embedded && "sf-embedded", studioPreview && "sf-studio-preview")}>
       <div className="sf-announcement">{settings.announcement}</div>
       <header className="sf-header">
         <button className="sf-brand" onClick={goHome}><BrandLockup /></button>
@@ -473,7 +535,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
               })}
 
               {settings.lifestyle.visible && settings.lifestyle.imageUrl && (
-                <section className="sf-lifestyle">
+                <section className="sf-lifestyle" style={lifestyleStyle}>
                   <img src={settings.lifestyle.imageUrl} alt="" />
                   <div><h2>{settings.lifestyle.title}</h2><p>{settings.lifestyle.description}</p><button className="sf-primary" onClick={() => openCatalog()}>{settings.lifestyle.ctaLabel}</button></div>
                 </section>
@@ -619,10 +681,153 @@ function SectionProductPicker({
   );
 }
 
+const viewportOptions: Array<{ id: PreviewMode; label: string; icon: typeof DeviceMobile }> = [
+  { id: "mobile", label: "Móvil", icon: DeviceMobile },
+  { id: "tablet", label: "Tablet", icon: DeviceTablet },
+  { id: "desktop", label: "PC", icon: Desktop }
+];
+
+function DeviceSelector({
+  value,
+  onChange,
+  label
+}: {
+  value: PreviewMode;
+  onChange: (mode: PreviewMode) => void;
+  label: string;
+}) {
+  return (
+    <div className="sfs-device-selector" role="group" aria-label={label}>
+      {viewportOptions.map(({ id, label: optionLabel, icon: Icon }) => (
+        <button type="button" key={id} className={clsx(value === id && "active")} onClick={() => onChange(id)} aria-pressed={value === id}>
+          <Icon size={18} />
+          <span>{optionLabel}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LifestyleCropEditor({
+  imageUrl,
+  positions,
+  disabled,
+  onChange
+}: {
+  imageUrl: string;
+  positions: StorefrontImagePositions;
+  disabled: boolean;
+  onChange: (positions: StorefrontImagePositions) => void;
+}) {
+  const [viewport, setViewport] = useState<PreviewMode>("mobile");
+  const position = positions[viewport];
+  const setPosition = (next: { x: number; y: number }) => {
+    onChange({
+      ...positions,
+      [viewport]: {
+        x: Math.max(0, Math.min(100, Math.round(next.x))),
+        y: Math.max(0, Math.min(100, Math.round(next.y)))
+      }
+    });
+  };
+  const moveFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setPosition({
+      x: ((event.clientX - bounds.left) / bounds.width) * 100,
+      y: ((event.clientY - bounds.top) / bounds.height) * 100
+    });
+  };
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    moveFromPointer(event);
+  };
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) moveFromPointer(event);
+  };
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (disabled || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 5 : 1;
+    setPosition({
+      x: position.x + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0),
+      y: position.y + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0)
+    });
+  };
+
+  return (
+    <section className="sfs-crop-editor">
+      <header>
+        <div>
+          <span className="sfs-step-number">3</span>
+          <div><h4>Elegí qué parte se muestra</h4><p>Cada dispositivo guarda su propio encuadre.</p></div>
+        </div>
+        <DeviceSelector value={viewport} onChange={setViewport} label="Dispositivo para ajustar el encuadre" />
+      </header>
+      {imageUrl ? (
+        <div className="sfs-crop-workspace">
+          <div
+            className={clsx("sfs-crop-frame", `is-${viewport}`, disabled && "disabled")}
+            role="application"
+            tabIndex={disabled ? -1 : 0}
+            aria-label={`Encuadre para ${viewport}. Arrastrá el punto o usá las flechas.`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onKeyDown={handleKeyDown}
+          >
+            <img src={imageUrl} alt="" draggable={false} style={{ objectPosition: `${position.x}% ${position.y}%` }} />
+            <span className="sfs-focus-point" style={{ left: `${position.x}%`, top: `${position.y}%` }}><CrosshairSimple size={24} weight="bold" /></span>
+          </div>
+          <div className="sfs-crop-controls">
+            <label>Horizontal <input type="range" min="0" max="100" value={position.x} disabled={disabled} onChange={(event) => setPosition({ ...position, x: Number(event.target.value) })} /><output>{position.x}%</output></label>
+            <label>Vertical <input type="range" min="0" max="100" value={position.y} disabled={disabled} onChange={(event) => setPosition({ ...position, y: Number(event.target.value) })} /><output>{position.y}%</output></label>
+            <button type="button" className="secondary-action" disabled={disabled} onClick={() => setPosition({ x: 50, y: 50 })}><CrosshairSimple size={17} /> Centrar</button>
+          </div>
+        </div>
+      ) : (
+        <div className="sfs-crop-empty"><ImagesSquare size={30} /><span>Subí o generá una imagen para ajustar el encuadre.</span></div>
+      )}
+    </section>
+  );
+}
+
+function StorefrontEditorHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <header className="sfs-editor-header">
+      <div><span className="sfs-editor-kicker"><PencilSimple size={15} /> Contenido editable</span><h3>{title}</h3><p>{description}</p></div>
+    </header>
+  );
+}
+
+function StorefrontEditBlock({
+  title,
+  description,
+  children,
+  compact = false
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <section className={clsx("sfs-edit-block", compact && "compact")}>
+      <header>
+        <span className="sfs-edit-block-icon"><PencilSimple size={17} /></span>
+        <div><h4>{title}</h4><p>{description}</p></div>
+        <span className="sfs-editable-chip">Editable</span>
+      </header>
+      <div className="sfs-edit-block-body">{children}</div>
+    </section>
+  );
+}
+
 export function StorefrontStudio() {
-  const products = useStore((state) => state.products);
+  const storeProducts = useStore((state) => state.products);
   const activeRole = useStore((state) => state.activeRole);
   const editable = canEditStorefront(activeRole);
+  const [readOnlyCatalog, setReadOnlyCatalog] = useState<Product[]>([]);
+  const products = storeProducts.length ? storeProducts : readOnlyCatalog;
   const signature = products.map((product) => `${product.id}:${product.category}:${product.publishable}`).join("|");
   const [studioPage, setStudioPage] = useState<StudioPage>("vista");
   const [draft, setDraft] = useState(() => createDefaultStorefrontSettings(products));
@@ -637,6 +842,20 @@ export function StorefrontStudio() {
   const [lifestyleQuality, setLifestyleQuality] = useState<"low" | "medium">("low");
   const [lifestyleStatus, setLifestyleStatus] = useState("");
   const [generatedImage, setGeneratedImage] = useState("");
+  const [isGeneratingLifestyle, setIsGeneratingLifestyle] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("mobile");
+  const previewFrame = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (storeProducts.length) return;
+    let active = true;
+    void loadPublicCatalogSnapshot().then((catalog) => {
+      if (active && catalog?.length) setReadOnlyCatalog(catalog);
+    });
+    return () => {
+      active = false;
+    };
+  }, [storeProducts.length]);
 
   useEffect(() => {
     let active = true;
@@ -651,6 +870,19 @@ export function StorefrontStudio() {
       active = false;
     };
   }, [signature]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(storefrontPreviewStorageKey, JSON.stringify({ settings: draft, products }));
+      previewFrame.current?.contentWindow?.postMessage({ type: storefrontPreviewMessage, settings: draft, products }, window.location.origin);
+    } catch {
+      // La vista previa sigue disponible con la última versión enviada al iframe.
+    }
+  }, [draft, signature]);
+
+  useEffect(() => () => {
+    window.sessionStorage.removeItem(storefrontPreviewStorageKey);
+  }, []);
 
   const updateDraft = (updater: (current: StorefrontSettings) => StorefrontSettings) => {
     setDraft((current) => updater(current));
@@ -678,6 +910,7 @@ export function StorefrontStudio() {
       return;
     }
     setLifestyleStatus("Generando imagen. Puede tardar hasta dos minutos...");
+    setIsGeneratingLifestyle(true);
     try {
       const result = await generateLifestyleImage({
         products: selectedProducts.map(({ id, name, imageUrl }) => ({ id, name, imageUrl })),
@@ -689,6 +922,8 @@ export function StorefrontStudio() {
       setLifestyleStatus(`Imagen creada con ${result.model}. Revisala antes de usarla.`);
     } catch (error) {
       setLifestyleStatus(error instanceof Error ? error.message : "No se pudo generar la imagen.");
+    } finally {
+      setIsGeneratingLifestyle(false);
     }
   };
 
@@ -707,61 +942,88 @@ export function StorefrontStudio() {
         </div>
       </header>
       {!editable && <div className="sfs-readonly">Solo dueño y administrador pueden modificar la tienda. La vista previa sigue disponible.</div>}
-      <nav className="module-topbar sfs-tabs" aria-label="Secciones del editor">
-        {([
-          ["vista", "Vista previa"],
-          ["portada", "Portada"],
-          ["categorias", "Categorías"],
-          ["secciones", "Colecciones"],
-          ["lifestyle", "Lifestyle"]
-        ] as [StudioPage, string][]).map(([id, label]) => (
-          <button key={id} className={clsx("module-tab", studioPage === id && "active")} onClick={() => setStudioPage(id)}>{label}</button>
-        ))}
+      <nav className="sfs-navigation" aria-label="Herramientas de la vidriera">
+        <button className={clsx("sfs-navigation-preview", studioPage === "vista" && "active")} onClick={() => setStudioPage("vista")}>
+          <Eye size={21} />
+          <span><strong>Vista previa</strong><small>Revisá la tienda por dispositivo</small></span>
+        </button>
+        <div className="sfs-navigation-edit">
+          <span><PencilSimple size={16} /> Editar contenido</span>
+          {([
+            ["portada", "Portada", "Textos e imágenes", Image],
+            ["categorias", "Categorías", "Orden y presentación", SquaresFour],
+            ["secciones", "Colecciones", "Filas de productos", Stack],
+            ["lifestyle", "Lifestyle", "Escena y encuadres", Sparkle]
+          ] as Array<[StudioPage, string, string, typeof Image]>).map(([id, label, description, Icon]) => (
+            <button key={id} className={clsx(studioPage === id && "active")} onClick={() => setStudioPage(id)}>
+              <Icon size={19} />
+              <span><strong>{label}</strong><small>{description}</small></span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       {studioPage === "vista" && (
-        <div className="sfs-preview-shell">
-          <div className="sfs-browser-bar"><span /><span /><span /><strong>regaleriashop.com</strong></div>
-          <StorefrontShop settingsOverride={draft} embedded />
-        </div>
+        <section className="sfs-preview-section">
+          <header>
+            <div><h3>Vista previa</h3><p>La vista móvil se abre primero. Los cambios de este borrador no afectan la web hasta publicar.</p></div>
+            <DeviceSelector value={previewMode} onChange={setPreviewMode} label="Tamaño de la vista previa" />
+          </header>
+          <div className="sfs-preview-stage">
+            <div className={clsx("sfs-preview-shell", `is-${previewMode}`)}>
+              <div className="sfs-browser-bar"><span /><span /><span /><strong>regaleriashop.com</strong></div>
+              <iframe
+                ref={previewFrame}
+                title={`Vista previa ${previewMode} de la tienda pública`}
+                src="/?preview=public&studioPreview=1"
+                onLoad={() => previewFrame.current?.contentWindow?.postMessage({ type: storefrontPreviewMessage, settings: draft, products }, window.location.origin)}
+              />
+            </div>
+          </div>
+        </section>
       )}
 
       {studioPage === "portada" && (
         <section className="sfs-editor-pane">
-          <header><div><h3>Portada</h3><p>La primera impresión de la tienda en computadora y celular.</p></div></header>
-          <label>Anuncio superior<input value={draft.announcement} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, announcement: event.target.value }))} /></label>
-          <div className="sfs-form-grid two">
-            <div className="sfs-field-stack">
-              <label>Texto breve<input value={draft.hero.eyebrow} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, eyebrow: event.target.value } }))} /></label>
-              <label>Título principal<textarea value={draft.hero.title} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, title: event.target.value } }))} /></label>
-              <label>Descripción<textarea value={draft.hero.description} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, description: event.target.value } }))} /></label>
-              <label>Botón<input value={draft.hero.ctaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, ctaLabel: event.target.value } }))} /></label>
-              <label>Producto vinculado<select value={draft.hero.productId} disabled={!editable} onChange={(event) => {
-                const product = products.find((item) => item.id === event.target.value);
-                updateDraft((current) => ({ ...current, hero: { ...current.hero, productId: event.target.value, imageUrl: product?.imageUrl ?? current.hero.imageUrl } }));
-              }}><option value="">Sin vínculo</option>{products.filter((product) => product.publishable).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          <StorefrontEditorHeader title="Portada" description="La primera impresión de la tienda en computadora y celular." />
+          <StorefrontEditBlock title="Anuncio superior" description="La franja breve que aparece antes del encabezado." compact>
+            <label>Texto del anuncio<input value={draft.announcement} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, announcement: event.target.value }))} /></label>
+          </StorefrontEditBlock>
+          <StorefrontEditBlock title="Presentación principal" description="El mensaje, la imagen y el producto destacado al entrar a la tienda.">
+            <div className="sfs-form-grid two">
+              <div className="sfs-field-stack">
+                <label>Texto breve<input value={draft.hero.eyebrow} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, eyebrow: event.target.value } }))} /></label>
+                <label>Título principal<textarea value={draft.hero.title} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, title: event.target.value } }))} /></label>
+                <label>Descripción<textarea value={draft.hero.description} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, description: event.target.value } }))} /></label>
+                <label>Texto del botón<input value={draft.hero.ctaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, ctaLabel: event.target.value } }))} /></label>
+                <label>Producto vinculado<select value={draft.hero.productId} disabled={!editable} onChange={(event) => {
+                  const product = products.find((item) => item.id === event.target.value);
+                  updateDraft((current) => ({ ...current, hero: { ...current.hero, productId: event.target.value, imageUrl: product?.imageUrl ?? current.hero.imageUrl } }));
+                }}><option value="">Sin vínculo</option>{products.filter((product) => product.publishable).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+              </div>
+              <EditorImageField disabled={!editable} label="Imagen principal" imageUrl={draft.hero.imageUrl} slot="hero-principal" onChange={(imageUrl) => updateDraft((current) => ({ ...current, hero: { ...current.hero, imageUrl } }))} />
             </div>
-            <EditorImageField disabled={!editable} label="Imagen principal" imageUrl={draft.hero.imageUrl} slot="hero-principal" onChange={(imageUrl) => updateDraft((current) => ({ ...current, hero: { ...current.hero, imageUrl } }))} />
-          </div>
-          <h3 className="sfs-subheading">Promoción secundaria</h3>
-          <div className="sfs-form-grid two">
-            <div className="sfs-field-stack">
-              <label>Título<input value={draft.hero.promoTitle} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoTitle: event.target.value } }))} /></label>
-              <label>Descripción<textarea value={draft.hero.promoDescription} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoDescription: event.target.value } }))} /></label>
-              <label>Botón<input value={draft.hero.promoCtaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoCtaLabel: event.target.value } }))} /></label>
-              <label>Producto vinculado<select value={draft.hero.promoProductId} disabled={!editable} onChange={(event) => {
-                const product = products.find((item) => item.id === event.target.value);
-                updateDraft((current) => ({ ...current, hero: { ...current.hero, promoProductId: event.target.value, promoImageUrl: product?.imageUrl ?? current.hero.promoImageUrl } }));
-              }}><option value="">Sin vínculo</option>{products.filter((product) => product.publishable).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+          </StorefrontEditBlock>
+          <StorefrontEditBlock title="Promoción secundaria" description="Una segunda propuesta visible al lado o debajo de la presentación principal.">
+            <div className="sfs-form-grid two">
+              <div className="sfs-field-stack">
+                <label>Título<input value={draft.hero.promoTitle} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoTitle: event.target.value } }))} /></label>
+                <label>Descripción<textarea value={draft.hero.promoDescription} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoDescription: event.target.value } }))} /></label>
+                <label>Texto del botón<input value={draft.hero.promoCtaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoCtaLabel: event.target.value } }))} /></label>
+                <label>Producto vinculado<select value={draft.hero.promoProductId} disabled={!editable} onChange={(event) => {
+                  const product = products.find((item) => item.id === event.target.value);
+                  updateDraft((current) => ({ ...current, hero: { ...current.hero, promoProductId: event.target.value, promoImageUrl: product?.imageUrl ?? current.hero.promoImageUrl } }));
+                }}><option value="">Sin vínculo</option>{products.filter((product) => product.publishable).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+              </div>
+              <EditorImageField disabled={!editable} label="Imagen de promoción" imageUrl={draft.hero.promoImageUrl} slot="hero-promocion" onChange={(promoImageUrl) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoImageUrl } }))} />
             </div>
-            <EditorImageField disabled={!editable} label="Imagen de promoción" imageUrl={draft.hero.promoImageUrl} slot="hero-promocion" onChange={(promoImageUrl) => updateDraft((current) => ({ ...current, hero: { ...current.hero, promoImageUrl } }))} />
-          </div>
+          </StorefrontEditBlock>
         </section>
       )}
 
       {studioPage === "categorias" && (
         <section className="sfs-editor-pane">
-          <header><div><h3>Categorías visuales</h3><p>Cada categoría del catálogo aparece automáticamente y conserva sus productos.</p></div></header>
+          <StorefrontEditorHeader title="Categorías visuales" description="Cada categoría del catálogo aparece automáticamente y conserva sus productos." />
           <div className="sfs-sort-list">
             {draft.categories.map((item, index) => (
               <article
@@ -786,6 +1048,7 @@ export function StorefrontStudio() {
                 </div>
                 <EditorImageField disabled={!editable} label={item.category} imageUrl={item.imageUrl} slot={`categoria-${item.category}`} onChange={(imageUrl) => updateDraft((current) => ({ ...current, categories: replaceAt(current.categories, index, { ...item, imageUrl }) }))} />
                 <div className="sfs-field-stack">
+                  <span className="sfs-item-edit-label"><PencilSimple size={15} /> Editar presentación</span>
                   <label>Nombre visible<input value={item.title} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, categories: replaceAt(current.categories, index, { ...item, title: event.target.value }) }))} /></label>
                   <label>Texto breve<textarea value={item.description} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, categories: replaceAt(current.categories, index, { ...item, description: event.target.value }) }))} /></label>
                   <label className="sfs-check"><input type="checkbox" checked={item.visible} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, categories: replaceAt(current.categories, index, { ...item, visible: event.target.checked }) }))} /> Mostrar en la portada</label>
@@ -798,7 +1061,7 @@ export function StorefrontStudio() {
 
       {studioPage === "secciones" && (
         <section className="sfs-editor-pane">
-          <header>
+          <header className="sfs-editor-header">
             <div><h3>Colecciones de productos</h3><p>Creá filas comerciales y ordenalas como en un editor de tienda.</p></div>
             <button className="secondary-action" disabled={!editable} onClick={() => updateDraft((current) => ({
               ...current,
@@ -835,7 +1098,7 @@ export function StorefrontStudio() {
                     <button disabled={!editable || index === 0} onClick={() => updateDraft((current) => ({ ...current, sections: moveItem(current.sections, index, -1) }))}><ArrowUp size={17} /></button>
                     <button disabled={!editable || index === draft.sections.length - 1} onClick={() => updateDraft((current) => ({ ...current, sections: moveItem(current.sections, index, 1) }))}><ArrowDown size={17} /></button>
                   </div>
-                  <strong>{section.title}</strong>
+                  <div className="sfs-section-title"><span className="sfs-item-edit-label"><PencilSimple size={15} /> Editable</span><strong>{section.title}</strong></div>
                   <label className="sfs-check"><input type="checkbox" checked={section.visible} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, sections: replaceAt(current.sections, index, { ...section, visible: event.target.checked }) }))} /> Visible</label>
                   <button className="sfs-danger-icon" disabled={!editable} onClick={() => updateDraft((current) => ({ ...current, sections: current.sections.filter((item) => item.id !== section.id) }))} aria-label={`Eliminar ${section.title}`}><Trash size={18} /></button>
                 </div>
@@ -853,9 +1116,11 @@ export function StorefrontStudio() {
 
       {studioPage === "lifestyle" && (
         <section className="sfs-editor-pane sfs-lifestyle-tool">
-          <header><div><h3>Composición lifestyle</h3><p>Elegí dos o tres productos. La IA crea una escena para revisar, nunca la publica sola.</p></div></header>
-          <div className="sfs-lifestyle-layout">
-            <div>
+          <StorefrontEditorHeader title="Composición lifestyle" description="Creá o subí la imagen, elegí el encuadre y recién después publicala." />
+          <section className="sfs-lifestyle-step">
+            <header><span className="sfs-step-number">1</span><div><h4>Elegí 2 o 3 productos</h4><p>La IA usa sus fotos como referencia y conserva sus rasgos principales.</p></div><span className="sfs-editable-chip">Editable</span></header>
+            <div className="sfs-lifestyle-layout">
+              <div>
               <label className="sfs-mini-search"><MagnifyingGlass size={17} /><input value={lifestyleQuery} onChange={(event) => setLifestyleQuery(event.target.value)} placeholder="Buscar productos con foto" /></label>
               <div className="sfs-lifestyle-products">
                 {visibleLifestyleProducts.map((product) => {
@@ -874,35 +1139,80 @@ export function StorefrontStudio() {
                   );
                 })}
               </div>
-            </div>
-            <div className="sfs-generation-controls">
-              <div className="sfs-selected-products">
-                {products.filter((product) => lifestyleProductIds.includes(product.id)).map((product) => <span key={product.id}><img src={product.imageUrl} alt="" />{product.name}</span>)}
               </div>
-              <label>Escena<select disabled={!editable} value={lifestyleScene} onChange={(event) => setLifestyleScene(event.target.value as typeof lifestyleScene)}><option value="hogar">Hogar luminoso</option><option value="regalo">Presentación de regalo</option><option value="mesa">Mesa editorial</option><option value="tienda">Vidriera de tienda</option></select></label>
-              <label>Detalle opcional<textarea disabled={!editable} value={lifestyleBrief} onChange={(event) => setLifestyleBrief(event.target.value)} placeholder="Ej: mañana luminosa, tonos suaves, sin texto ni personas" /></label>
-              <label>Calidad<select disabled={!editable} value={lifestyleQuality} onChange={(event) => setLifestyleQuality(event.target.value as typeof lifestyleQuality)}><option value="low">Borrador económico</option><option value="medium">Final</option></select></label>
-              <button className="primary-action" onClick={() => void generateLifestyle()} disabled={!editable || lifestyleProductIds.length < 2 || lifestyleProductIds.length > 3}><Sparkle size={18} /> Generar escena</button>
-              <p className="muted-text" aria-live="polite">{lifestyleStatus}</p>
+              <aside className="sfs-selection-summary">
+                <strong>{lifestyleProductIds.length}/3 seleccionados</strong>
+                <div className="sfs-selected-products">
+                  {products.filter((product) => lifestyleProductIds.includes(product.id)).map((product) => <span key={product.id}><img src={product.imageUrl} alt="" />{product.name}</span>)}
+                </div>
+                {!lifestyleProductIds.length && <p>Seleccioná productos desde la lista.</p>}
+              </aside>
             </div>
-          </div>
-          {generatedImage && (
-            <div className="sfs-generated-result">
-              <img src={generatedImage} alt="Composición lifestyle generada" />
-              <div>
-                <button className="secondary-action" disabled={!editable} onClick={() => updateDraft((current) => ({ ...current, hero: { ...current.hero, imageUrl: generatedImage, productId: "" } }))}>Usar en portada</button>
-                <button className="primary-action" disabled={!editable} onClick={() => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, visible: true, imageUrl: generatedImage, productIds: lifestyleProductIds } }))}>Usar como bloque lifestyle</button>
+          </section>
+
+          <section className="sfs-lifestyle-step">
+            <header><span className="sfs-step-number">2</span><div><h4>Creá o subí la imagen</h4><p>La imagen generada queda como propuesta. No se publica automáticamente.</p></div><span className="sfs-editable-chip">Editable</span></header>
+            <div className="sfs-create-image-grid">
+              <div className="sfs-generation-controls">
+                <div className="sfs-method-label"><Sparkle size={19} /><span><strong>Generar con IA</strong><small>Usa la clave configurada y consume crédito del proveedor.</small></span></div>
+                <label>Escena<select disabled={!editable || isGeneratingLifestyle} value={lifestyleScene} onChange={(event) => setLifestyleScene(event.target.value as typeof lifestyleScene)}><option value="hogar">Hogar luminoso</option><option value="regalo">Presentación de regalo</option><option value="mesa">Mesa editorial</option><option value="tienda">Vidriera de tienda</option></select></label>
+                <label>Detalle opcional<textarea disabled={!editable || isGeneratingLifestyle} value={lifestyleBrief} onChange={(event) => setLifestyleBrief(event.target.value)} placeholder="Ej: mañana luminosa, tonos suaves, sin texto ni personas" /></label>
+                <label>Calidad<select disabled={!editable || isGeneratingLifestyle} value={lifestyleQuality} onChange={(event) => setLifestyleQuality(event.target.value as typeof lifestyleQuality)}><option value="low">Borrador económico</option><option value="medium">Final</option></select></label>
+                <button className="primary-action" onClick={() => void generateLifestyle()} disabled={!editable || isGeneratingLifestyle || lifestyleProductIds.length < 2 || lifestyleProductIds.length > 3}>
+                  {isGeneratingLifestyle ? <SpinnerGap className="sfs-spinner" size={18} /> : <Sparkle size={18} />}
+                  {isGeneratingLifestyle ? "Generando..." : "Generar escena"}
+                </button>
+                <p className="muted-text" aria-live="polite">{lifestyleStatus || "Elegí entre 2 y 3 productos para habilitar la generación."}</p>
+              </div>
+              <div className="sfs-manual-image">
+                <div className="sfs-method-label"><UploadSimple size={19} /><span><strong>Usar imagen propia</strong><small>Subí una composición terminada desde tu equipo.</small></span></div>
+                <EditorImageField
+                  disabled={!editable}
+                  label="Imagen lifestyle"
+                  imageUrl={draft.lifestyle.imageUrl}
+                  slot="lifestyle-manual"
+                  onChange={(imageUrl) => updateDraft((current) => ({
+                    ...current,
+                    lifestyle: { ...current.lifestyle, imageUrl, imagePositions: createDefaultStorefrontImagePositions() }
+                  }))}
+                />
               </div>
             </div>
-          )}
+            {generatedImage && (
+              <div className="sfs-generated-result">
+                <img src={generatedImage} alt="Composición lifestyle generada" />
+                <div>
+                  <span><Check size={18} /> Propuesta lista para revisar</span>
+                  <button className="secondary-action" disabled={!editable} onClick={() => updateDraft((current) => ({ ...current, hero: { ...current.hero, imageUrl: generatedImage, productId: "" } }))}>Usar en portada</button>
+                  <button className="primary-action" disabled={!editable} onClick={() => updateDraft((current) => ({
+                    ...current,
+                    lifestyle: {
+                      ...current.lifestyle,
+                      visible: true,
+                      imageUrl: generatedImage,
+                      imagePositions: createDefaultStorefrontImagePositions(),
+                      productIds: lifestyleProductIds
+                    }
+                  }))}>Usar en Lifestyle</button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <LifestyleCropEditor
+            imageUrl={draft.lifestyle.imageUrl}
+            positions={draft.lifestyle.imagePositions}
+            disabled={!editable}
+            onChange={(imagePositions) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, imagePositions } }))}
+          />
+
           <div className="sfs-lifestyle-current">
-            <label className="sfs-check"><input type="checkbox" checked={draft.lifestyle.visible} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, visible: event.target.checked } }))} /> Mostrar bloque lifestyle en la portada</label>
+            <header><div><span className="sfs-item-edit-label"><PencilSimple size={15} /> Editable</span><h4>Textos y publicación</h4><p>Completá el bloque y activalo cuando esté listo.</p></div><label className="sfs-check"><input type="checkbox" checked={draft.lifestyle.visible} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, visible: event.target.checked } }))} /> Mostrar en la portada</label></header>
             <div className="sfs-form-grid two">
               <label>Título<input value={draft.lifestyle.title} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, title: event.target.value } }))} /></label>
               <label>Botón<input value={draft.lifestyle.ctaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, ctaLabel: event.target.value } }))} /></label>
             </div>
             <label>Descripción<textarea value={draft.lifestyle.description} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, description: event.target.value } }))} /></label>
-            <EditorImageField disabled={!editable} label="Imagen lifestyle actual" imageUrl={draft.lifestyle.imageUrl} slot="lifestyle-manual" onChange={(imageUrl) => updateDraft((current) => ({ ...current, lifestyle: { ...current.lifestyle, imageUrl } }))} />
           </div>
         </section>
       )}

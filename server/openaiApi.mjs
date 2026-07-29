@@ -6,6 +6,7 @@ const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 const imageModel = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 const lifestyleImageModel = process.env.OPENAI_LIFESTYLE_IMAGE_MODEL || "gpt-image-2";
 const generatedDir = path.resolve(process.cwd(), "public/generated/products");
+const publicDir = path.resolve(process.cwd(), "public");
 const maxRequestBytes = 15 * 1024 * 1024;
 
 const aiPrompts = {
@@ -68,6 +69,35 @@ function base64FromDataUrl(value) {
     mimeType: match[1] === "image/jpg" ? "image/jpeg" : match[1],
     base64: match[2]
   };
+}
+
+function imageContentType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".webp") return "image/webp";
+  return "image/png";
+}
+
+async function lifestyleReferenceFile(imageUrl, index) {
+  const parsed = base64FromDataUrl(imageUrl);
+  if (parsed) {
+    const extension = parsed.mimeType.split("/")[1].replace("jpeg", "jpg");
+    return toFile(Buffer.from(parsed.base64, "base64"), `producto-${index + 1}.${extension}`, { type: parsed.mimeType });
+  }
+
+  if (/^https?:\/\//i.test(imageUrl)) {
+    const response = await fetch(imageUrl);
+    if (!response.ok) throw new Error(`No se pudo leer la imagen de referencia ${index + 1}.`);
+    const contentType = response.headers.get("content-type") || "image/png";
+    return toFile(Buffer.from(await response.arrayBuffer()), `producto-${index + 1}.png`, { type: contentType });
+  }
+
+  const relativePath = decodeURIComponent(String(imageUrl).split("?")[0]).replace(/^\/+/, "");
+  const filePath = path.resolve(publicDir, relativePath);
+  if (filePath !== publicDir && !filePath.startsWith(`${publicDir}${path.sep}`)) throw new Error("Ruta de imagen no permitida.");
+  return toFile(await fs.readFile(filePath), `producto-${index + 1}${path.extname(filePath) || ".png"}`, {
+    type: imageContentType(filePath)
+  });
 }
 
 async function saveGeneratedImage({ productName, variant, b64Json, remoteUrl }) {
@@ -293,10 +323,11 @@ async function generateLifestyle(payload) {
 
   const inputImages = [];
   for (const [index, product] of products.entries()) {
-    const response = await fetch(product.imageUrl);
-    if (!response.ok) throw new Error(`No se pudo leer la imagen de ${product.name}.`);
-    const contentType = response.headers.get("content-type") || "image/png";
-    inputImages.push(await toFile(Buffer.from(await response.arrayBuffer()), `producto-${index + 1}.png`, { type: contentType }));
+    try {
+      inputImages.push(await lifestyleReferenceFile(product.imageUrl, index));
+    } catch {
+      throw new Error(`No se pudo leer la imagen de ${product.name}.`);
+    }
   }
 
   const prompt = lifestylePrompt({ ...payload, products });

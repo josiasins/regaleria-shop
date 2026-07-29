@@ -18,6 +18,7 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Rojo moderado para bajas, perdidas o negativos.
 - Modo noche usa fondo bosque profundo, paneles verdosos oscuros, texto marfil suave y los mismos acentos semanticos atenuados.
 - Evitar paletas saturadas o monocromaticas fuertes.
+- El fondo base del ecommerce es blanco frio `#FCFDFD`; no reutilizar el verde operativo del sistema interno como fondo de la tienda publica.
 
 ## Tipografia
 
@@ -71,4 +72,9 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - Las funciones de IA deben mostrar claramente cuando algo es sugerido y cuando ya fue aplicado al formulario.
 - La carga de imagenes debe ser visual; evitar textarea de URLs como mecanismo principal.
 - El editor de la vidriera usa borrador y publicacion explicita. La vista previa representa la misma interfaz que vera el cliente.
+- La vista previa de la vidriera abre en movil y usa anchos reales de 390 px, 820 px y escritorio; no simular dispositivos reduciendo visualmente una interfaz de escritorio.
+- Portada, Categorias, Colecciones y Lifestyle deben leerse como herramientas de edicion, separadas de la accion de revisar la vista previa.
+- Cada bloque editable de la vidriera usa un contenedor blanco frio, borde visible, encabezado propio, icono de lapiz y etiqueta `Editable`; la superficie general usa neutros frios y celeste del ecommerce, incluso cuando el sistema interno esta en modo noche.
+- Las imagenes lifestyle guardan un punto de encuadre independiente para movil, tablet y escritorio. Cambiar el encuadre modifica el borrador visual, nunca el archivo original.
+- El flujo Lifestyle se presenta en tres pasos: elegir productos, generar o subir una imagen y ajustar el encuadre. La IA entrega una propuesta revisable y no activa ni publica el bloque por si sola.
 - Las categorias visuales y colecciones se pueden reordenar, pero las categorias reales y los productos siguen perteneciendo al catalogo.
