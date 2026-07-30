@@ -261,6 +261,15 @@ Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion
 - La carga de una foto nueva dispara la misma preparación en segundo plano.
 - Un fallo de optimización conserva el original como fallback.
 
+### Validación productiva del 30/07/2026
+
+- API publicada en Render con Node 22 y commit `087d318`.
+- 53 imágenes originales preparadas; cada una tiene derivados WebP de 320, 640, 1280 y 1920 px.
+- Los originales se conservan sin reemplazo: 21,06 MB.
+- El conjunto completo de derivados ocupa 8,76 MB.
+- En viewport móvil de 390 px, el navegador eligió 320 px para tarjetas y 640 px para el hero.
+- Control de integridad posterior: 45 productos y 1 pedido online, sin cambios.
+
 La vista previa del editor comparte por `sessionStorage` unicamente el borrador visual y una copia de solo lectura del catalogo. No comparte ventas, turnos, compras, pagos ni otros datos operativos, y no permite confirmar pedidos reales desde el marco de previsualizacion.
 
 Para que esa vista previa funcione en Render sin permitir que sitios externos incrusten el sistema, las cabeceras del sitio interno deben conservar:

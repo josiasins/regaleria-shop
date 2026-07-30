@@ -837,3 +837,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Primer render:** mientras se consulta el manifiesto, la tienda conserva el espacio visual con un píxel transparente. Así evita iniciar por error la descarga pesada del original antes de conocer el `srcset`.
 - **Control de datos:** ninguna variante reemplaza, edita o elimina el original ni modifica el producto.
 - **Alternativa descartada:** redimensionar dinámicamente en Render Free para cada visita, porque agrega latencia de arranque y dependencia operativa al ecommerce. La ruta de proxy experimental fue retirada antes del despliegue.
+
+# 2026-07-30 - Entorno reproducible para la API de imágenes
+
+- **Incidente:** Render pasó a usar Node 24 por defecto y npm rechazó el archivo de dependencias porque faltaban cuatro variantes opcionales de `sharp` para arquitecturas distintas a la computadora de desarrollo.
+- **Decisión:** fijar Node `22.x` en `package.json` y conservar en `package-lock.json` todas las variantes opcionales declaradas por `sharp`.
+- **Motivo:** el servidor de imágenes debe instalarse de la misma forma en desarrollo y producción, sin depender de cambios silenciosos del entorno de Render.
+- **Seguridad:** la corrección solo modifica el entorno y el manifiesto de instalación. No ejecuta migraciones, no cambia permisos y no escribe productos, pedidos, ventas, pagos, compras ni stock.
+- **Verificación productiva:** Render compiló el commit `087d318`, instaló 252 paquetes, reportó 0 vulnerabilidades y publicó la API. `/health` respondió `200` y `/api/images/optimize` rechazó una llamada sin sesión con `401`.
+- **Biblioteca optimizada:** se generaron cuatro derivados WebP para 53 originales. El total de originales conservados fue 21,06 MB y los cuatro juegos completos sumaron 8,76 MB. La tienda eligió 320 px para la bombilla y 640 px para el hero en una pantalla móvil de 390 px.
+- **Integridad:** antes y después del proceso se conservaron 45 productos publicados y 1 pedido online. No se creó, editó ni eliminó ningún dato comercial durante la prueba.
