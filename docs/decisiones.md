@@ -794,3 +794,13 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Seguridad:** `OPENAI_API_KEY` permanece en servidor o en secretos de Supabase. La funcion acepta referencias alojadas solamente en el proyecto de Supabase o en el host publico de imagenes admitido.
 - **Verificacion:** la suite aprobo 45 pruebas, la compilacion de produccion termino correctamente y una generacion real con `gpt-image-2` devolvio un PNG 1:1. El archivo de prueba se descarto sin asociarlo a un producto.
 - **Alternativas descartadas:** reemplazo automatico, porque puede alterar una etiqueta; dos o tres variantes por clic, porque incrementan costo y revision; guardar base64 dentro del producto, porque vuelve pesada la ficha y la sincronizacion.
+
+# 2026-07-29 - API dedicada para la foto premium
+
+- **Decision:** ejecutar la generacion de foto premium en un servicio API separado del sitio interno estatico y guardar el PNG resultante en el bucket existente `product-images`.
+- **Motivo:** el servicio actual de Render es un sitio estatico y no puede ejecutar OpenAI en el servidor. La autorizacion automatica de la CLI de Supabase fallo dentro del panel web, por lo que no se insistio ni se modificaron tokens, usuarios o permisos de Supabase.
+- **Seguridad:** el navegador envia la sesion vigente; la API la valida contra Supabase, consulta `current_app_role` y acepta solo `dueno` o `administrador`. Tambien restringe origen, host de la imagen, tamaño de archivo y cantidad de generaciones por ventana de tiempo.
+- **Persistencia:** la API sube la propuesta con la sesion del usuario al mismo almacenamiento permanente usado por las fotos de producto. No guarda archivos finales en el disco temporal de Render.
+- **Control de datos:** la API no actualiza productos. Generar, incorporar la propuesta al borrador y guardar el producto siguen siendo tres acciones separadas.
+- **Alcance:** no se ejecutaron migraciones ni escrituras sobre catalogo, stock, ventas, turnos, pagos, compras o configuracion publicada. Se verificaron 45 productos antes del despliegue.
+- **Alternativas descartadas:** guardar en el disco de Render, porque se pierde al reiniciar; exponer la clave en el frontend, por seguridad; continuar creando tokens de Supabase ante fallos del panel, para evitar riesgo de bloqueo o credenciales innecesarias.

@@ -12,10 +12,18 @@ export interface CatalogImageGenerationResult {
   model: string;
 }
 
-async function invokeLocalCatalogImage(input: CatalogImageGenerationInput) {
-  const response = await fetch("/api/ai/catalog-image", {
+async function invokeCatalogImage(input: CatalogImageGenerationInput) {
+  const { data } = await supabase!.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) throw new Error("Tu sesión venció. Volvé a ingresar para generar la imagen.");
+
+  const apiBaseUrl = String(import.meta.env.VITE_INTERNAL_API_URL || "").replace(/\/$/, "");
+  const response = await fetch(`${apiBaseUrl}/api/ai/catalog-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
     body: JSON.stringify(input)
   });
   const body = await response.json().catch(() => ({}));
@@ -26,14 +34,6 @@ async function invokeLocalCatalogImage(input: CatalogImageGenerationInput) {
 }
 
 export async function generateCatalogProductImage(input: CatalogImageGenerationInput) {
-  if (supabase) {
-    const { data, error } = await supabase.functions.invoke<CatalogImageGenerationResult>("generate-catalog-image", {
-      body: input
-    });
-    if (!error && data?.imageUrl) return data;
-    if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-      throw new Error(error?.message || "La herramienta de foto premium no está disponible.");
-    }
-  }
-  return invokeLocalCatalogImage(input);
+  if (!supabase) throw new Error("Supabase no está configurado.");
+  return invokeCatalogImage(input);
 }

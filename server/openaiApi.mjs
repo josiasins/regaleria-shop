@@ -9,6 +9,9 @@ const catalogImageModel = process.env.OPENAI_CATALOG_IMAGE_MODEL || "gpt-image-2
 const generatedDir = path.resolve(process.cwd(), "public/generated/products");
 const publicDir = path.resolve(process.cwd(), "public");
 const maxRequestBytes = 15 * 1024 * 1024;
+const catalogGenerationWindowMs = 10 * 60 * 1000;
+const catalogGenerationLimit = 5;
+const catalogGenerationAttempts = new Map();
 
 const aiPrompts = {
   purchaseSystem:
@@ -24,6 +27,19 @@ function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(payload));
+}
+
+function applyCatalogCors(req, res) {
+  const origin = String(req.headers.origin || "");
+  const configuredOrigins = String(
+    process.env.INTERNAL_APP_ORIGINS || "https://sistema.regaleriashop.com,http://localhost:5174,http://127.0.0.1:5174"
+  ).split(",").map((value) => value.trim()).filter(Boolean);
+  if (origin && configuredOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
 
 async function readJson(req) {
@@ -50,6 +66,95 @@ function sendApiError(res, error, fallbackMessage) {
 function createClient() {
   if (!process.env.OPENAI_API_KEY) return null;
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
+function statusError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function supabaseServerConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+  if (!url || !anonKey) throw statusError("Supabase no está configurado en el servidor.", 500);
+  return { url: url.replace(/\/$/, ""), anonKey };
+}
+
+async function authorizeCatalogGeneration(req) {
+  const authorization = String(req.headers.authorization || "");
+  if (!authorization.startsWith("Bearer ")) throw statusError("Sesión no autorizada.", 401);
+  const { url, anonKey } = supabaseServerConfig();
+  const headers = { apikey: anonKey, Authorization: authorization };
+
+  const userResponse = await fetch(`${url}/auth/v1/user`, { headers });
+  if (!userResponse.ok) throw statusError("Tu sesión venció. Volvé a ingresar.", 401);
+  const user = await userResponse.json();
+  if (!user?.id) throw statusError("Sesión no autorizada.", 401);
+
+  const roleResponse = await fetch(`${url}/rest/v1/rpc/current_app_role`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: "{}"
+  });
+  if (!roleResponse.ok) throw statusError("No se pudo verificar tu permiso.", 403);
+  const role = await roleResponse.json();
+  if (!["dueno", "administrador"].includes(String(role))) {
+    throw statusError("Solo dueño o administrador pueden generar fotos premium.", 403);
+  }
+
+  const now = Date.now();
+  const recentAttempts = (catalogGenerationAttempts.get(user.id) || []).filter(
+    (timestamp) => now - timestamp < catalogGenerationWindowMs
+  );
+  if (recentAttempts.length >= catalogGenerationLimit) {
+    throw statusError("Alcanzaste el límite temporal de generaciones. Esperá unos minutos.", 429);
+  }
+  catalogGenerationAttempts.set(user.id, [...recentAttempts, now]);
+
+  return { authorization, url, anonKey };
+}
+
+function validateCatalogImageUrl(imageUrl, supabaseUrl) {
+  const parsed = base64FromDataUrl(imageUrl);
+  if (parsed) {
+    if (Buffer.byteLength(parsed.base64, "base64") > 12 * 1024 * 1024) {
+      throw statusError("La imagen supera 12 MB.", 400);
+    }
+    return;
+  }
+
+  let source;
+  try {
+    source = new URL(String(imageUrl));
+  } catch {
+    throw statusError("La imagen seleccionada no tiene una URL válida.", 400);
+  }
+  const allowedHosts = new Set([new URL(supabaseUrl).hostname, "images.unsplash.com"]);
+  if (source.protocol !== "https:" || !allowedHosts.has(source.hostname)) {
+    throw statusError("La imagen debe estar alojada en el almacenamiento autorizado.", 400);
+  }
+}
+
+async function uploadGeneratedCatalogImage({ bytes, productId, authorization, url, anonKey }) {
+  const imagePath = `${slugify(productId)}/premium-${crypto.randomUUID()}.png`;
+  const encodedPath = imagePath.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(`${url}/storage/v1/object/product-images/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: anonKey,
+      Authorization: authorization,
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=31536000",
+      "x-upsert": "false"
+    },
+    body: bytes
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw statusError(body.message || body.error || "No se pudo guardar la imagen en la nube.", response.status);
+  }
+  return `${url}/storage/v1/object/public/product-images/${encodedPath}`;
 }
 
 function slugify(value) {
@@ -178,10 +283,13 @@ function catalogImagePrompt(payload) {
   ].filter(Boolean).join(" ");
 }
 
-async function generateCatalogImage(payload) {
+async function generateCatalogImage(payload, req) {
+  const access = await authorizeCatalogGeneration(req);
   const client = createClient();
   if (!client) throw new Error("OPENAI_API_KEY no está configurada.");
+  if (!payload.productId || !payload.productName) throw statusError("Falta identificar el producto.", 400);
   if (!payload.imageUrl) throw new Error("Seleccioná una imagen de referencia.");
+  validateCatalogImageUrl(payload.imageUrl, access.url);
   const imageFile = await lifestyleReferenceFile(payload.imageUrl, 0);
   const result = await client.images.edit({
     model: catalogImageModel,
@@ -192,13 +300,20 @@ async function generateCatalogImage(payload) {
     output_format: "png"
   });
   const item = result.data?.[0];
-  const imageUrl = await saveGeneratedImage({
-    productName: payload.productName,
-    variant: "premium-catalogo",
-    b64Json: item?.b64_json,
-    remoteUrl: item?.url
+  let bytes;
+  if (item?.b64_json) {
+    bytes = Buffer.from(item.b64_json, "base64");
+  } else if (item?.url) {
+    const imageResponse = await fetch(item.url);
+    if (!imageResponse.ok) throw new Error("No se pudo descargar la imagen generada.");
+    bytes = Buffer.from(await imageResponse.arrayBuffer());
+  }
+  if (!bytes?.length) throw new Error("OpenAI no devolvió una imagen.");
+  const imageUrl = await uploadGeneratedCatalogImage({
+    bytes,
+    productId: payload.productId,
+    ...access
   });
-  if (!imageUrl) throw new Error("OpenAI no devolvió una imagen.");
   return { imageUrl, model: catalogImageModel };
 }
 
@@ -419,14 +534,7 @@ export function registerOpenAiApi(server) {
     }
   });
 
-  server.middlewares.use("/api/ai/catalog-image", async (req, res) => {
-    if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
-    try {
-      sendJson(res, 200, await generateCatalogImage(await readJson(req)));
-    } catch (error) {
-      sendApiError(res, error, "Error al generar la foto premium");
-    }
-  });
+  server.middlewares.use("/api/ai/catalog-image", handleCatalogImageRequest);
 
   server.middlewares.use("/api/ai/lifestyle", async (req, res) => {
     if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
@@ -436,4 +544,22 @@ export function registerOpenAiApi(server) {
       sendApiError(res, error, "Error al generar la composicion");
     }
   });
+}
+
+export async function handleCatalogImageRequest(req, res) {
+  applyCatalogCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
+  const origin = String(req.headers.origin || "");
+  if (origin && !res.getHeader("Access-Control-Allow-Origin")) {
+    return sendJson(res, 403, { error: "Origen no autorizado." });
+  }
+  try {
+    sendJson(res, 200, await generateCatalogImage(await readJson(req), req));
+  } catch (error) {
+    sendApiError(res, error, "Error al generar la foto premium");
+  }
 }

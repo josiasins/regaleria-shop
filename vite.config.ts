@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => {
         name: "regaleria-openai-api",
         configureServer(server) {
           registerOpenAiApi(server);
+        },
+        configurePreviewServer(server) {
+          registerOpenAiApi(server);
         }
       }
     ],
