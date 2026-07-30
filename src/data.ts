@@ -135,9 +135,9 @@ export const businessProfile: BusinessProfile = {
 export const categories = ["Mates y termos", "Deco", "Bazar", "Regalos personalizados", "Libreria", "Accesorios", "Sin categoria"];
 
 export const rolePermissions: RolePermissions = {
-  dueno: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "tesoreria", "capital", "catalogo", "web", "reportes", "sistema", "descuentos"],
-  administrador: ["panel", "ventas", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
-  encargado: ["panel", "ventas", "stock", "compras", "clientes", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "descuentos"],
+  dueno: ["panel", "ventas", "pedidos", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "tesoreria", "capital", "catalogo", "web", "reportes", "sistema", "descuentos"],
+  administrador: ["panel", "ventas", "pedidos", "stock", "compras", "clientes", "proveedores", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "sistema", "descuentos"],
+  encargado: ["panel", "ventas", "pedidos", "stock", "compras", "clientes", "presupuestos", "pagos", "gastos", "catalogo", "web", "reportes", "descuentos"],
   cajero: ["panel", "ventas", "clientes", "presupuestos", "pagos"]
 };
 

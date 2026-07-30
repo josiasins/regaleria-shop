@@ -33,7 +33,9 @@ import { clsx } from "clsx";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { loadPublicCatalogSnapshot } from "./catalogCloud";
 import { uploadStorefrontImage } from "./fileStorage";
+import { requestImageOptimization } from "./imageAssetsCloud";
 import { formatMoney } from "./receipt";
+import { StorefrontImage } from "./StorefrontImage";
 import {
   createDefaultStorefrontImagePositions,
   createDefaultStorefrontSettings,
@@ -172,7 +174,7 @@ function ProductTile({ product, onOpen, onAdd }: { product: Product; onOpen: () 
   return (
     <article className="sf-product-card">
       <button className="sf-product-photo" onClick={onOpen} aria-label={`Ver ${product.name}`}>
-        {product.imageUrl ? <img src={product.imageUrl} alt={`${product.name}, ${product.category}`} /> : <Package size={34} />}
+        {product.imageUrl ? <StorefrontImage src={product.imageUrl} alt={`${product.name}, ${product.category}`} sizes="(max-width: 680px) 50vw, (max-width: 900px) 33vw, 25vw" /> : <Package size={34} />}
         {available ? <span>Disponible</span> : <span className="sold-out">Sin stock</span>}
       </button>
       <div className="sf-product-copy">
@@ -203,13 +205,13 @@ function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: (
       <button className="sf-text-button" onClick={onBack}><ArrowLeft size={18} /> Volver</button>
       <section className="sf-detail-gallery">
         <div className="sf-detail-main">
-          {imageUrl ? <img src={imageUrl} alt={product.name} /> : <Package size={44} />}
+          {imageUrl ? <StorefrontImage src={imageUrl} alt={product.name} sizes="(max-width: 900px) 100vw, 55vw" eager /> : <Package size={44} />}
         </div>
         {gallery.length > 1 && (
           <div className="sf-detail-thumbs">
             {gallery.map((url, index) => (
               <button className={clsx(url === imageUrl && "active")} key={`${url}-${index}`} onClick={() => setImageUrl(url)}>
-                <img src={url} alt={`${product.name}, vista ${index + 1}`} />
+                <StorefrontImage src={url} alt={`${product.name}, vista ${index + 1}`} sizes="88px" />
               </button>
             ))}
           </div>
@@ -436,7 +438,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                   const variant = product?.variants.find((item) => item.id === line.variantId);
                   return (
                     <article key={line.variantId}>
-                      {product?.imageUrl ? <img src={product.imageUrl} alt="" /> : <Package size={28} />}
+                      {product?.imageUrl ? <StorefrontImage src={product.imageUrl} alt="" sizes="96px" /> : <Package size={28} />}
                       <div><strong>{line.name}</strong><span>{variant?.name} · {line.sku}</span><small>{formatMoney(line.unitPrice)} por unidad</small></div>
                       <div className="sf-quantity">
                         <button onClick={() => setQuantity(line.variantId, line.quantity - 1)} aria-label={`Quitar una unidad de ${line.name}`}><Minus size={16} /></button>
@@ -489,12 +491,12 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                     <p>{settings.hero.description}</p>
                     <button className="sf-primary" onClick={() => openCatalog()}>{settings.hero.ctaLabel} <ArrowRight size={18} /></button>
                   </div>
-                  <button className="sf-hero-media" onClick={() => settings.hero.productId ? openProduct(settings.hero.productId) : openCatalog()}>
-                    {heroImage ? <img src={heroImage} alt="" /> : <Package size={52} />}
+                  <button className="sf-hero-media" aria-label="Ver producto destacado" onClick={() => settings.hero.productId ? openProduct(settings.hero.productId) : openCatalog()}>
+                    {heroImage ? <StorefrontImage src={heroImage} alt="Producto destacado de Regaleria Shop" sizes="(max-width: 680px) 100vw, 55vw" eager /> : <Package size={52} />}
                   </button>
                 </section>
-                <button className="sf-promo" onClick={() => settings.hero.promoProductId ? openProduct(settings.hero.promoProductId) : openCatalog()}>
-                  {promoImage ? <img src={promoImage} alt="" /> : <GiftFallback />}
+                <button className="sf-promo" aria-label={`Ver ${settings.hero.promoTitle}`} onClick={() => settings.hero.promoProductId ? openProduct(settings.hero.promoProductId) : openCatalog()}>
+                  {promoImage ? <StorefrontImage src={promoImage} alt={settings.hero.promoTitle} className="sf-promo-image" sizes="(max-width: 900px) 42vw, 26vw" eager /> : <GiftFallback />}
                   <div><strong>{settings.hero.promoTitle}</strong><span>{settings.hero.promoDescription}</span><b>{settings.hero.promoCtaLabel} <ArrowRight size={16} /></b></div>
                 </button>
               </main>
@@ -505,7 +507,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                   {visibleCategories.map((item) => (
                     <button key={item.id} className="sf-category-card" onClick={() => openCatalog(item.category)}>
                       <div><strong>{item.title}</strong><span>{item.description}</span><b>Explorar <ArrowRight size={15} /></b></div>
-                      {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <GiftFallback />}
+                      {item.imageUrl ? <StorefrontImage src={item.imageUrl} alt="" sizes="(max-width: 680px) 40vw, 22vw" /> : <GiftFallback />}
                     </button>
                   ))}
                 </div>
@@ -536,7 +538,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
 
               {settings.lifestyle.visible && settings.lifestyle.imageUrl && (
                 <section className="sf-lifestyle" style={lifestyleStyle}>
-                  <img src={settings.lifestyle.imageUrl} alt="" />
+                  <StorefrontImage src={settings.lifestyle.imageUrl} alt="" sizes="100vw" />
                   <div><h2>{settings.lifestyle.title}</h2><p>{settings.lifestyle.description}</p><button className="sf-primary" onClick={() => openCatalog()}>{settings.lifestyle.ctaLabel}</button></div>
                 </section>
               )}
@@ -844,6 +846,8 @@ export function StorefrontStudio() {
   const [generatedImage, setGeneratedImage] = useState("");
   const [isGeneratingLifestyle, setIsGeneratingLifestyle] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("mobile");
+  const [optimizationStatus, setOptimizationStatus] = useState("");
+  const [isOptimizingImages, setIsOptimizingImages] = useState(false);
   const previewFrame = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -932,15 +936,50 @@ export function StorefrontStudio() {
     return !lifestyleQuery.trim() || productSearchText(product).includes(lifestyleQuery.trim().toLocaleLowerCase());
   });
 
+  const optimizePublishedImages = async () => {
+    if (!editable || isOptimizingImages) return;
+    const sourceUrls = Array.from(new Set([
+      ...products.flatMap((product) => [product.imageUrl, ...(product.imageUrls ?? [])]),
+      draft.hero.imageUrl,
+      draft.hero.promoImageUrl,
+      ...draft.categories.map((category) => category.imageUrl),
+      draft.lifestyle.imageUrl
+    ].filter((url): url is string => Boolean(url))));
+    if (!sourceUrls.length) {
+      setOptimizationStatus("No hay imágenes para optimizar.");
+      return;
+    }
+    setIsOptimizingImages(true);
+    let completed = 0;
+    let failed = 0;
+    setOptimizationStatus(`Preparando 0 de ${sourceUrls.length} imágenes...`);
+    for (const sourceUrl of sourceUrls) {
+      try {
+        const result = await requestImageOptimization(sourceUrl);
+        if (result) completed += 1;
+        else failed += 1;
+      } catch {
+        failed += 1;
+      }
+      setOptimizationStatus(`Preparadas ${completed} de ${sourceUrls.length}${failed ? ` · ${failed} con error` : ""}.`);
+    }
+    setIsOptimizingImages(false);
+  };
+
   return (
     <section className="workspace storefront-studio">
       <header className="sfs-command">
         <div><span>Editor de tienda</span><h2>Vidriera pública</h2><p>Ordená contenido, cambiá imágenes y previsualizá antes de publicar.</p></div>
         <div>
           <span className={clsx("sfs-save-state", dirty && "dirty")}>{status}</span>
+          <button className="secondary-action" onClick={() => void optimizePublishedImages()} disabled={!editable || isOptimizingImages}>
+            {isOptimizingImages ? <SpinnerGap className="spin" size={18} /> : <ImagesSquare size={18} />}
+            {isOptimizingImages ? "Optimizando..." : "Optimizar imágenes"}
+          </button>
           <button className="primary-action" onClick={() => void save()} disabled={!editable || !dirty}><Check size={18} /> Guardar y publicar</button>
         </div>
       </header>
+      {optimizationStatus && <p className="sfs-optimization-status" aria-live="polite">{optimizationStatus}</p>}
       {!editable && <div className="sfs-readonly">Solo dueño y administrador pueden modificar la tienda. La vista previa sigue disponible.</div>}
       <nav className="sfs-navigation" aria-label="Herramientas de la vidriera">
         <button className={clsx("sfs-navigation-preview", studioPage === "vista" && "active")} onClick={() => setStudioPage("vista")}>

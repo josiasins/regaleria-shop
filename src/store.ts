@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
-import { loadCloudCommerce, saveCloudOrder } from "./commerceCloud";
+import { loadCloudCommerce, manageCloudOrder, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, capitalEntries, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
 import { auditCloudOperations, isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
@@ -19,6 +19,7 @@ import type {
   NewProductInput,
   OnlineOrder,
   OnlineOrderDraftInput,
+  OnlineOrderManagementInput,
   OperationalSnapshot,
   OperationAuditEntry,
   PaymentMethod,
@@ -124,6 +125,7 @@ interface AppState {
   updateRolePermissions: (role: Role, permissions: RolePermissions[Role]) => void;
   addTransfer: (input: TransferDraftInput) => Transfer | null;
   addOnlineOrder: (input: OnlineOrderDraftInput) => Promise<OnlineOrder | null>;
+  manageOnlineOrder: (input: OnlineOrderManagementInput) => Promise<OnlineOrder | null>;
   confirmTransfer: (id: string) => void;
   convertQuote: (id: string) => Sale | null;
   markAllSynced: () => void;
@@ -2094,6 +2096,10 @@ export const useStore = create<AppState>((set, get) => ({
       lines: cleanLines,
       total: totals.total,
       status: "nuevo",
+      paymentStatus: "pendiente",
+      paidAmount: 0,
+      payments: [],
+      events: [],
       createdAt: new Date().toISOString(),
       syncStatus: "pendiente"
     };
@@ -2143,13 +2149,88 @@ export const useStore = create<AppState>((set, get) => ({
     ];
     const saved = await saveCloudOrder(order, emailMessages);
     if (!saved) return null;
+    const stockReservation: Sale = {
+      id: order.id,
+      receiptNumber: order.number,
+      type: "detallada",
+      customerName: order.customerName,
+      lines: order.lines,
+      discount: 0,
+      paymentMethod: "otro",
+      paymentStatus: "pendiente",
+      paidAmount: 0,
+      payments: [],
+      total: order.total,
+      margin: 0,
+      createdAt: order.createdAt,
+      syncStatus: order.syncStatus
+    };
     set((state) => ({
       onlineOrders: [order, ...state.onlineOrders],
       emailMessages: [...emailMessages, ...state.emailMessages],
       movements: [...movementsForOrder, ...state.movements],
-      products: applySaleStock(state.products, { ...order, receiptNumber: order.number, type: "detallada", discount: 0, paymentMethod: "otro", margin: 0 })
+      products: applySaleStock(state.products, stockReservation)
     }));
     return order;
+  },
+  manageOnlineOrder: async (input) => {
+    if (import.meta.env.MODE === "test") {
+      const current = get().onlineOrders.find((order) => order.id === input.orderId);
+      if (!current) return null;
+      const now = new Date().toISOString();
+      let updated: OnlineOrder = { ...current, updatedAt: now, syncStatus: "sincronizado" };
+      if (input.action === "set_status") {
+        updated = { ...updated, status: input.status };
+      } else if (input.action === "add_payment") {
+        const payment = {
+          id: `test_payment_${crypto.randomUUID()}`,
+          amount: input.payment.amount,
+          paymentMethod: input.payment.paymentMethod,
+          note: input.payment.note,
+          createdAt: now
+        };
+        const payments = [...(updated.payments ?? []), payment];
+        const paidAmount = money(payments.reduce((sum, item) => sum + item.amount, 0));
+        updated = {
+          ...updated,
+          payments,
+          paidAmount,
+          paymentStatus: paidAmount >= updated.total ? "pagado" : paidAmount > 0 ? "parcial" : "pendiente"
+        };
+      } else if (input.action === "update_delivery") {
+        updated = { ...updated, ...input.delivery };
+      } else if (input.action === "cancel") {
+        if (current.stockRestoredAt) return current;
+        updated = { ...updated, status: "cancelado", cancelledAt: now, stockRestoredAt: now };
+      }
+      set((state) => ({
+        onlineOrders: state.onlineOrders.map((order) => order.id === updated.id ? updated : order),
+        ...(input.action === "cancel"
+          ? {
+              products: state.products.map((product) => ({
+                ...product,
+                variants: product.variants.map((variant) => {
+                  const quantity = current.lines
+                    .filter((line) => line.variantId === variant.id)
+                    .reduce((sum, line) => sum + line.quantity, 0);
+                  return quantity ? { ...variant, stock: variant.stock + quantity } : variant;
+                })
+              }))
+            }
+          : {})
+      }));
+      return updated;
+    }
+    const updated = await manageCloudOrder(input);
+    if (!updated) return null;
+    const cloudProducts = input.action === "cancel" ? await loadCloudCatalog() : null;
+    set((state) => ({
+      onlineOrders: state.onlineOrders.some((order) => order.id === updated.id)
+        ? state.onlineOrders.map((order) => order.id === updated.id ? updated : order)
+        : [updated, ...state.onlineOrders],
+      ...(cloudProducts?.length ? { products: cloudProducts, categories: mergeCategories(state.categories, cloudProducts) } : {})
+    }));
+    return updated;
   },
   confirmTransfer: (id) => {
     set((state) => ({

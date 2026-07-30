@@ -53,6 +53,10 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - La portada publica combina un hero comercial con producto real, una promocion secundaria, categorias fotograficas y filas de productos. No usa fondos decorativos abstractos.
 - En celular, la tienda publica usa cabecera compacta y navegacion inferior para Inicio, Buscar y Carrito. En tablet conserva la navegacion superior y apila promociones sin perder jerarquia.
 - El carrito público vive en una página propia, accesible desde el encabezado; nunca se agrega como bloque al final del catálogo.
+- Pedidos online usa patrón maestro-detalle: búsqueda y estados a la izquierda, cliente, artículos, cobro, preparación, entrega e historial a la derecha. En móvil se apila en una sola columna.
+- La preparación de un pedido muestra una acción siguiente principal. Los cambios manuales de estado quedan en un desplegable de menor jerarquía.
+- Una promoción con producto alto separa físicamente imagen y texto. La imagen usa `contain` y el bloque de texto conserva fondo opaco; el nombre nunca se superpone al producto.
+- Las imágenes públicas usan `srcset` con variantes WebP de 320, 640, 1280 y 1920 px, conservando el original sin reemplazarlo.
 - La marca elegida usa logo dorado con caja, cinta y palabra `shop`; la fuente maestra es `public/brand/regaleria-shop-logo_NEW.af`, y las reglas completas viven en `docs/manual-marca.md`.
 - El sistema interno usa el simbolo compacto y la web publica puede usar el lockup completo cuando el espacio lo permite.
 - La paleta de marca combina oro regalo, marfil tienda, bosque operativo, salvia y coral accion; el oro se usa como firma, no como color dominante de interfaz.

@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { requestImageOptimization } from "./imageAssetsCloud";
 
 export interface CatalogImageGenerationInput {
   productId: string;
@@ -30,6 +31,7 @@ async function invokeCatalogImage(input: CatalogImageGenerationInput) {
   if (!response.ok || !body.imageUrl) {
     throw new Error(body.error || "No se pudo generar la foto premium.");
   }
+  void requestImageOptimization(String(body.imageUrl));
   return body as CatalogImageGenerationResult;
 }
 

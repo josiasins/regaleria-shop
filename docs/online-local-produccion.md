@@ -235,11 +235,31 @@ Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion
 - Inicio: `npm run start:api`.
 - Salud: `/health`.
 - Rutas protegidas: `/api/ai/catalog-image` y `/api/ai/lifestyle`.
+- Optimización protegida: `/api/images/optimize`.
 - Origen admitido: `https://sistema.regaleriashop.com`.
 - Variables requeridas: `OPENAI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `INTERNAL_APP_ORIGINS`.
 - El sitio interno recibe `VITE_INTERNAL_API_URL` durante su compilacion.
 - La clave de OpenAI nunca se incluye en el bundle ni se envia al navegador.
 - La cabecera `Content-Security-Policy` del sitio interno debe incluir `https://regaleria-shop-api.onrender.com` en `connect-src`. No usar `*`.
+
+## Pedidos ecommerce
+
+- La web anónima ejecuta `create_store_order`; PostgreSQL recalcula precio y stock y construye los correos.
+- El sistema autenticado lee `store_orders` y actualiza mediante `manage_store_order`.
+- `store_order_events` conserva la auditoría separada del JSON legible del pedido.
+- `expire_store_orders` libera reservas pendientes después de 48 horas. Si `pg_cron` está activo se ejecuta cada 15 minutos.
+- La cancelación es idempotente: una segunda solicitud no vuelve a sumar stock.
+- Antes y después de cualquier migración o despliegue se verifica la cantidad de productos y se ejecuta backup.
+
+## Rendimiento de imágenes públicas
+
+- `image_assets` guarda el manifiesto de derivados; anon puede leerlo, pero no escribir.
+- `/api/images/optimize` exige sesión de dueño o administrador.
+- Los derivados viven en `product-images/optimized/<hash>/<ancho>.webp` con caché anual.
+- La tienda usa URLs directas de Supabase y no un proxy dinámico de Render.
+- En `Web pública > Vidriera pública`, dueño y administrador pueden ejecutar `Optimizar imágenes` para preparar la biblioteca histórica y ver el avance.
+- La carga de una foto nueva dispara la misma preparación en segundo plano.
+- Un fallo de optimización conserva el original como fallback.
 
 La vista previa del editor comparte por `sessionStorage` unicamente el borrador visual y una copia de solo lectura del catalogo. No comparte ventas, turnos, compras, pagos ni otros datos operativos, y no permite confirmar pedidos reales desde el marco de previsualizacion.
 

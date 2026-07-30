@@ -430,3 +430,24 @@
 5. La imagen vuelve como resultado para revision; no cambia la web por si sola.
 6. Se puede usar en portada o en el bloque lifestyle del borrador.
 7. `Guardar y publicar` confirma el cambio visual y deja historial.
+
+## Pedido online y gestion interna
+
+1. El cliente confirma el carrito en la web pública.
+2. PostgreSQL valida cliente, cantidades, precio web y stock; ignora totales o correos propuestos por el navegador.
+3. Se crea un pedido `nuevo`, se reserva stock y se registra una vigencia de 48 horas.
+4. El sistema interno recibe el pedido y el stock actualizado mediante Realtime.
+5. En `Pedidos online` se busca por cliente, número, artículo o código y se abre su detalle.
+6. Con motivo obligatorio se confirma, prepara, marca listo o entrega; también se pueden registrar varios pagos parciales.
+7. La entrega conserva dirección, seguimiento y nota interna.
+8. Cancelar devuelve el stock una sola vez. Si tenía cobros, queda `reembolso pendiente`.
+9. Cada paso se agrega al historial con fecha, usuario, motivo y datos de la operación.
+10. Una reserva pendiente vencida se cancela automáticamente y libera stock.
+
+## Imagen liviana para ecommerce
+
+1. Una foto se sube o genera y el original se guarda sin cambios.
+2. La API verifica sesión y rol, descarga el original y genera cuatro WebP.
+3. Las variantes se guardan con URL inmutable y se registran en `image_assets`.
+4. La tienda consulta una vez el manifiesto y usa `srcset` para que cada dispositivo descargue el tamaño adecuado.
+5. Si una variante no está disponible, se muestra el original; nunca se deja una ficha sin imagen.

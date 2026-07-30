@@ -16,6 +16,12 @@ export function isCloudCatalogEnabled() {
   return hostname === publicDomain || hostname === `www.${publicDomain}` || hostname === internalDomain || hostname.endsWith(".onrender.com");
 }
 
+function isPublicStorefrontHost() {
+  const hostname = window.location.hostname.toLowerCase();
+  const publicDomain = String(import.meta.env.VITE_PUBLIC_DOMAIN || "regaleriashop.com").toLowerCase();
+  return hostname === publicDomain || hostname === `www.${publicDomain}`;
+}
+
 function catalogRow(product: Product) {
   return {
     id: product.id,
@@ -32,6 +38,18 @@ export async function loadCloudCatalog() {
 
 export async function loadPublicCatalogSnapshot() {
   if (!supabase) return null;
+  if (isPublicStorefrontHost()) {
+    const { data, error } = await supabase.rpc("get_public_catalog");
+    if (!error) {
+      return ((data ?? []) as Product[]).map((product) => ({
+        ...product,
+        publishable: true,
+        syncStatus: "sincronizado" as const
+      }));
+    }
+    console.error("No se pudo cargar el catalogo publico protegido.", error.message);
+    return null;
+  }
   const { data, error } = await supabase
     .from("public_catalog_products")
     .select("id,publishable,data,updated_at")
@@ -87,4 +105,22 @@ export async function seedCloudCatalog(products: Product[]) {
     return false;
   }
   return true;
+}
+
+export function subscribeToCloudCatalog(onChange: (products: Product[]) => void) {
+  if (!isCloudCatalogEnabled() || !supabase) return () => {};
+  const client = supabase;
+  let active = true;
+  const refresh = async () => {
+    const products = await loadPublicCatalogSnapshot();
+    if (active && products) onChange(products);
+  };
+  const channel = client
+    .channel("public-catalog-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "public_catalog_products" }, () => void refresh())
+    .subscribe();
+  return () => {
+    active = false;
+    void client.removeChannel(channel);
+  };
 }

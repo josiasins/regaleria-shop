@@ -214,3 +214,20 @@
 - [x] Guardado automatico del estado operativo interno en Supabase despues de compras, ventas, gastos y cambios criticos.
 - [ ] Migrar ventas, compras, clientes, proveedores y finanzas desde el estado local a tablas reales de Supabase.
 - [x] Configurar DNS interno en Porkbun.
+
+### Etapa 15: Operacion ecommerce
+
+- [x] Bandeja interna de pedidos online con búsqueda y filtros.
+- [x] Estados de preparación, pagos parciales, entrega y seguimiento.
+- [x] Cancelación auditada con devolución idempotente de stock.
+- [x] Reservas pendientes con vencimiento a 48 horas.
+- [x] Checkout con precio y stock recalculados en PostgreSQL.
+- [x] Correos construidos en servidor, sin contenido arbitrario desde el navegador.
+- [x] Catálogo público sin costos ni proveedores.
+- [x] Sincronización Realtime de pedidos y catálogo.
+- [x] Variantes WebP responsivas conservando originales.
+- [x] Optimización manual de biblioteca histórica con progreso y carga futura automática.
+- [ ] Integrar pasarela de pago online y webhooks firmados.
+- [ ] Preparar cambios, devoluciones y reembolsos completos.
+- [ ] Separar direcciones y perfiles de clientes ecommerce en tablas dedicadas.
+- [ ] Añadir picking por lote y etiquetas de envío cuando el volumen lo requiera.

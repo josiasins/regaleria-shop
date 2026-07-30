@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { requestImageOptimization } from "./imageAssetsCloud";
 
 export type FileBucket = "product-images" | "purchase-documents" | "transfer-receipts" | "expense-documents";
 
@@ -45,7 +46,9 @@ export async function uploadProductImage(productId: string, productName: string,
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const path = `${safeFilePart(productId)}/${safeFilePart(productName)}-${crypto.randomUUID()}.${extension}`;
   await uploadBusinessFile("product-images", path, file);
-  return getPublicBusinessFileUrl("product-images", path);
+  const url = getPublicBusinessFileUrl("product-images", path);
+  void requestImageOptimization(url);
+  return url;
 }
 
 export async function uploadStorefrontImage(slot: string, file: File) {
@@ -59,5 +62,7 @@ export async function uploadStorefrontImage(slot: string, file: File) {
   const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const path = `storefront/${safeFilePart(slot)}-${crypto.randomUUID()}.${extension}`;
   await uploadBusinessFile("product-images", path, file);
-  return getPublicBusinessFileUrl("product-images", path);
+  const url = getPublicBusinessFileUrl("product-images", path);
+  void requestImageOptimization(url);
+  return url;
 }

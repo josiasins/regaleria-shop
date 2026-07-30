@@ -27,6 +27,9 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 - Los datos repetibles, como categorias, clientes y proveedores, se administran como listas reutilizables.
 - La IA puede asistir la precarga documental y crear composiciones lifestyle a partir de dos o tres fotos reales. Nunca registra stock ni publica una imagen sin confirmacion humana.
 - La tienda pública debe funcionar como ecommerce real: categorías dinámicas, búsqueda, ficha de producto, carrito, pedidos persistentes y comunicaciones.
+- Un pedido web reserva stock en la misma fuente que usa el sistema interno, pero conserva su propio circuito de preparación, cobro, entrega, cancelación e historial.
+- La gestión online debe permitir buscar pedidos, registrar pagos parciales, avanzar estados y devolver stock de forma idempotente al cancelar.
+- La tienda pública consume imágenes derivadas livianas; los originales se conservan para edición y archivo.
 - La presentacion de la tienda publica se administra aparte de los datos operativos. Cambiar una portada, una categoria visual o una coleccion no modifica productos, precios, stock ni pedidos.
 
 ## Anti-referencias

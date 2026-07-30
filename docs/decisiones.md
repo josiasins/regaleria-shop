@@ -816,3 +816,24 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Servicio:** la raiz de la API ahora informa que el servicio esta activo y remite al sistema interno; las rutas operativas siguen protegidas y una solicitud sin sesion recibe `401`.
 - **Criterio de cierre:** no considerar una funcion publicada por comprobar solo `/health`; debe probarse desde `sistema.regaleriashop.com`, completar generacion, mostrar la propuesta y conservar el catalogo sin cambios.
 - **Verificacion productiva:** desde una sesion real de dueño en `sistema.regaleriashop.com`, Foto premium genero una propuesta para `Bombillon river alpaca` y Lifestyle genero otra usando dos productos con `gpt-image-2`. No se eligio usar, guardar ni publicar ninguna propuesta. El catalogo conservo 45 filas.
+
+# 2026-07-30 - Gestion integrada de pedidos online
+
+- **Decision:** usar `store_orders` como fuente de verdad para pedidos ecommerce y agregar una bandeja interna maestro-detalle con búsqueda, estados, pagos parciales, entrega, cancelación e historial.
+- **Stock:** el checkout vuelve a calcular precio y existencia dentro de PostgreSQL. Crear el pedido reserva stock; cancelar o vencer la reserva lo devuelve una sola vez mediante bloqueo de fila y marca `stockRestoredAt`.
+- **Reserva:** un pedido pendiente conserva mercadería durante 48 horas. Una tarea programada revisa las reservas cada 15 minutos cuando `pg_cron` está disponible.
+- **Seguridad:** el navegador deja de definir destinatarios y HTML de correos. PostgreSQL normaliza cliente, líneas, precios y mensajes; `email_data` se mantiene solo para compatibilidad y se ignora.
+- **Privacidad comercial:** la tienda pública consulta `get_public_catalog`, que excluye proveedor y reemplaza costo por cero. El sistema autenticado conserva el catálogo completo.
+- **Auditoría:** cada cambio interno exige motivo y agrega un evento inmutable en `store_order_events` y en la copia legible del pedido.
+- **Datos existentes:** las migraciones son aditivas; no actualizan ni eliminan pedidos, productos, ventas, turnos, pagos, compras o movimientos previos.
+
+# 2026-07-30 - Variantes livianas de imágenes ecommerce
+
+- **Decision:** conservar cada imagen original y generar WebP permanentes de 320, 640, 1280 y 1920 px en `product-images/optimized`.
+- **Motivo:** el catálogo tenía 51 imágenes y más de 16 MB de originales; un celular no debe descargar el archivo de escritorio.
+- **Entrega:** `image_assets` publica únicamente el manifiesto de variantes. El navegador elige el tamaño con `srcset` y descarga desde el CDN de Supabase, sin despertar Render por cada imagen.
+- **Carga futura:** al subir o generar una foto, el sistema solicita optimización en segundo plano. Solo dueño o administrador pueden ejecutar el proceso.
+- **Biblioteca existente:** Vidriera pública ofrece `Optimizar imágenes` con avance visible para preparar también las fotos anteriores. La tarea crea derivados y nunca reemplaza el archivo original.
+- **Primer render:** mientras se consulta el manifiesto, la tienda conserva el espacio visual con un píxel transparente. Así evita iniciar por error la descarga pesada del original antes de conocer el `srcset`.
+- **Control de datos:** ninguna variante reemplaza, edita o elimina el original ni modifica el producto.
+- **Alternativa descartada:** redimensionar dinámicamente en Render Free para cada visita, porque agrega latencia de arranque y dependencia operativa al ecommerce. La ruta de proxy experimental fue retirada antes del despliegue.

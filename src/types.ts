@@ -324,6 +324,27 @@ export interface SupplierDraftInput {
   note: string;
 }
 
+export type OnlineOrderStatus = "nuevo" | "confirmado" | "preparando" | "listo" | "entregado" | "cancelado";
+export type OnlineOrderPaymentStatus = "pendiente" | "parcial" | "pagado" | "reembolso_pendiente" | "reembolsado";
+
+export interface OnlineOrderPayment {
+  id: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface OnlineOrderEvent {
+  id: string;
+  action: string;
+  reason: string;
+  createdAt: string;
+  createdBy?: string;
+  data?: Record<string, unknown>;
+}
+
 export interface OnlineOrder {
   id: string;
   number: string;
@@ -334,7 +355,16 @@ export interface OnlineOrder {
   deliveryAddress: string;
   lines: SaleLine[];
   total: number;
-  status: "nuevo" | "preparando" | "entregado" | "cancelado";
+  status: OnlineOrderStatus;
+  paymentStatus?: OnlineOrderPaymentStatus;
+  paidAmount?: number;
+  payments?: OnlineOrderPayment[];
+  internalNote?: string;
+  trackingCode?: string;
+  updatedAt?: string;
+  cancelledAt?: string;
+  stockRestoredAt?: string;
+  events?: OnlineOrderEvent[];
   createdAt: string;
   syncStatus: SyncStatus;
 }
@@ -347,6 +377,40 @@ export interface OnlineOrderDraftInput {
   deliveryAddress: string;
   lines: SaleLine[];
 }
+
+export type OnlineOrderManagementInput =
+  | {
+      orderId: string;
+      action: "set_status";
+      status: Exclude<OnlineOrderStatus, "cancelado">;
+      reason: string;
+    }
+  | {
+      orderId: string;
+      action: "add_payment";
+      payment: {
+        amount: number;
+        paymentMethod: PaymentMethod;
+        note: string;
+      };
+      reason: string;
+    }
+  | {
+      orderId: string;
+      action: "update_delivery";
+      delivery: {
+        deliveryMethod: "retiro" | "envio";
+        deliveryAddress: string;
+        trackingCode: string;
+        internalNote: string;
+      };
+      reason: string;
+    }
+  | {
+      orderId: string;
+      action: "cancel";
+      reason: string;
+    };
 
 export interface EmailMessage {
   id: string;
@@ -530,6 +594,7 @@ export interface ImportProductRow {
 export type PermissionKey =
   | "panel"
   | "ventas"
+  | "pedidos"
   | "stock"
   | "compras"
   | "clientes"

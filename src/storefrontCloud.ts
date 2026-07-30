@@ -1,6 +1,7 @@
 import type { Product, Role } from "./types";
 import { supabase } from "./supabaseClient";
 import { createDefaultStorefrontSettings, normalizeStorefrontSettings, type StorefrontSettings } from "./storefront";
+import { requestImageOptimization } from "./imageAssetsCloud";
 
 interface StorefrontSettingsRow {
   data: StorefrontSettings;
@@ -100,6 +101,7 @@ async function invokeLifestyle(input: LifestyleGenerationInput) {
   if (!response.ok || !body.imageUrl) {
     throw new Error(body.error || "No se pudo generar la imagen lifestyle.");
   }
+  void requestImageOptimization(String(body.imageUrl));
   return body as LifestyleGenerationResult;
 }
 

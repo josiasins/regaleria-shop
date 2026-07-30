@@ -24,6 +24,7 @@ import {
   PlusCircle,
   Printer,
   Receipt,
+  ShoppingBag,
   ShoppingCartSimple,
   SignOut,
   Sparkle,
@@ -42,12 +43,14 @@ import { es } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { analyzePurchaseWithOpenAi } from "./aiClient";
-import { isCloudCatalogEnabled } from "./catalogCloud";
+import { isCloudCatalogEnabled, subscribeToCloudCatalog } from "./catalogCloud";
 import { generateCatalogProductImage } from "./catalogImageCloud";
 import { uploadProductImage } from "./fileStorage";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { loadCurrentAppRole } from "./securityCloud";
 import { StorefrontShop, StorefrontStudio } from "./StorefrontExperience";
+import { OnlineOrders } from "./OnlineOrders";
+import { subscribeToCloudOrders } from "./commerceCloud";
 import { canSeeFinancials, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, SalePaymentStatus, StockMovementType, Supplier } from "./types";
@@ -56,6 +59,7 @@ import type { Session } from "@supabase/supabase-js";
 const sections = [
   { id: "panel", label: "Panel", icon: ChartLineUp },
   { id: "ventas", label: "Ventas", icon: ShoppingCartSimple },
+  { id: "pedidos", label: "Pedidos online", icon: GlobeHemisphereWest },
   { id: "stock", label: "Productos y stock", icon: Package },
   { id: "compras", label: "Compras", icon: Truck },
   { id: "clientes", label: "Clientes", icon: Users },
@@ -94,7 +98,7 @@ const stockMovementLabels: Record<StockMovementType, string> = {
 };
 
 const sectionGroups: { title: string; ids: Section[] }[] = [
-  { title: "Operacion", ids: ["panel", "ventas", "stock", "compras"] },
+  { title: "Operacion", ids: ["panel", "ventas", "pedidos", "stock", "compras"] },
   { title: "Personas", ids: ["clientes", "proveedores"] },
   { title: "Finanzas", ids: ["presupuestos", "pagos", "gastos", "tesoreria", "capital"] },
   { title: "Catalogo y web", ids: ["catalogo", "web"] },
@@ -254,6 +258,9 @@ function useCatalogSync() {
   useEffect(() => {
     if (!isCloudCatalogEnabled()) return;
     void refresh();
+    const unsubscribeCatalog = subscribeToCloudCatalog((products) => {
+      useStore.setState({ products, catalogStatus: "actualizado" });
+    });
     let wasHidden = document.visibilityState === "hidden";
     const notifyWhenReturning = () => {
       if (document.visibilityState === "hidden") {
@@ -264,7 +271,10 @@ function useCatalogSync() {
       wasHidden = false;
     };
     document.addEventListener("visibilitychange", notifyWhenReturning);
-    return () => document.removeEventListener("visibilitychange", notifyWhenReturning);
+    return () => {
+      document.removeEventListener("visibilitychange", notifyWhenReturning);
+      unsubscribeCatalog();
+    };
   }, [refresh]);
 
   return { updateAvailable, refresh };
@@ -452,6 +462,10 @@ function InternalApp() {
     document.title = "Regaleria | Gestión";
   }, []);
 
+  useEffect(() => subscribeToCloudOrders((onlineOrders) => {
+    useStore.setState({ onlineOrders });
+  }), []);
+
   const [section, setSection] = useState<Section>(getInitialSection);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -578,6 +592,7 @@ function InternalApp() {
         <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} updateAvailable={updateAvailable} onRefresh={refresh} />
         {section === "panel" && <Dashboard />}
         {section === "ventas" && <Sales />}
+        {section === "pedidos" && <OnlineOrders />}
         {section === "stock" && <Stock onEditProduct={(productId) => {
           setEditingProductId(productId);
           navigate("catalogo");
@@ -616,7 +631,7 @@ function Header({
   updateAvailable: boolean;
   onRefresh: () => Promise<void>;
 }) {
-  const { products, customers, suppliers, sales } = useStore();
+  const { products, customers, suppliers, sales, onlineOrders } = useStore();
   const activeSales = sales.filter((sale) => !sale.deletedAt);
   const [search, setSearch] = useState("");
   const pending = useStore((state) =>
@@ -646,7 +661,8 @@ function Header({
         }))),
         ...customers.map((customer) => ({ label: customer.name, meta: "Cliente", section: "clientes" as Section })),
         ...suppliers.filter((supplier) => !supplier.deletedAt).map((supplier) => ({ label: supplier.name, meta: "Proveedor", section: "proveedores" as Section })),
-        ...activeSales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section }))
+        ...activeSales.map((sale) => ({ label: sale.receiptNumber, meta: sale.customerName ?? "Venta", section: "ventas" as Section })),
+        ...onlineOrders.map((order) => ({ label: order.number, meta: `${order.customerName} · Pedido web`, section: "pedidos" as Section }))
       ]
         .filter((item) => allowedSections.includes(item.section))
         .filter((item) => `${item.label} ${item.meta} ${"search" in item ? item.search : ""}`.toLowerCase().includes(search.trim().toLowerCase()))
@@ -697,6 +713,9 @@ function Dashboard() {
   const totalExpenses = expenses.filter((expense) => !expense.deletedAt).reduce((sum, expense) => sum + expense.amount, 0);
   const lowStock = products.flatMap((product) => product.variants.filter((variant) => variant.stock <= variant.lowStockAt).map((variant) => `${product.name} (${variant.name})`));
   const pendingTransfers = transfers.filter((transfer) => transfer.status === "pendiente");
+  const activeOnlineOrders = onlineOrders.filter((order) => order.status !== "cancelado");
+  const pendingOnlineOrders = activeOnlineOrders.filter((order) => order.status !== "entregado");
+  const onlineSales = activeOnlineOrders.reduce((sum, order) => sum + order.total, 0);
 
   return (
     <section className="workspace">
@@ -705,7 +724,8 @@ function Dashboard() {
         <Metric label="Margen estimado" value={canSeeFinancials(activeRole) ? formatMoney(totalMargin) : "Restringido"} icon={<TrendUp size={24} />} />
         <Metric label="Gastos cargados" value={canSeeFinancials(activeRole) ? formatMoney(totalExpenses) : "Restringido"} icon={<Wallet size={24} />} />
         <Metric label="Transferencias pendientes" value={String(pendingTransfers.length)} icon={<CreditCard size={24} />} />
-        <Metric label="Pedidos web" value={String(onlineOrders.length)} icon={<GlobeHemisphereWest size={24} />} />
+        <Metric label="Pedidos web activos" value={String(pendingOnlineOrders.length)} icon={<GlobeHemisphereWest size={24} />} />
+        <Metric label="Ventas online" value={formatMoney(onlineSales)} icon={<ShoppingBag size={24} />} />
       </div>
       <div className="split">
         <Panel title="Decisiones sugeridas">

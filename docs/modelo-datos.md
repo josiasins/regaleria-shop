@@ -21,6 +21,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - PurchaseLine: lineas de compra que actualizan stock y costo de variantes. Puede conservar costo bruto, neto, alicuota, IVA unitario y subtotales discriminados.
 - OnlineOrder: pedido creado desde la web publica.
 - OnlineOrderLine: lineas del pedido web.
+- StoreOrderEvent: evento inmutable de creación, estado, cobro, entrega, cancelación o vencimiento.
+- ImageAsset: URL original, hash de contenido, peso original y variantes WebP públicas.
 - StockMovement: historial de movimientos de stock.
 - CashClosure: cierre de caja diario con totales por medio de pago y gastos.
 - CashShift: turno operativo de mostrador con efectivo inicial declarado, responsable, apertura, cierre, efectivo contado, efectivo esperado, nota y estado de sincronizacion.
@@ -40,6 +42,9 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - Product y PurchaseReceipt pueden asociarse a Supplier, pero conservan `supplier` para mantener el texto usado en el momento de la carga.
 - PurchaseReceipt genera PurchaseLine, StockMovement de ingreso y Expense de categoria Reposicion.
 - OnlineOrder descuenta stock mediante lineas conectadas a Variant y queda como pedido interno, no como factura fiscal.
+- `store_orders` es la fuente de verdad del circuito ecommerce. `operational_state` puede conservar una copia de compatibilidad, pero nunca prevalece sobre la tabla dedicada.
+- Cancelar o vencer un pedido usa `stockRestoredAt` para impedir una devolución doble.
+- ImageAsset referencia al original por URL; sus variantes son derivados reemplazables y el original permanece intacto.
 - Product se edita visualmente desde Catalogo; Variant y StockMovement sostienen cantidades, costos y precios operativos.
 - Product puede tener varias imagenes para galeria publicable. La marca no reemplaza al proveedor: proveedor sostiene compras y costos; marca se usa en Catalogo y puede mostrarse al cliente.
 - Variant usa `webPrice` solamente cuando fue configurado en Catalogo; si no existe, la web usa `price`. El pedido web recalcula este valor en PostgreSQL antes de guardarse.

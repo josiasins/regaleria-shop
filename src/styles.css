@@ -356,8 +356,9 @@
 
 .sf-promo {
   display: grid;
-  grid-template-rows: minmax(240px, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
+  height: 430px;
   overflow: hidden;
   border: 1px solid var(--sf-line);
   border-radius: 8px;
@@ -369,15 +370,21 @@
 .sf-promo > .sf-image-fallback {
   width: 100%;
   height: 100%;
-  min-height: 240px;
-  object-fit: cover;
+  min-height: 0;
+  object-fit: contain;
+  padding: 20px 24px 8px;
+  background: #fff;
 }
 
 .sf-promo > div {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 20px;
+  border-top: 1px solid var(--sf-line);
+  background: #fff;
 }
 
 .sf-promo strong {
@@ -1144,6 +1151,13 @@
 .sfs-save-state.dirty {
   color: #a46d17;
   font-weight: 750;
+}
+
+.sfs-optimization-status {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: right;
 }
 
 .sfs-readonly {
@@ -2166,13 +2180,14 @@
   .sf-promo {
     grid-template-columns: 42% minmax(0, 1fr);
     grid-template-rows: auto;
-    height: 220px;
+    height: auto;
     min-height: 190px;
   }
 
   .sf-promo > img,
   .sf-promo > .sf-image-fallback {
     min-height: 190px;
+    aspect-ratio: 4 / 3;
   }
 
   .sf-category-grid {
@@ -2342,13 +2357,14 @@
 
   .sf-promo {
     grid-template-columns: 38% minmax(0, 1fr);
-    height: 150px;
-    min-height: 150px;
+    height: auto;
+    min-height: 168px;
   }
 
   .sf-promo > img,
   .sf-promo > .sf-image-fallback {
-    min-height: 150px;
+    min-height: 168px;
+    padding: 12px 10px;
   }
 
   .sf-promo > div {
@@ -3194,6 +3210,571 @@ button.sync-pill {
 .workspace {
   padding: 28px 34px 44px;
   min-width: 0;
+}
+
+.online-orders-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.orders-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid oklch(84% 0.026 150);
+  border-radius: 8px;
+  background: oklch(84% 0.026 150);
+}
+
+.orders-summary > div {
+  display: grid;
+  gap: 5px;
+  min-height: 88px;
+  padding: 16px 18px;
+  background: oklch(98% 0.008 150);
+}
+
+.orders-summary span,
+.orders-toolbar > span {
+  color: oklch(52% 0.026 158);
+  font-size: 0.8rem;
+}
+
+.orders-summary strong {
+  font-size: 1.35rem;
+}
+
+.orders-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 220px auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.orders-search {
+  position: relative;
+}
+
+.orders-search svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: oklch(50% 0.045 160);
+}
+
+.orders-search input {
+  padding-left: 38px;
+}
+
+.orders-toolbar > span {
+  justify-self: end;
+}
+
+.orders-layout {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.95fr) minmax(460px, 1.05fr);
+  align-items: start;
+  min-height: 620px;
+  overflow: hidden;
+  border: 1px solid oklch(84% 0.026 150);
+  border-radius: 8px;
+  background: oklch(98% 0.008 150);
+}
+
+.orders-list {
+  max-height: calc(100vh - 292px);
+  overflow-y: auto;
+  border-right: 1px solid oklch(84% 0.026 150);
+}
+
+.orders-list > header,
+.orders-list > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 110px;
+  align-items: center;
+  gap: 14px;
+}
+
+.orders-list > header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  min-height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid oklch(84% 0.026 150);
+  color: oklch(52% 0.026 158);
+  background: oklch(96% 0.012 150);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.orders-list > button {
+  width: 100%;
+  min-height: 82px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid oklch(88% 0.018 150);
+  background: transparent;
+  text-align: left;
+}
+
+.orders-list > button:hover,
+.orders-list > button.selected {
+  background: oklch(94% 0.027 153);
+}
+
+.orders-list > button.selected {
+  box-shadow: inset 3px 0 oklch(48% 0.09 160);
+}
+
+.orders-list > button > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.orders-list small,
+.order-detail small,
+.order-detail p,
+.order-detail a,
+.order-workflow span,
+.order-payment span,
+.order-delivery span {
+  color: oklch(52% 0.026 158);
+  font-size: 0.8rem;
+}
+
+.orders-list > button > strong {
+  justify-self: end;
+}
+
+.order-status,
+.payment-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.order-status.nuevo,
+.payment-status.pendiente {
+  color: oklch(39% 0.09 55);
+  background: oklch(92% 0.06 73);
+}
+
+.order-status.confirmado,
+.order-status.preparando,
+.payment-status.parcial {
+  color: oklch(38% 0.07 230);
+  background: oklch(92% 0.04 230);
+}
+
+.order-status.listo,
+.order-status.entregado,
+.payment-status.pagado {
+  color: oklch(34% 0.085 155);
+  background: oklch(91% 0.055 153);
+}
+
+.order-status.cancelado,
+.payment-status.reembolso_pendiente,
+.payment-status.reembolsado {
+  color: oklch(41% 0.12 25);
+  background: oklch(92% 0.055 25);
+}
+
+.order-detail {
+  display: grid;
+  gap: 18px;
+  max-height: calc(100vh - 292px);
+  overflow-y: auto;
+  padding: 22px;
+}
+
+.order-detail-heading,
+.order-customer,
+.order-lines > header,
+.order-lines > div,
+.order-lines > footer,
+.order-workflow > header,
+.order-payment > header,
+.order-delivery > header,
+.order-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.order-detail-heading h2 {
+  margin: 3px 0;
+  font-size: 1.5rem;
+}
+
+.order-detail-heading > div:last-child {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.order-customer {
+  align-items: start;
+  padding: 14px 0;
+  border-block: 1px solid oklch(86% 0.022 150);
+}
+
+.order-customer > div {
+  display: grid;
+  gap: 4px;
+  max-width: 50%;
+}
+
+.order-customer a {
+  text-decoration: none;
+}
+
+.order-lines {
+  display: grid;
+}
+
+.order-lines > header,
+.order-lines > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 110px;
+}
+
+.order-lines > header {
+  padding: 8px 0;
+  color: oklch(52% 0.026 158);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.order-lines > div {
+  padding: 10px 0;
+  border-top: 1px solid oklch(88% 0.018 150);
+}
+
+.order-lines > div > span {
+  display: grid;
+  gap: 2px;
+}
+
+.order-lines > div > b,
+.order-lines > div > strong,
+.order-lines > header > span:not(:first-child) {
+  justify-self: end;
+}
+
+.order-lines > footer {
+  padding-top: 12px;
+  border-top: 1px solid oklch(80% 0.032 150);
+  font-size: 1.15rem;
+}
+
+.order-workflow,
+.order-payment,
+.order-delivery,
+.order-history {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.order-workflow > header > div,
+.order-payment > header > div,
+.order-delivery > header > div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+
+.order-status-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.order-next-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 6px;
+  color: #fff;
+  background: oklch(48% 0.12 153);
+  font-weight: 800;
+}
+
+.order-complete-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: oklch(43% 0.1 153);
+  font-weight: 750;
+}
+
+.order-manual-status {
+  margin-top: 2px;
+}
+
+.order-manual-status summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.order-manual-status .order-status-actions {
+  margin-top: 10px;
+}
+
+.order-status-actions button,
+.order-payment-grid button {
+  min-height: 40px;
+  border: 1px solid oklch(82% 0.026 150);
+  border-radius: 7px;
+  background: oklch(98% 0.008 150);
+}
+
+.order-status-actions button.active {
+  color: oklch(98% 0.008 150);
+  border-color: oklch(43% 0.08 160);
+  background: oklch(43% 0.08 160);
+}
+
+.order-payment-grid {
+  display: grid;
+  grid-template-columns: 150px 170px minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.order-payment-grid label,
+.order-delivery label,
+.order-audit-reason {
+  display: grid;
+  gap: 6px;
+  color: oklch(43% 0.026 158);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.order-payment-grid button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  color: oklch(98% 0.008 150);
+  border-color: oklch(43% 0.08 160);
+  background: oklch(43% 0.08 160);
+  font-weight: 800;
+}
+
+.order-delivery > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.order-delivery textarea {
+  min-height: 70px;
+}
+
+.order-delivery .secondary-action {
+  justify-self: start;
+}
+
+.order-cancel {
+  justify-self: start;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid oklch(74% 0.09 25);
+  border-radius: 7px;
+  color: oklch(42% 0.13 25);
+  background: oklch(96% 0.025 25);
+  font-weight: 800;
+}
+
+.order-history {
+  padding-top: 16px;
+  border-top: 1px solid oklch(86% 0.022 150);
+}
+
+.order-history > header {
+  justify-content: flex-start;
+}
+
+.order-history > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid oklch(90% 0.014 150);
+}
+
+.order-message {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 12px;
+  border: 1px solid oklch(78% 0.05 155);
+  border-radius: 7px;
+  color: oklch(34% 0.07 158);
+  background: oklch(94% 0.045 153);
+  font-weight: 750;
+}
+
+.orders-empty {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  padding: 28px;
+  color: oklch(53% 0.026 158);
+  text-align: center;
+}
+
+.theme-night .orders-summary,
+.theme-night .orders-layout {
+  border-color: oklch(36% 0.03 158);
+  background: oklch(25% 0.03 158);
+}
+
+.theme-night .orders-summary > div,
+.theme-night .orders-list > header,
+.theme-night .orders-layout,
+.theme-night .order-status-actions button {
+  color: oklch(91% 0.014 154);
+  background: oklch(24% 0.032 158);
+}
+
+.theme-night .orders-list,
+.theme-night .orders-list > header,
+.theme-night .orders-list > button,
+.theme-night .order-customer,
+.theme-night .order-lines > div,
+.theme-night .order-lines > footer,
+.theme-night .order-history,
+.theme-night .order-history > div {
+  border-color: oklch(34% 0.026 158);
+}
+
+.theme-night .orders-list > button:hover,
+.theme-night .orders-list > button.selected {
+  background: oklch(29% 0.04 158);
+}
+
+.theme-night .order-cancel {
+  color: oklch(85% 0.09 25);
+  border-color: oklch(47% 0.09 25);
+  background: oklch(26% 0.055 25);
+}
+
+@media (max-width: 1180px) {
+  .orders-layout {
+    grid-template-columns: minmax(330px, 0.85fr) minmax(400px, 1.15fr);
+  }
+
+  .orders-list > header,
+  .orders-list > button {
+    grid-template-columns: minmax(0, 1fr) 120px;
+  }
+
+  .orders-list > header > span:last-child,
+  .orders-list > button > strong {
+    display: none;
+  }
+
+  .order-payment-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .orders-layout {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .orders-list {
+    max-height: 360px;
+    border-right: 0;
+    border-bottom: 1px solid oklch(84% 0.026 150);
+  }
+
+  .order-detail {
+    max-height: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .orders-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .orders-summary > div {
+    min-height: 68px;
+  }
+
+  .orders-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .orders-toolbar > span {
+    justify-self: start;
+  }
+
+  .orders-list > header,
+  .orders-list > button {
+    grid-template-columns: minmax(0, 1fr) 105px;
+    gap: 8px;
+  }
+
+  .order-detail {
+    padding: 14px;
+  }
+
+  .order-customer,
+  .order-detail-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .order-detail-heading > div:last-child {
+    justify-items: start;
+  }
+
+  .order-customer > div {
+    max-width: none;
+  }
+
+  .order-status-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .order-payment-grid,
+  .order-delivery > div {
+    grid-template-columns: 1fr;
+  }
+
+  .order-history > div {
+    grid-template-columns: 1fr;
+  }
 }
 
 .metric-grid {

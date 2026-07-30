@@ -687,6 +687,43 @@ describe("Regaleria app", () => {
     });
   });
 
+  it("audits partial payment and restores an online reservation only once", async () => {
+    const product = useStore.getState().products.find((item) => item.publishable && item.variants.some((variant) => variant.stock > 0))!;
+    const variant = product.variants.find((item) => item.stock > 0)!;
+    const originalStock = variant.stock;
+    const order = await useStore.getState().addOnlineOrder({
+      customerName: "Cliente auditado",
+      customerContact: "3515550000",
+      customerEmail: "auditado@example.com",
+      deliveryMethod: "retiro",
+      deliveryAddress: "",
+      lines: [{
+        productId: product.id,
+        variantId: variant.id,
+        name: product.name,
+        sku: variant.sku,
+        quantity: 1,
+        unitPrice: variant.price,
+        unitCost: variant.cost
+      }]
+    });
+
+    expect(order).not.toBeNull();
+    expect(useStore.getState().products.find((item) => item.id === product.id)?.variants.find((item) => item.id === variant.id)?.stock).toBe(originalStock - 1);
+
+    const partial = await useStore.getState().manageOnlineOrder({
+      orderId: order!.id,
+      action: "add_payment",
+      payment: { amount: order!.total / 2, paymentMethod: "transferencia", note: "Seña" },
+      reason: "Seña confirmada"
+    });
+    expect(partial?.paymentStatus).toBe("parcial");
+
+    await useStore.getState().manageOnlineOrder({ orderId: order!.id, action: "cancel", reason: "Cliente desistió" });
+    await useStore.getState().manageOnlineOrder({ orderId: order!.id, action: "cancel", reason: "Reintento" });
+    expect(useStore.getState().products.find((item) => item.id === product.id)?.variants.find((item) => item.id === variant.id)?.stock).toBe(originalStock);
+  });
+
   it("can show and clear the offline sync queue", async () => {
     const user = userEvent.setup();
     render(<App />);

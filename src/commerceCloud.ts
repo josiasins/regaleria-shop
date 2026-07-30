@@ -1,6 +1,6 @@
 import { isCloudCatalogEnabled } from "./catalogCloud";
 import { supabase } from "./supabaseClient";
-import type { EmailMessage, OnlineOrder } from "./types";
+import type { EmailMessage, OnlineOrder, OnlineOrderManagementInput } from "./types";
 
 export async function saveCloudOrder(order: OnlineOrder, emails: EmailMessage[]) {
   if (!isCloudCatalogEnabled()) return true;
@@ -25,5 +25,46 @@ export async function loadCloudCommerce() {
   return {
     orders: (orderRows ?? []).map((row) => row.data as OnlineOrder),
     emails: (emailRows ?? []).map((row) => row.data as EmailMessage)
+  };
+}
+
+export async function manageCloudOrder(input: OnlineOrderManagementInput) {
+  if (!isCloudCatalogEnabled()) return null;
+  if (!supabase) return null;
+  const payload = input.action === "set_status"
+    ? { status: input.status }
+    : input.action === "add_payment"
+      ? { payment: input.payment }
+      : input.action === "update_delivery"
+        ? { delivery: input.delivery }
+        : {};
+  const { data, error } = await supabase.rpc("manage_store_order", {
+    target_order_id: input.orderId,
+    order_action: input.action,
+    action_data: payload,
+    action_reason: input.reason
+  });
+  if (error) {
+    console.error("No se pudo actualizar el pedido web.", error.message);
+    return null;
+  }
+  return data as OnlineOrder;
+}
+
+export function subscribeToCloudOrders(onChange: (orders: OnlineOrder[]) => void) {
+  if (!isCloudCatalogEnabled() || !supabase) return () => {};
+  const client = supabase;
+  let active = true;
+  const refresh = async () => {
+    const commerce = await loadCloudCommerce();
+    if (active) onChange(commerce.orders);
+  };
+  const channel = client
+    .channel("store-orders-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "store_orders" }, () => void refresh())
+    .subscribe();
+  return () => {
+    active = false;
+    void client.removeChannel(channel);
   };
 }
