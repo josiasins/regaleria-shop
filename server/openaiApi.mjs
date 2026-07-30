@@ -29,7 +29,7 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function applyCatalogCors(req, res) {
+function applyInternalAppCors(req, res) {
   const origin = String(req.headers.origin || "");
   const configuredOrigins = String(
     process.env.INTERNAL_APP_ORIGINS || "https://sistema.regaleriashop.com,http://localhost:5174,http://127.0.0.1:5174"
@@ -81,7 +81,7 @@ function supabaseServerConfig() {
   return { url: url.replace(/\/$/, ""), anonKey };
 }
 
-async function authorizeCatalogGeneration(req) {
+async function authorizeImageGeneration(req) {
   const authorization = String(req.headers.authorization || "");
   if (!authorization.startsWith("Bearer ")) throw statusError("Sesión no autorizada.", 401);
   const { url, anonKey } = supabaseServerConfig();
@@ -112,7 +112,7 @@ async function authorizeCatalogGeneration(req) {
   }
   catalogGenerationAttempts.set(user.id, [...recentAttempts, now]);
 
-  return { authorization, url, anonKey };
+  return { authorization, url, anonKey, userId: user.id };
 }
 
 function validateCatalogImageUrl(imageUrl, supabaseUrl) {
@@ -136,8 +136,8 @@ function validateCatalogImageUrl(imageUrl, supabaseUrl) {
   }
 }
 
-async function uploadGeneratedCatalogImage({ bytes, productId, authorization, url, anonKey }) {
-  const imagePath = `${slugify(productId)}/premium-${crypto.randomUUID()}.png`;
+async function uploadGeneratedImage({ bytes, folder, filePrefix, authorization, url, anonKey }) {
+  const imagePath = `${slugify(folder)}/${slugify(filePrefix)}-${crypto.randomUUID()}.png`;
   const encodedPath = imagePath.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(`${url}/storage/v1/object/product-images/${encodedPath}`, {
     method: "POST",
@@ -284,7 +284,7 @@ function catalogImagePrompt(payload) {
 }
 
 async function generateCatalogImage(payload, req) {
-  const access = await authorizeCatalogGeneration(req);
+  const access = await authorizeImageGeneration(req);
   const client = createClient();
   if (!client) throw new Error("OPENAI_API_KEY no está configurada.");
   if (!payload.productId || !payload.productName) throw statusError("Falta identificar el producto.", 400);
@@ -309,9 +309,10 @@ async function generateCatalogImage(payload, req) {
     bytes = Buffer.from(await imageResponse.arrayBuffer());
   }
   if (!bytes?.length) throw new Error("OpenAI no devolvió una imagen.");
-  const imageUrl = await uploadGeneratedCatalogImage({
+  const imageUrl = await uploadGeneratedImage({
     bytes,
-    productId: payload.productId,
+    folder: payload.productId,
+    filePrefix: "premium",
     ...access
   });
   return { imageUrl, model: catalogImageModel };
@@ -471,15 +472,17 @@ function lifestylePrompt(payload) {
   ].filter(Boolean).join(" ");
 }
 
-async function generateLifestyle(payload) {
+async function generateLifestyle(payload, req) {
+  const access = await authorizeImageGeneration(req);
   const products = Array.isArray(payload.products) ? payload.products.filter((product) => product?.imageUrl && product?.name).slice(0, 3) : [];
-  if (products.length < 2) throw new Error("Elegí al menos dos productos con imagen.");
+  if (products.length < 2) throw statusError("Elegí al menos dos productos con imagen.", 400);
   const client = createClient();
   if (!client) throw new Error("OPENAI_API_KEY no esta configurada.");
 
   const inputImages = [];
   for (const [index, product] of products.entries()) {
     try {
+      validateCatalogImageUrl(product.imageUrl, access.url);
       inputImages.push(await lifestyleReferenceFile(product.imageUrl, index));
     } catch {
       throw new Error(`No se pudo leer la imagen de ${product.name}.`);
@@ -496,13 +499,21 @@ async function generateLifestyle(payload) {
     output_format: "png"
   });
   const item = result.data?.[0];
-  const imageUrl = await saveGeneratedImage({
-    productName: `lifestyle-${products.map((product) => product.name).join("-")}`,
-    variant: "composicion",
-    b64Json: item?.b64_json,
-    remoteUrl: item?.url
+  let bytes;
+  if (item?.b64_json) {
+    bytes = Buffer.from(item.b64_json, "base64");
+  } else if (item?.url) {
+    const imageResponse = await fetch(item.url);
+    if (!imageResponse.ok) throw new Error("No se pudo descargar la imagen generada.");
+    bytes = Buffer.from(await imageResponse.arrayBuffer());
+  }
+  if (!bytes?.length) throw new Error("OpenAI no devolvió una imagen.");
+  const imageUrl = await uploadGeneratedImage({
+    bytes,
+    folder: "storefront",
+    filePrefix: "lifestyle",
+    ...access
   });
-  if (!imageUrl) throw new Error("OpenAI no devolvio una imagen.");
   return { imageUrl, prompt, model: lifestyleImageModel };
 }
 
@@ -536,18 +547,11 @@ export function registerOpenAiApi(server) {
 
   server.middlewares.use("/api/ai/catalog-image", handleCatalogImageRequest);
 
-  server.middlewares.use("/api/ai/lifestyle", async (req, res) => {
-    if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
-    try {
-      sendJson(res, 200, await generateLifestyle(await readJson(req)));
-    } catch (error) {
-      sendApiError(res, error, "Error al generar la composicion");
-    }
-  });
+  server.middlewares.use("/api/ai/lifestyle", handleLifestyleImageRequest);
 }
 
 export async function handleCatalogImageRequest(req, res) {
-  applyCatalogCors(req, res);
+  applyInternalAppCors(req, res);
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     return res.end();
@@ -561,5 +565,23 @@ export async function handleCatalogImageRequest(req, res) {
     sendJson(res, 200, await generateCatalogImage(await readJson(req), req));
   } catch (error) {
     sendApiError(res, error, "Error al generar la foto premium");
+  }
+}
+
+export async function handleLifestyleImageRequest(req, res) {
+  applyInternalAppCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
+  const origin = String(req.headers.origin || "");
+  if (origin && !res.getHeader("Access-Control-Allow-Origin")) {
+    return sendJson(res, 403, { error: "Origen no autorizado." });
+  }
+  try {
+    sendJson(res, 200, await generateLifestyle(await readJson(req), req));
+  } catch (error) {
+    sendApiError(res, error, "Error al generar la composicion");
   }
 }

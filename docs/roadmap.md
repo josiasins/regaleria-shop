@@ -173,13 +173,14 @@
 - [x] Galeria visual con miniaturas y carga por cuadros `+`.
 - [ ] Futuro: OCR real para PDF/fotos con proveedor configurado.
 - [ ] Futuro: comparacion explicita entre pedido esperado y mercaderia recibida.
-- [ ] Futuro: migrar almacenamiento de imagenes a nube/S3 cuando haya backend productivo.
+- [x] Guardar propuestas generadas en Supabase Storage desde el backend productivo.
 - [x] Base para Supabase Storage con buckets de imagenes y comprobantes.
 - [ ] Futuro: historial de confianza, correcciones y aprendizaje por proveedor.
 - [x] Herramienta lifestyle con dos o tres productos, borrador economico y aprobacion humana.
 - [x] Foto premium de catalogo con fondo blanco, una propuesta y aprobacion humana antes de guardar.
-- [ ] Desplegar y configurar la funcion Edge de composicion lifestyle en produccion.
+- [x] Desplegar Lifestyle en la API protegida de Render y retirar la dependencia de la funcion Edge.
 - [x] Desplegar y configurar la API protegida de foto premium en produccion.
+- [ ] Verificar Foto premium y Lifestyle de punta a punta desde el navegador publicado en cada despliegue que cambie la integracion.
 
 ### Etapa 14: Produccion online
 

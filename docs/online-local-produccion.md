@@ -214,10 +214,9 @@ El SQL inicial esta en `supabase/storage.sql`.
 - La tienda anonima tiene lectura de `storefront_settings`.
 - Solo dueño y administrador ejecutan `save_storefront_settings`.
 - La web abierta escucha cambios de `storefront_settings` mediante Supabase Realtime. Al publicar desde el sistema interno, otras pestañas reciben la nueva portada sin recargar.
-- `supabase/functions/generate-lifestyle` genera composiciones con la clave guardada como secreto de Supabase, nunca en el navegador.
-- La funcion Edge requiere `OPENAI_API_KEY` y admite `OPENAI_LIFESTYLE_IMAGE_MODEL`, cuyo valor recomendado es `gpt-image-2`.
-- La foto premium de catalogo se ejecuta en la API interna de Render y guarda una propuesta PNG en `product-images`. Requiere `OPENAI_API_KEY` solo en el servicio API y admite `OPENAI_CATALOG_IMAGE_MODEL`, cuyo valor recomendado es `gpt-image-2`.
-- La API valida la sesion de Supabase y el rol de dueño/administrador. Generar un archivo no actualiza el producto: la incorporacion y el guardado siguen siendo acciones explicitas en el editor.
+- Lifestyle y la foto premium de catalogo se ejecutan en la API interna de Render y guardan una propuesta PNG en `product-images`.
+- El servicio requiere `OPENAI_API_KEY` y admite `OPENAI_LIFESTYLE_IMAGE_MODEL` y `OPENAI_CATALOG_IMAGE_MODEL`; el valor recomendado para ambos es `gpt-image-2`.
+- La API valida la sesion de Supabase y el rol de dueño/administrador. Generar un archivo no actualiza el producto ni la vidriera: la incorporacion y el guardado siguen siendo acciones explicitas en el editor.
 
 Despues de aplicar `supabase/storefront.sql` por una conexion SQL directa, refrescar la cache de la API:
 
@@ -225,19 +224,9 @@ Despues de aplicar `supabase/storefront.sql` por una conexion SQL directa, refre
 notify pgrst, 'reload schema';
 ```
 
-Despliegue pendiente de la funcion lifestyle:
+En desarrollo local, `/api/ai/lifestyle` reutiliza `OPENAI_API_KEY` desde el entorno del servidor de Vite. En produccion, el navegador llama al mismo endpoint en la API interna usando la sesion vigente. La clave no se entrega al navegador.
 
-```bash
-npx supabase login
-npx supabase secrets set OPENAI_API_KEY
-npx supabase functions deploy generate-lifestyle --project-ref nxfdxhixvgogxjenrfhr
-```
-
-El editor visual, las tablas y la tienda funcionan aunque Lifestyle todavia no este desplegada. La foto premium no depende de esta funcion Edge.
-
-En desarrollo local, `/api/ai/lifestyle` reutiliza `OPENAI_API_KEY` desde el entorno del servidor de Vite. La prueba del 2026-07-29 confirmo una generacion real con `gpt-image-2`; la clave no se entrega al navegador. Las referencias pueden ser imagenes publicas, archivos locales dentro de `public/` o datos de imagen validos.
-
-La ruta `/api/ai/catalog-image` usa la misma validacion de sesion en local y produccion. En produccion guarda el resultado en `product-images`; el editor nunca aplica esa URL hasta que el usuario elige agregarla o usarla como portada, y nunca confirma el cambio hasta `Guardar producto`.
+Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion de sesion en local y produccion. Guardan el resultado en `product-images`; el editor nunca aplica la propuesta hasta una eleccion explicita del usuario.
 
 ## API interna de imagenes
 
@@ -245,10 +234,12 @@ La ruta `/api/ai/catalog-image` usa la misma validacion de sesion en local y pro
 - URL: `https://regaleria-shop-api.onrender.com`.
 - Inicio: `npm run start:api`.
 - Salud: `/health`.
+- Rutas protegidas: `/api/ai/catalog-image` y `/api/ai/lifestyle`.
 - Origen admitido: `https://sistema.regaleriashop.com`.
 - Variables requeridas: `OPENAI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `INTERNAL_APP_ORIGINS`.
 - El sitio interno recibe `VITE_INTERNAL_API_URL` durante su compilacion.
 - La clave de OpenAI nunca se incluye en el bundle ni se envia al navegador.
+- La cabecera `Content-Security-Policy` del sitio interno debe incluir `https://regaleria-shop-api.onrender.com` en `connect-src`. No usar `*`.
 
 La vista previa del editor comparte por `sessionStorage` unicamente el borrador visual y una copia de solo lectura del catalogo. No comparte ventas, turnos, compras, pagos ni otros datos operativos, y no permite confirmar pedidos reales desde el marco de previsualizacion.
 

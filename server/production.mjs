@@ -1,10 +1,19 @@
 import http from "node:http";
-import { handleCatalogImageRequest } from "./openaiApi.mjs";
+import { handleCatalogImageRequest, handleLifestyleImageRequest } from "./openaiApi.mjs";
 
 const port = Number(process.env.PORT || 3000);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost");
+  if (url.pathname === "/") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    return res.end(JSON.stringify({
+      ok: true,
+      service: "Regaleria Shop API",
+      message: "Servicio interno activo. Usá sistema.regaleriashop.com para operar."
+    }));
+  }
   if (url.pathname === "/health") {
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
@@ -12,6 +21,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/ai/catalog-image") {
     return handleCatalogImageRequest(req, res);
+  }
+  if (url.pathname === "/api/ai/lifestyle") {
+    return handleLifestyleImageRequest(req, res);
   }
   res.statusCode = 404;
   res.setHeader("Content-Type", "application/json");

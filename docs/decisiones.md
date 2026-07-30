@@ -806,3 +806,12 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Despliegue:** se creo el servicio gratuito `regaleria-shop-api` (`srv-d9laccm7bikc738mke90`) y se publico `https://regaleria-shop-api.onrender.com`. El sitio interno fue reconstruido con esa URL y el bundle productivo quedo conectado.
 - **Verificacion:** `/health` respondio correctamente; una llamada sin sesion fue rechazada con `401`; el origen interno recibio las cabeceras CORS previstas. Las 45 pruebas y la compilacion terminaron correctamente, y el catalogo siguio mostrando 45 productos.
 - **Alternativas descartadas:** guardar en el disco de Render, porque se pierde al reiniciar; exponer la clave en el frontend, por seguridad; continuar creando tokens de Supabase ante fallos del panel, para evitar riesgo de bloqueo o credenciales innecesarias.
+
+# 2026-07-29 - Correccion de integracion de imagenes en produccion
+
+- **Incidente:** la API respondia en `/health`, pero el sistema publicado no podia llamarla porque su politica `connect-src` no incluia el dominio del servicio. Ademas, Lifestyle conservaba una llamada a una funcion Edge de Supabase que no estaba desplegada. Las comprobaciones anteriores fueron insuficientes porque no probaron el flujo completo desde el navegador publicado.
+- **Decision:** usar la API protegida de Render para Foto premium y Lifestyle. Ambos endpoints reciben la sesion normal del usuario, verifican el rol en Supabase, restringen origen y referencias, aplican limite temporal y guardan solamente la propuesta en `product-images`.
+- **Persistencia:** Lifestyle deja de escribir en el disco temporal de Render. Las propuestas quedan en Supabase Storage y no alteran productos ni la configuracion de la vidriera hasta que el usuario las aprueba y guarda.
+- **Seguridad:** no se crearon tokens administrativos, no se modificaron usuarios, politicas ni tablas de Supabase y no se expuso la clave de OpenAI al navegador. `connect-src` admite solamente Supabase y la API interna conocida.
+- **Servicio:** la raiz de la API ahora informa que el servicio esta activo y remite al sistema interno; las rutas operativas siguen protegidas y una solicitud sin sesion recibe `401`.
+- **Criterio de cierre:** no considerar una funcion publicada por comprobar solo `/health`; debe probarse desde `sistema.regaleriashop.com`, completar generacion, mostrar la propuesta y conservar el catalogo sin cambios.

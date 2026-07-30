@@ -81,28 +81,28 @@ export function canEditStorefront(role: Role) {
   return role === "dueno" || role === "administrador";
 }
 
-async function invokeLocalLifestyle(input: LifestyleGenerationInput) {
-  const response = await fetch("/api/ai/lifestyle", {
+async function invokeLifestyle(input: LifestyleGenerationInput) {
+  if (!supabase) throw new Error("Supabase no está configurado.");
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) throw new Error("Tu sesión venció. Volvé a ingresar para generar la imagen.");
+
+  const apiBaseUrl = String(import.meta.env.VITE_INTERNAL_API_URL || "").replace(/\/$/, "");
+  const response = await fetch(`${apiBaseUrl}/api/ai/lifestyle`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
     body: JSON.stringify(input)
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body.imageUrl) {
     throw new Error(body.error || "No se pudo generar la imagen lifestyle.");
   }
-  return response.json() as Promise<LifestyleGenerationResult>;
+  return body as LifestyleGenerationResult;
 }
 
 export async function generateLifestyleImage(input: LifestyleGenerationInput) {
-  if (supabase) {
-    const { data, error } = await supabase.functions.invoke<LifestyleGenerationResult>("generate-lifestyle", {
-      body: input
-    });
-    if (!error && data?.imageUrl) return data;
-    if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-      throw new Error(error?.message || "La funcion de imagenes no esta disponible.");
-    }
-  }
-  return invokeLocalLifestyle(input);
+  return invokeLifestyle(input);
 }
