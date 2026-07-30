@@ -180,7 +180,8 @@
 - [x] Foto premium de catalogo con fondo blanco, una propuesta y aprobacion humana antes de guardar.
 - [x] Desplegar Lifestyle en la API protegida de Render y retirar la dependencia de la funcion Edge.
 - [x] Desplegar y configurar la API protegida de foto premium en produccion.
-- [ ] Verificar Foto premium y Lifestyle de punta a punta desde el navegador publicado en cada despliegue que cambie la integracion.
+- [x] Verificar Foto premium y Lifestyle de punta a punta desde el navegador publicado.
+- [ ] Repetir la verificacion de punta a punta en cada despliegue futuro que cambie la integracion.
 
 ### Etapa 14: Produccion online
 
