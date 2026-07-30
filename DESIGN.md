@@ -57,6 +57,10 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - La preparación de un pedido muestra una acción siguiente principal. Los cambios manuales de estado quedan en un desplegable de menor jerarquía.
 - Una promoción con producto alto separa físicamente imagen y texto. La imagen usa `contain` y el bloque de texto conserva fondo opaco; el nombre nunca se superpone al producto.
 - Las imágenes públicas usan `srcset` con variantes WebP de 320, 640, 1280 y 1920 px, conservando el original sin reemplazarlo.
+- La ficha de producto ordena categoría, nombre, propuesta de valor, precio, disponibilidad, acción principal, confianza y detalles. La información secundaria usa acordeones o secciones compactas.
+- Las ventas relacionadas muestran como máximo tres opciones con imagen, nombre, precio y acción; no usan carruseles automáticos.
+- El buscador de regalos presenta preguntas cortas, progreso comprensible y resultados con una opción económica, una premium y un pack cuando corresponda.
+- En móvil, la acción de compra puede permanecer fija sobre la navegación inferior sin tapar contenido.
 - La marca elegida usa logo dorado con caja, cinta y palabra `shop`; la fuente maestra es `public/brand/regaleria-shop-logo_NEW.af`, y las reglas completas viven en `docs/manual-marca.md`.
 - El sistema interno usa el simbolo compacto y la web publica puede usar el lockup completo cuando el espacio lo permite.
 - La paleta de marca combina oro regalo, marfil tienda, bosque operativo, salvia y coral accion; el oro se usa como firma, no como color dominante de interfaz.
@@ -75,6 +79,8 @@ El sistema interno tambien ofrece modo noche para uso prolongado o ambientes de 
 - El selector Dia/Noche vive en la barra superior y debe recordar la preferencia con `localStorage`.
 - Atajos de mostrador deben ser pocos y memorables.
 - Las funciones de IA deben mostrar claramente cuando algo es sugerido y cuando ya fue aplicado al formulario.
+- Completar una ficha con IA aplica texto solo al borrador. El usuario debe revisar y guardar; ningún campo sensible cambia por inferencia.
+- Las animaciones confirman acciones y respetan `prefers-reduced-motion`; no se usan rebotes, confeti constante ni sliders automáticos.
 - Una foto generada nunca reemplaza la original ni cambia la portada por si sola. Antes de aplicarla se deben revisar logos, etiquetas, color y forma; despues se guarda con la accion general del producto.
 - La carga de imagenes debe ser visual; evitar textarea de URLs como mecanismo principal.
 - El editor de la vidriera usa borrador y publicacion explicita. La vista previa representa la misma interfaz que vera el cliente.

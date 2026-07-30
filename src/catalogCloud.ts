@@ -11,15 +11,25 @@ interface CatalogRow {
 export function isCloudCatalogEnabled() {
   if (import.meta.env.MODE === "test") return false;
   const hostname = window.location.hostname.toLowerCase();
+  const preview = new URLSearchParams(window.location.search);
   const publicDomain = String(import.meta.env.VITE_PUBLIC_DOMAIN || "regaleriashop.com").toLowerCase();
   const internalDomain = String(import.meta.env.VITE_INTERNAL_DOMAIN || "sistema.regaleriashop.com").toLowerCase();
-  return hostname === publicDomain || hostname === `www.${publicDomain}` || hostname === internalDomain || hostname.endsWith(".onrender.com");
+  return hostname === publicDomain
+    || hostname === `www.${publicDomain}`
+    || hostname === internalDomain
+    || hostname.endsWith(".onrender.com")
+    || preview.get("preview") === "public"
+    || preview.get("studioPreview") === "1";
 }
 
 function isPublicStorefrontHost() {
   const hostname = window.location.hostname.toLowerCase();
   const publicDomain = String(import.meta.env.VITE_PUBLIC_DOMAIN || "regaleriashop.com").toLowerCase();
-  return hostname === publicDomain || hostname === `www.${publicDomain}`;
+  const preview = new URLSearchParams(window.location.search);
+  return hostname === publicDomain
+    || hostname === `www.${publicDomain}`
+    || preview.get("preview") === "public"
+    || preview.get("studioPreview") === "1";
 }
 
 function catalogRow(product: Product) {
@@ -115,6 +125,14 @@ export function subscribeToCloudCatalog(onChange: (products: Product[]) => void)
     const products = await loadPublicCatalogSnapshot();
     if (active && products) onChange(products);
   };
+  void refresh();
+  if (isPublicStorefrontHost()) {
+    const interval = window.setInterval(() => void refresh(), 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }
   const channel = client
     .channel("public-catalog-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "public_catalog_products" }, () => void refresh())

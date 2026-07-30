@@ -10,6 +10,7 @@ import {
   FileText,
   Gear,
   GlobeHemisphereWest,
+  Gift,
   Heart,
   House,
   EnvelopeSimple,
@@ -46,9 +47,11 @@ import { analyzePurchaseWithOpenAi } from "./aiClient";
 import { isCloudCatalogEnabled, subscribeToCloudCatalog } from "./catalogCloud";
 import { generateCatalogProductImage } from "./catalogImageCloud";
 import { uploadProductImage } from "./fileStorage";
+import { generateProductEnrichment } from "./productEnrichmentCloud";
 import { createReceiptPdf, formatMoney } from "./receipt";
 import { loadCurrentAppRole } from "./securityCloud";
 import { StorefrontShop, StorefrontStudio } from "./StorefrontExperience";
+import { normalizeProductCommerce } from "./storefrontMerchandising";
 import { OnlineOrders } from "./OnlineOrders";
 import { subscribeToCloudOrders } from "./commerceCloud";
 import { canSeeFinancials, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
@@ -3469,6 +3472,7 @@ function Catalog({ editingProductId, onEditProduct, onBack }: { editingProductId
     return (
       <ProductEditor
         product={editingProduct}
+        products={products}
         categories={categories}
         canDelete={activeRole === "dueno" || activeRole === "administrador"}
         canGeneratePremium={activeRole === "dueno" || activeRole === "administrador"}
@@ -4443,6 +4447,7 @@ function ProductCard({ product, onEdit, viewMode }: { product: Product; onEdit: 
 
 function ProductEditor({
   product,
+  products,
   categories,
   canDelete,
   canGeneratePremium,
@@ -4451,6 +4456,7 @@ function ProductEditor({
   onBack
 }: {
   product: Product;
+  products: Product[];
   categories: string[];
   canDelete: boolean;
   canGeneratePremium: boolean;
@@ -4467,6 +4473,8 @@ function ProductEditor({
   const [premiumImageUrl, setPremiumImageUrl] = useState("");
   const [premiumImageStatus, setPremiumImageStatus] = useState("");
   const [isGeneratingPremium, setIsGeneratingPremium] = useState(false);
+  const [isEnrichingProduct, setIsEnrichingProduct] = useState(false);
+  const [enrichmentStatus, setEnrichmentStatus] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState("");
   const [draft, setDraft] = useState({
@@ -4479,13 +4487,16 @@ function ProductEditor({
     slug: product.slug ?? slugify(product.name),
     seoTitle: product.seoTitle ?? "",
     seoDescription: product.seoDescription ?? "",
+    commerce: normalizeProductCommerce(product.commerce),
     publishable: product.publishable
   });
   const [priceDrafts, setPriceDrafts] = useState(() => product.variants.map((variant) => ({
     variantId: variant.id,
     price: variant.price,
     usesWebPrice: variant.webPrice !== undefined,
-    webPrice: variant.webPrice ?? variant.price
+    webPrice: variant.webPrice ?? variant.price,
+    webCompareAtPrice: variant.webCompareAtPrice ?? 0,
+    taxFreePrice: variant.taxFreePrice ?? 0
   })));
 
   useEffect(() => {
@@ -4499,13 +4510,16 @@ function ProductEditor({
       slug: product.slug ?? slugify(product.name),
       seoTitle: product.seoTitle ?? "",
       seoDescription: product.seoDescription ?? "",
+      commerce: normalizeProductCommerce(product.commerce),
       publishable: product.publishable
     });
     setPriceDrafts(product.variants.map((variant) => ({
       variantId: variant.id,
       price: variant.price,
       usesWebPrice: variant.webPrice !== undefined,
-      webPrice: variant.webPrice ?? variant.price
+      webPrice: variant.webPrice ?? variant.price,
+      webCompareAtPrice: variant.webCompareAtPrice ?? 0,
+      taxFreePrice: variant.taxFreePrice ?? 0
     })));
     setSelectedImage(0);
     setDraggedImageIndex(null);
@@ -4513,6 +4527,8 @@ function ProductEditor({
     setPremiumImageUrl("");
     setPremiumImageStatus("");
     setIsGeneratingPremium(false);
+    setIsEnrichingProduct(false);
+    setEnrichmentStatus("");
   }, [product]);
 
   const categoryOptions = categories.includes(product.category) ? categories : [product.category, ...categories];
@@ -4531,7 +4547,9 @@ function ProductEditor({
       pricing: priceDrafts.map((pricing) => ({
         variantId: pricing.variantId,
         price: Math.max(pricing.price, 0),
-        webPrice: pricing.usesWebPrice ? Math.max(pricing.webPrice, 0) : null
+        webPrice: pricing.usesWebPrice ? Math.max(pricing.webPrice, 0) : null,
+        webCompareAtPrice: pricing.webCompareAtPrice > 0 ? Math.max(pricing.webCompareAtPrice, 0) : null,
+        taxFreePrice: pricing.taxFreePrice > 0 ? Math.max(pricing.taxFreePrice, 0) : null
       }))
     });
     if (saved) {
@@ -4606,6 +4624,38 @@ function ProductEditor({
   };
   const updatePriceDraft = (variantId: string, update: Partial<(typeof priceDrafts)[number]>) => {
     setPriceDrafts((current) => current.map((pricing) => pricing.variantId === variantId ? { ...pricing, ...update } : pricing));
+  };
+  const enrichProduct = async () => {
+    setIsEnrichingProduct(true);
+    setEnrichmentStatus("Analizando los datos y la imagen seleccionada...");
+    try {
+      const result = await generateProductEnrichment({
+        productId: product.id,
+        productName: draft.name,
+        code: product.variants.map((variant) => variant.sku).filter(Boolean).join(", "),
+        category: draft.category,
+        brand: draft.brand,
+        description: draft.description,
+        imageUrl: mainImage
+      });
+      setDraft((current) => ({
+        ...current,
+        description: result.description || current.description,
+        commerce: normalizeProductCommerce({
+          ...current.commerce,
+          ...result.commerce,
+          giftProfile: {
+            ...current.commerce.giftProfile,
+            ...result.commerce.giftProfile
+          }
+        })
+      }));
+      setEnrichmentStatus("Propuesta aplicada al borrador. Revisala y guardá el producto para confirmar.");
+    } catch (error) {
+      setEnrichmentStatus(error instanceof Error ? error.message : "No se pudo completar la ficha comercial.");
+    } finally {
+      setIsEnrichingProduct(false);
+    }
   };
   const generatePremiumImage = async () => {
     if (!mainImage) {
@@ -4815,10 +4865,76 @@ function ProductEditor({
                       Precio web
                       <input aria-label={`Precio web - ${variant.name}`} type="number" min="0" value={pricing.webPrice} onChange={(event) => updatePriceDraft(variant.id, { webPrice: Number(event.target.value) || 0 })} />
                     </label>}
+                    <label>
+                      Precio anterior verificado
+                      <input aria-label={`Precio anterior - ${variant.name}`} type="number" min="0" value={pricing.webCompareAtPrice} onChange={(event) => updatePriceDraft(variant.id, { webCompareAtPrice: Number(event.target.value) || 0 })} />
+                    </label>
+                    <label>
+                      Precio sin impuestos
+                      <input aria-label={`Precio sin impuestos - ${variant.name}`} type="number" min="0" value={pricing.taxFreePrice} onChange={(event) => updatePriceDraft(variant.id, { taxFreePrice: Number(event.target.value) || 0 })} />
+                    </label>
                   </div>
                 );
               })}
             </section>
+            <details className="product-commerce-editor">
+              <summary><Gift size={19} /><span><strong>Ficha comercial y regalos</strong><small>Información, recomendaciones y datos para el buscador de regalos</small></span></summary>
+              <div className="product-commerce-body">
+                {canGeneratePremium && (
+                  <section className="product-enrichment-assistant" aria-label="Asistente de ficha comercial">
+                    <div>
+                      <span className="eyebrow"><Sparkle size={16} weight="fill" /> Asistente de contenido</span>
+                      <strong>Completá la ficha a partir del nombre, código y foto</strong>
+                      <small>No inventa medidas ni materiales. Aplica una propuesta al borrador y nunca guarda automáticamente.</small>
+                    </div>
+                    <button className="secondary-action" type="button" onClick={enrichProduct} disabled={isEnrichingProduct || !draft.name.trim()}>
+                      <Sparkle size={18} /> {isEnrichingProduct ? "Analizando..." : "Completar ficha con IA"}
+                    </button>
+                    {enrichmentStatus && <p>{enrichmentStatus}</p>}
+                  </section>
+                )}
+                <div className="form-grid two">
+                  <label>Propuesta de valor<textarea value={draft.commerce.valueProposition} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, valueProposition: event.target.value } })} placeholder="Una frase clara que explique por qué elegirlo" /></label>
+                  <label>Qué es<textarea value={draft.commerce.whatIsIt} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, whatIsIt: event.target.value } })} /></label>
+                  <label>Ideal para<textarea value={draft.commerce.idealFor} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, idealFor: event.target.value } })} /></label>
+                  <label>Ocasiones<textarea value={draft.commerce.occasions} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, occasions: event.target.value } })} /></label>
+                  <label>Qué incluye<input value={draft.commerce.includes.join(", ")} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, includes: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) } })} placeholder="Producto, caja, accesorio" /></label>
+                  <label>Presentación<input value={draft.commerce.presentation} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, presentation: event.target.value } })} /></label>
+                  <label>Materiales<input value={draft.commerce.materials} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, materials: event.target.value } })} /></label>
+                  <label>Medidas<input value={draft.commerce.dimensions} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, dimensions: event.target.value } })} /></label>
+                  <label>Colores o aromas<input value={draft.commerce.colorsOrScents} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, colorsOrScents: event.target.value } })} /></label>
+                  <label>Cuidados<input value={draft.commerce.care} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, care: event.target.value } })} /></label>
+                  <label>Tiempo de preparación<input value={draft.commerce.preparationTime} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, preparationTime: event.target.value } })} /></label>
+                  <label>Política de cambio<input value={draft.commerce.changePolicy} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, changePolicy: event.target.value } })} /></label>
+                  <label>Etiqueta comercial<select value={draft.commerce.badge} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, badge: event.target.value as typeof draft.commerce.badge } })}><option value="">Sin etiqueta</option><option value="nuevo">Nuevo</option><option value="edicion_limitada">Edición limitada</option><option value="pack_ahorro">Pack ahorro</option><option value="ultimas_unidades">Últimas unidades</option></select></label>
+                </div>
+                <div className="product-commerce-toggles">
+                  <label className="check-row"><input type="checkbox" checked={draft.commerce.personalizable} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, personalizable: event.target.checked } })} /> Se puede personalizar</label>
+                  <label className="check-row"><input type="checkbox" checked={draft.commerce.dedicationAvailable} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, dedicationAvailable: event.target.checked } })} /> Admite dedicatoria</label>
+                  <label className="check-row"><input type="checkbox" checked={draft.commerce.directDeliveryAvailable} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, directDeliveryAvailable: event.target.checked } })} /> Puede enviarse al destinatario</label>
+                </div>
+                <section className="gift-profile-editor">
+                  <h4>Buscador de regalos</h4>
+                  <div className="form-grid three">
+                    <label>Destinatarios<input value={draft.commerce.giftProfile.recipients.join(", ")} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, giftProfile: { ...draft.commerce.giftProfile, recipients: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) } } })} placeholder="mamá, pareja, colega" /></label>
+                    <label>Ocasiones<input value={draft.commerce.giftProfile.occasions.join(", ")} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, giftProfile: { ...draft.commerce.giftProfile, occasions: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) } } })} /></label>
+                    <label>Intereses<input value={draft.commerce.giftProfile.interests.join(", ")} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, giftProfile: { ...draft.commerce.giftProfile, interests: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) } } })} /></label>
+                  </div>
+                  <label className="check-row"><input type="checkbox" checked={draft.commerce.giftProfile.urgentReady} onChange={(event) => setDraft({ ...draft, commerce: { ...draft.commerce, giftProfile: { ...draft.commerce.giftProfile, urgentReady: event.target.checked } } })} /> Puede prepararse en el día</label>
+                </section>
+                {(["crossSellProductIds", "upsellProductIds", "downsellProductIds"] as const).map((field) => (
+                  <section className="commerce-relations" key={field}>
+                    <h4>{field === "crossSellProductIds" ? "Complementos (máximo 3)" : field === "upsellProductIds" ? "Opciones superiores (máximo 3)" : "Alternativas económicas (máximo 3)"}</h4>
+                    <div>
+                      {products.filter((item) => item.id !== product.id && item.publishable).map((item) => {
+                        const selected = draft.commerce[field].includes(item.id);
+                        return <label key={item.id}><input type="checkbox" checked={selected} disabled={!selected && draft.commerce[field].length >= 3} onChange={() => setDraft({ ...draft, commerce: { ...draft.commerce, [field]: selected ? draft.commerce[field].filter((id) => id !== item.id) : [...draft.commerce[field], item.id] } })} /> {item.name}</label>;
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </details>
             <SeoGuidance
               name={draft.name}
               description={draft.description}

@@ -213,7 +213,7 @@ El SQL inicial esta en `supabase/storage.sql`.
 - `supabase/storefront.sql` crea la configuracion publica y su historial auditable.
 - La tienda anonima tiene lectura de `storefront_settings`.
 - Solo dueño y administrador ejecutan `save_storefront_settings`.
-- La web abierta escucha cambios de `storefront_settings` mediante Supabase Realtime. Al publicar desde el sistema interno, otras pestañas reciben la nueva portada sin recargar.
+- La web abierta escucha cambios de `storefront_settings` mediante Supabase Realtime. El catálogo público se vuelve a consultar cada diez segundos mediante `get_public_catalog`, porque el rol anónimo no puede leer el JSON comercial completo.
 - Lifestyle y la foto premium de catalogo se ejecutan en la API interna de Render y guardan una propuesta PNG en `product-images`.
 - El servicio requiere `OPENAI_API_KEY` y admite `OPENAI_LIFESTYLE_IMAGE_MODEL` y `OPENAI_CATALOG_IMAGE_MODEL`; el valor recomendado para ambos es `gpt-image-2`.
 - La API valida la sesion de Supabase y el rol de dueño/administrador. Generar un archivo no actualiza el producto ni la vidriera: la incorporacion y el guardado siguen siendo acciones explicitas en el editor.
@@ -226,7 +226,7 @@ notify pgrst, 'reload schema';
 
 En desarrollo local, `/api/ai/lifestyle` reutiliza `OPENAI_API_KEY` desde el entorno del servidor de Vite. En produccion, el navegador llama al mismo endpoint en la API interna usando la sesion vigente. La clave no se entrega al navegador.
 
-Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion de sesion en local y produccion. Guardan el resultado en `product-images`; el editor nunca aplica la propuesta hasta una eleccion explicita del usuario.
+Las rutas `/api/ai/catalog-image`, `/api/ai/lifestyle` y `/api/ai/product-enrichment` usan la misma validacion de sesion en local y produccion. Las dos primeras guardan propuestas en `product-images`; la tercera devuelve texto estructurado y no persiste nada. El editor nunca publica ni guarda una propuesta por sí solo.
 
 ## API interna de imagenes
 
@@ -234,7 +234,7 @@ Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion
 - URL: `https://regaleria-shop-api.onrender.com`.
 - Inicio: `npm run start:api`.
 - Salud: `/health`.
-- Rutas protegidas: `/api/ai/catalog-image` y `/api/ai/lifestyle`.
+- Rutas protegidas: `/api/ai/catalog-image`, `/api/ai/lifestyle` y `/api/ai/product-enrichment`.
 - Optimización protegida: `/api/images/optimize`.
 - Origen admitido: `https://sistema.regaleriashop.com`.
 - Variables requeridas: `OPENAI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e `INTERNAL_APP_ORIGINS`.
@@ -244,7 +244,7 @@ Las rutas `/api/ai/catalog-image` y `/api/ai/lifestyle` usan la misma validacion
 
 ## Pedidos ecommerce
 
-- La web anónima ejecuta `create_store_order`; PostgreSQL recalcula precio y stock y construye los correos.
+- La web anónima ejecuta `create_store_order_v3`; PostgreSQL recalcula precio, stock, packs, ahorro y envoltorio y construye los correos. Durante una actualización compatible, el cliente puede usar `create_store_order` si V3 todavía no existe.
 - El sistema autenticado lee `store_orders` y actualiza mediante `manage_store_order`.
 - `store_order_events` conserva la auditoría separada del JSON legible del pedido.
 - `expire_store_orders` libera reservas pendientes después de 48 horas. Si `pg_cron` está activo se ejecuta cada 15 minutos.

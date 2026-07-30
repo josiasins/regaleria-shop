@@ -1,5 +1,9 @@
 import http from "node:http";
-import { handleCatalogImageRequest, handleLifestyleImageRequest } from "./openaiApi.mjs";
+import {
+  handleCatalogImageRequest,
+  handleLifestyleImageRequest,
+  handleProductEnrichmentRequest
+} from "./openaiApi.mjs";
 import { handleImageOptimizationRequest } from "./imageAssets.mjs";
 
 const port = Number(process.env.PORT || 3000);
@@ -25,6 +29,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/ai/lifestyle") {
     return handleLifestyleImageRequest(req, res);
+  }
+  if (url.pathname === "/api/ai/product-enrichment") {
+    return handleProductEnrichmentRequest(req, res);
   }
   if (url.pathname === "/api/images/optimize") {
     return handleImageOptimizationRequest(req, res);

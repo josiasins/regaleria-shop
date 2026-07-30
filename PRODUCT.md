@@ -31,6 +31,9 @@ Plataforma web interna para administrar una regaleria fisica y preparar su creci
 - La gestión online debe permitir buscar pedidos, registrar pagos parciales, avanzar estados y devolver stock de forma idempotente al cancelar.
 - La tienda pública consume imágenes derivadas livianas; los originales se conservan para edición y archivo.
 - La presentacion de la tienda publica se administra aparte de los datos operativos. Cambiar una portada, una categoria visual o una coleccion no modifica productos, precios, stock ni pedidos.
+- La venta asistida debe aportar valor sin presión artificial: como máximo tres relaciones relevantes, packs con ahorro real y alternativas por presupuesto.
+- El buscador de regalos recomienda mediante datos configurados y stock real. La IA puede proponer texto comercial, pero no decide precio, existencia ni publicación.
+- Precio anterior, cuotas, CFTEA, precio sin impuestos y etiquetas comerciales se muestran solamente cuando fueron verificados o configurados.
 
 ## Anti-referencias
 

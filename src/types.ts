@@ -16,6 +16,45 @@ export interface Variant {
   price: number;
   /** Precio opcional exclusivo para la tienda publica. Sin valor, usa el precio interno. */
   webPrice?: number;
+  /** Precio anterior comprobable. Solo se muestra cuando es mayor al precio web vigente. */
+  webCompareAtPrice?: number;
+  /** Precio informado sin impuestos nacionales. Se carga de forma explicita para evitar estimaciones legales. */
+  taxFreePrice?: number;
+}
+
+export type ProductCommercialBadge = "nuevo" | "edicion_limitada" | "pack_ahorro" | "ultimas_unidades" | "";
+
+export interface ProductGiftProfile {
+  recipients: string[];
+  occasions: string[];
+  interests: string[];
+  budget: "economico" | "medio" | "premium" | "";
+  urgentReady: boolean;
+  giftReady: boolean;
+}
+
+export interface ProductCommerce {
+  valueProposition: string;
+  whatIsIt: string;
+  idealFor: string;
+  occasions: string;
+  includes: string[];
+  dimensions: string;
+  weight: string;
+  materials: string;
+  colorsOrScents: string;
+  care: string;
+  presentation: string;
+  preparationTime: string;
+  changePolicy: string;
+  personalizable: boolean;
+  dedicationAvailable: boolean;
+  directDeliveryAvailable: boolean;
+  badge: ProductCommercialBadge;
+  crossSellProductIds: string[];
+  upsellProductIds: string[];
+  downsellProductIds: string[];
+  giftProfile: ProductGiftProfile;
 }
 
 export interface Product {
@@ -31,6 +70,7 @@ export interface Product {
   slug?: string;
   seoTitle?: string;
   seoDescription?: string;
+  commerce?: ProductCommerce;
   variants: Variant[];
   syncStatus: SyncStatus;
 }
@@ -52,11 +92,14 @@ export interface ProductUpdateInput {
   slug?: string;
   seoTitle?: string;
   seoDescription?: string;
+  commerce?: ProductCommerce;
   publishable: boolean;
   pricing?: Array<{
     variantId: string;
     price: number;
     webPrice: number | null;
+    webCompareAtPrice?: number | null;
+    taxFreePrice?: number | null;
   }>;
 }
 
@@ -129,6 +172,8 @@ export interface SaleLine {
   quantity: number;
   unitPrice: number;
   unitCost: number;
+  bundleId?: string;
+  bundleInstanceId?: string;
 }
 
 export interface SalePayment {
@@ -355,6 +400,13 @@ export interface OnlineOrder {
   deliveryAddress: string;
   lines: SaleLine[];
   total: number;
+  discount?: number;
+  bundles?: Array<{ id: string; title: string; instanceId: string; saving: number }>;
+  giftOptions?: {
+    giftWrap: boolean;
+    dedication: string;
+    directToRecipient: boolean;
+  };
   status: OnlineOrderStatus;
   paymentStatus?: OnlineOrderPaymentStatus;
   paidAmount?: number;
@@ -376,6 +428,11 @@ export interface OnlineOrderDraftInput {
   deliveryMethod: "retiro" | "envio";
   deliveryAddress: string;
   lines: SaleLine[];
+  giftOptions?: {
+    giftWrap: boolean;
+    dedication: string;
+    directToRecipient: boolean;
+  };
 }
 
 export type OnlineOrderManagementInput =

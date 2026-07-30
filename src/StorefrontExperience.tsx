@@ -4,6 +4,9 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  ChatCircleText,
+  CaretDown,
+  Clock,
   CrosshairSimple,
   Desktop,
   DeviceMobile,
@@ -11,16 +14,19 @@ import {
   Eye,
   Heart,
   House,
+  Gift,
   Image,
   ImagesSquare,
   ListMagnifyingGlass,
   MagnifyingGlass,
   Minus,
+  MapPin,
   Package,
   PencilSimple,
   Plus,
   ShoppingBag,
   ShoppingCartSimple,
+  ShieldCheck,
   Sparkle,
   SpinnerGap,
   SquaresFour,
@@ -56,9 +62,22 @@ import {
 } from "./storefrontCloud";
 import { useStore } from "./store";
 import type { Product, SaleLine } from "./types";
+import {
+  bundleLines,
+  bundleRegularPrice,
+  cartBundleDiscount,
+  findGiftRecommendations,
+  giftFinderWhatsappUrl,
+  normalizeProductCommerce,
+  publicProductPrice,
+  relatedProducts,
+  type GiftFinderAnswers,
+  type GiftBudget,
+  type StorefrontBundle
+} from "./storefrontMerchandising";
 
-type StorePage = "home" | "catalog" | "cart";
-type StudioPage = "vista" | "portada" | "categorias" | "secciones" | "lifestyle";
+type StorePage = "home" | "catalog" | "gift-finder" | "help" | "cart";
+type StudioPage = "vista" | "portada" | "categorias" | "secciones" | "lifestyle" | "venta";
 type PreviewMode = StorefrontViewport;
 
 const cartStorageKey = "regaleria-public-cart-v1";
@@ -171,11 +190,21 @@ function ProductTile({ product, onOpen, onAdd }: { product: Product; onOpen: () 
   const available = firstAvailableVariant(product);
   const prices = product.variants.map(publicPrice).filter(Number.isFinite);
   const price = prices.length ? Math.min(...prices) : 0;
+  const commerce = normalizeProductCommerce(product.commerce);
+  const badge = commerce.badge === "nuevo"
+    ? "Nuevo"
+    : commerce.badge === "edicion_limitada"
+      ? "Edición limitada"
+      : commerce.badge === "pack_ahorro"
+        ? "Pack ahorro"
+        : commerce.badge === "ultimas_unidades"
+          ? "Últimas unidades"
+          : "";
   return (
     <article className="sf-product-card">
       <button className="sf-product-photo" onClick={onOpen} aria-label={`Ver ${product.name}`}>
         {product.imageUrl ? <StorefrontImage src={product.imageUrl} alt={`${product.name}, ${product.category}`} sizes="(max-width: 680px) 50vw, (max-width: 900px) 33vw, 25vw" /> : <Package size={34} />}
-        {available ? <span>Disponible</span> : <span className="sold-out">Sin stock</span>}
+        {badge ? <span>{badge}</span> : !available ? <span className="sold-out">Sin stock</span> : null}
       </button>
       <div className="sf-product-copy">
         <small>{product.category}</small>
@@ -189,11 +218,60 @@ function ProductTile({ product, onOpen, onAdd }: { product: Product; onOpen: () 
   );
 }
 
-function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: () => void; onAdd: (variant: Product["variants"][number]) => void }) {
+function MiniProductRail({
+  title,
+  products,
+  onOpen,
+  onAdd
+}: {
+  title: string;
+  products: Product[];
+  onOpen: (id: string) => void;
+  onAdd: (product: Product) => void;
+}) {
+  if (!products.length) return null;
+  return (
+    <section className="sf-related">
+      <header><h2>{title}</h2></header>
+      <div>
+        {products.slice(0, 3).map((product) => (
+          <ProductTile key={product.id} product={product} onOpen={() => onOpen(product.id)} onAdd={() => onAdd(product)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProductDetail({
+  product,
+  products,
+  settings,
+  onBack,
+  onOpen,
+  onAdd,
+  onAddProduct,
+  onAddBundle
+}: {
+  product: Product;
+  products: Product[];
+  settings: StorefrontSettings;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+  onAdd: (variant: Product["variants"][number]) => void;
+  onAddProduct: (product: Product) => void;
+  onAddBundle: (bundle: StorefrontBundle) => void;
+}) {
   const gallery = (product.imageUrls?.length ? product.imageUrls : [product.imageUrl]).filter(Boolean);
   const [imageUrl, setImageUrl] = useState(gallery[0] ?? "");
   const [variantId, setVariantId] = useState(firstAvailableVariant(product)?.id ?? product.variants[0]?.id ?? "");
   const variant = product.variants.find((item) => item.id === variantId);
+  const commerce = normalizeProductCommerce(product.commerce);
+  const crossSell = relatedProducts(product, products, "cross");
+  const upsell = relatedProducts(product, products, "up");
+  const downsell = relatedProducts(product, products, "down");
+  const productBundles = settings.commerce.bundles.filter((bundle) => bundle.visible && bundle.productIds.includes(product.id));
+  const compareAt = variant?.webCompareAtPrice && variant.webCompareAtPrice > publicPrice(variant) ? variant.webCompareAtPrice : 0;
+  const saving = compareAt && variant ? compareAt - publicPrice(variant) : 0;
 
   useEffect(() => {
     setImageUrl(gallery[0] ?? "");
@@ -221,7 +299,7 @@ function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: (
         <span>{product.category}</span>
         <h1>{product.name}</h1>
         {product.brand && <small>Marca {product.brand}</small>}
-        <p>{product.description || "Consultá disponibilidad y elegí la variante que más te guste."}</p>
+        <p>{commerce.valueProposition || product.description || "Consultá disponibilidad y elegí la variante que más te guste."}</p>
         <label>
           Opción
           <select value={variantId} onChange={(event) => setVariantId(event.target.value)}>
@@ -234,8 +312,19 @@ function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: (
         </label>
         {variant && (
           <div className="sf-detail-price">
-            <strong>{formatMoney(publicPrice(variant))}</strong>
+            <div>
+              {compareAt > 0 && <del>{formatMoney(compareAt)}</del>}
+              <strong>{formatMoney(publicPrice(variant))}</strong>
+              {saving > 0 && <b>Ahorrás {formatMoney(saving)}</b>}
+            </div>
             <span>{variant.stock > 0 ? `${variant.stock} disponible(s)` : "Sin stock"}</span>
+            {settings.commerce.installments > 1 && (
+              <small>
+                {settings.commerce.installments} cuotas de {formatMoney(publicPrice(variant) / settings.commerce.installments)}
+                {settings.commerce.cfteaLabel ? ` · ${settings.commerce.cfteaLabel}` : ""}
+              </small>
+            )}
+            {variant.taxFreePrice && variant.taxFreePrice > 0 && <small>Precio sin impuestos nacionales: {formatMoney(variant.taxFreePrice)}</small>}
           </div>
         )}
         <button className="sf-primary" onClick={() => variant && onAdd(variant)} disabled={!variant || variant.stock < 1}>
@@ -243,9 +332,99 @@ function ProductDetail({ product, onBack, onAdd }: { product: Product; onBack: (
         </button>
         <div className="sf-detail-service">
           <Truck size={22} />
-          <div><strong>Entrega coordinada</strong><span>Retiro en el local o envío a convenir.</span></div>
+          <div><strong>Entrega coordinada</strong><span>{settings.commerce.shippingInfo}</span></div>
+        </div>
+        <div className="sf-detail-service">
+          <Gift size={22} />
+          <div><strong>Listo para regalar</strong><span>{commerce.presentation || settings.commerce.preparationText}</span></div>
+        </div>
+        <div className="sf-detail-service">
+          <ShieldCheck size={22} />
+          <div><strong>Compra acompañada</strong><span>{commerce.changePolicy || settings.commerce.changesPolicy}</span></div>
+        </div>
+        <div className="sf-product-facts">
+          {commerce.whatIsIt && <div><strong>Qué es</strong><p>{commerce.whatIsIt}</p></div>}
+          {commerce.idealFor && <div><strong>Ideal para</strong><p>{commerce.idealFor}</p></div>}
+          {commerce.occasions && <div><strong>Ocasiones</strong><p>{commerce.occasions}</p></div>}
+          {commerce.includes.length > 0 && <div><strong>Incluye</strong><p>{commerce.includes.join(" · ")}</p></div>}
+          {(commerce.materials || commerce.dimensions || commerce.colorsOrScents) && (
+            <details>
+              <summary>Características <CaretDown size={16} /></summary>
+              {commerce.materials && <p><b>Materiales:</b> {commerce.materials}</p>}
+              {commerce.dimensions && <p><b>Medidas:</b> {commerce.dimensions}</p>}
+              {commerce.colorsOrScents && <p><b>Color o aroma:</b> {commerce.colorsOrScents}</p>}
+              {commerce.care && <p><b>Cuidados:</b> {commerce.care}</p>}
+            </details>
+          )}
         </div>
       </section>
+      {productBundles.map((bundle) => {
+        const regular = bundleRegularPrice(bundle, products);
+        const savingAmount = Math.max(0, regular - bundle.packPrice);
+        return (
+          <section className="sf-bundle-offer" key={bundle.id}>
+            <div><span>Pack {bundle.tier}</span><h2>{bundle.title}</h2><p>{bundle.description}</p></div>
+            <div><small>{regular > bundle.packPrice ? `Por separado ${formatMoney(regular)}` : ""}</small><strong>{formatMoney(bundle.packPrice)}</strong>{savingAmount > 0 && <b>Ahorrás {formatMoney(savingAmount)}</b>}</div>
+            <button className="sf-primary" onClick={() => onAddBundle(bundle)}><Plus size={18} /> Agregar pack</button>
+          </section>
+        );
+      })}
+      <MiniProductRail title="Queda muy bien con" products={crossSell} onOpen={onOpen} onAdd={onAddProduct} />
+      <MiniProductRail title="Una opción superior" products={upsell} onOpen={onOpen} onAdd={onAddProduct} />
+      <MiniProductRail title="Una alternativa más económica" products={downsell} onOpen={onOpen} onAdd={onAddProduct} />
+    </main>
+  );
+}
+
+function GiftFinder({
+  products,
+  settings,
+  onOpen,
+  onAddBundle
+}: {
+  products: Product[];
+  settings: StorefrontSettings;
+  onOpen: (id: string) => void;
+  onAddBundle: (bundle: StorefrontBundle) => void;
+}) {
+  const [answers, setAnswers] = useState<GiftFinderAnswers>({
+    recipient: "",
+    occasion: "",
+    interest: "",
+    budget: "25000_50000",
+    timing: "esta_semana",
+    giftReady: true
+  });
+  const [searched, setSearched] = useState(false);
+  const result = useMemo(() => searched ? findGiftRecommendations(products, settings.commerce, answers) : null, [answers, products, searched, settings.commerce]);
+  const whatsappUrl = result ? giftFinderWhatsappUrl(settings.commerce, answers, result) : "";
+  return (
+    <main className="sf-gift-finder">
+      <header className="sf-page-heading">
+        <div><span>Asistente de regalos</span><h1>{settings.commerce.giftFinderTitle}</h1><p>{settings.commerce.giftFinderDescription}</p></div>
+        <Gift size={44} />
+      </header>
+      <section className="sf-gift-form">
+        <label>¿Para quién es?<input value={answers.recipient} onChange={(event) => setAnswers({ ...answers, recipient: event.target.value })} placeholder="Ej: mamá, pareja, colega" /></label>
+        <label>¿Qué ocasión?<input value={answers.occasion} onChange={(event) => setAnswers({ ...answers, occasion: event.target.value })} placeholder="Cumpleaños, agradecimiento..." /></label>
+        <label>¿Qué le gusta?<input value={answers.interest} onChange={(event) => setAnswers({ ...answers, interest: event.target.value })} placeholder="Mate, deco, accesorios..." /></label>
+        <label>Presupuesto<select value={answers.budget} onChange={(event) => setAnswers({ ...answers, budget: event.target.value as GiftBudget })}><option value="hasta_25000">Hasta $25.000</option><option value="25000_50000">$25.000 a $50.000</option><option value="50000_90000">$50.000 a $90.000</option><option value="mas_90000">Más de $90.000</option></select></label>
+        <label>¿Para cuándo?<select value={answers.timing} onChange={(event) => setAnswers({ ...answers, timing: event.target.value as GiftFinderAnswers["timing"] })}><option value="hoy">Hoy</option><option value="esta_semana">Esta semana</option><option value="sin_apuro">Sin apuro</option></select></label>
+        <label className="sf-check"><input type="checkbox" checked={answers.giftReady} onChange={(event) => setAnswers({ ...answers, giftReady: event.target.checked })} /> Lo quiero listo para regalar</label>
+        <button className="sf-primary" onClick={() => setSearched(true)}><Sparkle size={18} /> Ver recomendaciones</button>
+      </section>
+      {result && (
+        <section className="sf-gift-results">
+          <header><h2>Tres ideas para vos</h2><p>Elegidas entre productos publicados y con stock.</p></header>
+          <div className="sf-product-grid">{result.main.map((product) => <ProductTile key={product.id} product={product} onOpen={() => onOpen(product.id)} onAdd={() => onOpen(product.id)} />)}</div>
+          <div className="sf-gift-alternatives">
+            {result.economic && <button onClick={() => onOpen(result.economic!.id)}><span>Más económica</span><strong>{result.economic.name}</strong><b>{formatMoney(publicProductPrice(result.economic))}</b></button>}
+            {result.premium && <button onClick={() => onOpen(result.premium!.id)}><span>Premium</span><strong>{result.premium.name}</strong><b>{formatMoney(publicProductPrice(result.premium))}</b></button>}
+            {result.bundle && <button onClick={() => onAddBundle(result.bundle!)}><span>Pack</span><strong>{result.bundle.title}</strong><b>{formatMoney(result.bundle.packPrice)}</b></button>}
+          </div>
+          {whatsappUrl && <a className="sf-whatsapp-link" href={whatsappUrl} target="_blank" rel="noreferrer"><ChatCircleText size={20} /> Consultar estas opciones por WhatsApp</a>}
+        </section>
+      )}
     </main>
   );
 }
@@ -271,6 +450,9 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
   const [customerContact, setCustomerContact] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<"retiro" | "envio">("retiro");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [dedication, setDedication] = useState("");
+  const [directToRecipient, setDirectToRecipient] = useState(false);
   const [message, setMessage] = useState("");
   const selectedProduct = publishable.find((product) => product.id === selectedProductId);
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -280,6 +462,10 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
     const matchesCategory = category === "Todos" || product.category === category;
     return matchesCategory && (!normalizedQuery || productSearchText(product).includes(normalizedQuery));
   });
+  const bundleDiscount = cartBundleDiscount(cart, settings.commerce.bundles);
+  const giftWrapCost = giftWrap ? settings.commerce.giftWrapPrice : 0;
+  const cartSubtotal = lineTotal(cart);
+  const cartTotal = Math.max(0, cartSubtotal - bundleDiscount + giftWrapCost);
 
   useEffect(() => {
     if (!studioPreview) return;
@@ -344,6 +530,21 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
     setMessage(`${product.name} se agregó al carrito.`);
   };
 
+  const addProductToCart = (product: Product) => {
+    const variant = firstAvailableVariant(product);
+    if (variant) addToCart(product, variant);
+  };
+
+  const addBundleToCart = (bundle: StorefrontBundle) => {
+    const lines = bundleLines(bundle, publishable);
+    if (lines.length !== bundle.productIds.length) {
+      setMessage("Uno de los productos del pack ya no tiene stock.");
+      return;
+    }
+    setCart((current) => [...current, ...lines]);
+    setMessage(`${bundle.title} se agregó al carrito.`);
+  };
+
   const setQuantity = (variantId: string, quantity: number) => {
     const product = publishable.find((item) => item.variants.some((variant) => variant.id === variantId));
     const variant = product?.variants.find((item) => item.id === variantId);
@@ -351,6 +552,12 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
     setCart((current) => current
       .map((line) => line.variantId === variantId ? { ...line, quantity: Math.min(quantity, variant.stock) } : line)
       .filter((line) => line.quantity > 0));
+  };
+
+  const removeCartLine = (target: SaleLine) => {
+    setCart((current) => target.bundleInstanceId
+      ? current.filter((line) => line.bundleInstanceId !== target.bundleInstanceId)
+      : current.filter((line) => line.variantId !== target.variantId));
   };
 
   const submitOrder = async () => {
@@ -365,7 +572,12 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
       customerEmail,
       deliveryMethod,
       deliveryAddress,
-      lines: cart
+      lines: cart,
+      giftOptions: {
+        giftWrap,
+        dedication,
+        directToRecipient
+      }
     });
     if (!order) {
       setMessage("No se pudo registrar el pedido. Revisá los datos e intentá nuevamente.");
@@ -376,6 +588,9 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
     setCustomerEmail("");
     setCustomerContact("");
     setDeliveryAddress("");
+    setGiftWrap(false);
+    setDedication("");
+    setDirectToRecipient(false);
     setMessage(`Pedido ${order.number} recibido. Te enviaremos la confirmación por correo.`);
   };
 
@@ -408,6 +623,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
           />
         </label>
         <div className="sf-header-actions">
+          {settings.commerce.giftFinderEnabled && <button onClick={() => setStorePage("gift-finder")}><Gift size={21} /><span>Buscador de regalos</span></button>}
           <button onClick={() => openCatalog()}><ListMagnifyingGlass size={21} /><span>Catálogo</span></button>
           <button className="sf-cart" onClick={() => setStorePage("cart")} aria-label={`Carrito, ${cartCount} productos`}>
             <ShoppingCartSimple size={22} /><span>{cartCount}</span>
@@ -416,6 +632,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
       </header>
       <nav className="sf-nav" aria-label="Categorías principales">
         <button className={clsx(storePage === "home" && "active")} onClick={goHome}>Inicio</button>
+        {settings.commerce.giftFinderEnabled && <button className={clsx(storePage === "gift-finder" && "active")} onClick={() => setStorePage("gift-finder")}>Encontrar un regalo</button>}
         {visibleCategories.map((item) => (
           <button className={clsx(category === item.category && "active")} key={item.id} onClick={() => openCatalog(item.category)}>
             {item.title}
@@ -428,7 +645,7 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
           <button className="sf-text-button" onClick={() => setStorePage("catalog")}><ArrowLeft size={18} /> Seguir comprando</button>
           <header className="sf-page-heading">
             <div><span>Tu selección</span><h1>Carrito</h1></div>
-            <strong>{formatMoney(lineTotal(cart))}</strong>
+            <strong>{formatMoney(cartTotal)}</strong>
           </header>
           {cart.length ? (
             <div className="sf-cart-layout">
@@ -437,16 +654,18 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                   const product = publishable.find((item) => item.id === line.productId);
                   const variant = product?.variants.find((item) => item.id === line.variantId);
                   return (
-                    <article key={line.variantId}>
+                    <article key={`${line.variantId}-${line.bundleInstanceId ?? "single"}`}>
                       {product?.imageUrl ? <StorefrontImage src={product.imageUrl} alt="" sizes="96px" /> : <Package size={28} />}
                       <div><strong>{line.name}</strong><span>{variant?.name} · {line.sku}</span><small>{formatMoney(line.unitPrice)} por unidad</small></div>
-                      <div className="sf-quantity">
-                        <button onClick={() => setQuantity(line.variantId, line.quantity - 1)} aria-label={`Quitar una unidad de ${line.name}`}><Minus size={16} /></button>
-                        <strong>{line.quantity}</strong>
-                        <button onClick={() => setQuantity(line.variantId, line.quantity + 1)} disabled={line.quantity >= (variant?.stock ?? 0)} aria-label={`Agregar una unidad de ${line.name}`}><Plus size={16} /></button>
-                      </div>
+                      {line.bundleInstanceId
+                        ? <span className="sf-pack-line">Pack</span>
+                        : <div className="sf-quantity">
+                            <button onClick={() => setQuantity(line.variantId, line.quantity - 1)} aria-label={`Quitar una unidad de ${line.name}`}><Minus size={16} /></button>
+                            <strong>{line.quantity}</strong>
+                            <button onClick={() => setQuantity(line.variantId, line.quantity + 1)} disabled={line.quantity >= (variant?.stock ?? 0)} aria-label={`Agregar una unidad de ${line.name}`}><Plus size={16} /></button>
+                          </div>}
                       <strong>{formatMoney(line.quantity * line.unitPrice)}</strong>
-                      <button className="sf-icon-button" onClick={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))} aria-label={`Eliminar ${line.name}`}><Trash size={18} /></button>
+                      <button className="sf-icon-button" onClick={() => removeCartLine(line)} aria-label={line.bundleInstanceId ? "Eliminar pack" : `Eliminar ${line.name}`}><Trash size={18} /></button>
                     </article>
                   );
                 })}
@@ -461,7 +680,18 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                   <button className={clsx(deliveryMethod === "envio" && "active")} onClick={() => setDeliveryMethod("envio")}>Envío</button>
                 </div>
                 {deliveryMethod === "envio" && <label>Dirección<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} /></label>}
-                <div className="sf-checkout-total"><span>Total</span><strong>{formatMoney(lineTotal(cart))}</strong></div>
+                <section className="sf-gift-options">
+                  <label className="sf-check"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} /> {settings.commerce.giftWrapLabel}{settings.commerce.giftWrapPrice > 0 ? ` (+${formatMoney(settings.commerce.giftWrapPrice)})` : ""}</label>
+                  <label>Dedicatoria<textarea value={dedication} maxLength={240} onChange={(event) => setDedication(event.target.value)} placeholder="Mensaje breve para incluir con el regalo" /></label>
+                  <label className="sf-check"><input type="checkbox" checked={directToRecipient} onChange={(event) => setDirectToRecipient(event.target.checked)} /> Enviar directamente a quien lo recibe</label>
+                  {settings.commerce.invoiceExcludedFromGift && <small>No incluimos precios ni factura dentro del regalo.</small>}
+                </section>
+                <div className="sf-checkout-summary">
+                  <span>Productos <b>{formatMoney(cartSubtotal)}</b></span>
+                  {bundleDiscount > 0 && <span className="saving">Ahorro en packs <b>-{formatMoney(bundleDiscount)}</b></span>}
+                  {giftWrapCost > 0 && <span>Preparación de regalo <b>{formatMoney(giftWrapCost)}</b></span>}
+                </div>
+                <div className="sf-checkout-total"><span>Total</span><strong>{formatMoney(cartTotal)}</strong></div>
                 <button className="sf-primary" onClick={submitOrder} disabled={!customerName.trim() || !customerEmail.includes("@") || !customerContact.trim() || (deliveryMethod === "envio" && !deliveryAddress.trim())}>
                   Confirmar pedido
                 </button>
@@ -477,8 +707,29 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
             </div>
           )}
         </main>
+      ) : storePage === "gift-finder" ? (
+        <GiftFinder products={publishable} settings={settings} onOpen={openProduct} onAddBundle={addBundleToCart} />
+      ) : storePage === "help" ? (
+        <main className="sf-help-page">
+          <header className="sf-page-heading"><div><span>Compra con confianza</span><h1>Ayuda y contacto</h1></div><ShieldCheck size={42} /></header>
+          <section className="sf-contact-grid">
+            {settings.commerce.address && <article><MapPin size={24} /><strong>Local</strong><span>{settings.commerce.address}</span>{settings.commerce.mapUrl && <a href={settings.commerce.mapUrl} target="_blank" rel="noreferrer">Ver mapa</a>}</article>}
+            {settings.commerce.whatsapp && <article><ChatCircleText size={24} /><strong>WhatsApp</strong><span>{settings.commerce.responseTime}</span><a href={`https://wa.me/${settings.commerce.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer">Escribir ahora</a></article>}
+            {settings.commerce.hours && <article><Clock size={24} /><strong>Horarios</strong><span>{settings.commerce.hours}</span></article>}
+          </section>
+          <section className="sf-faqs"><h2>Preguntas frecuentes</h2>{settings.commerce.faqs.map((faq) => <details key={faq.id}><summary>{faq.question}<CaretDown size={17} /></summary><p>{faq.answer}</p></details>)}</section>
+        </main>
       ) : selectedProduct ? (
-        <ProductDetail product={selectedProduct} onBack={() => setSelectedProductId(null)} onAdd={(variant) => addToCart(selectedProduct, variant)} />
+        <ProductDetail
+          product={selectedProduct}
+          products={publishable}
+          settings={settings}
+          onBack={() => setSelectedProductId(null)}
+          onOpen={openProduct}
+          onAdd={(variant) => addToCart(selectedProduct, variant)}
+          onAddProduct={addProductToCart}
+          onAddBundle={addBundleToCart}
+        />
       ) : (
         <>
           {storePage === "home" && !query.trim() && (
@@ -548,6 +799,12 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
                 <div><Check size={25} /><strong>Stock real</strong><span>Lo publicado está disponible.</span></div>
                 <div><Heart size={25} /><strong>Atención cercana</strong><span>Te ayudamos a elegir.</span></div>
               </section>
+              {settings.commerce.giftFinderEnabled && (
+                <section className="sf-gift-cta">
+                  <div><span>¿No sabés qué elegir?</span><h2>{settings.commerce.giftFinderTitle}</h2><p>{settings.commerce.giftFinderDescription}</p></div>
+                  <button className="sf-primary" onClick={() => setStorePage("gift-finder")}><Gift size={20} /> Empezar</button>
+                </section>
+              )}
             </>
           )}
 
@@ -586,11 +843,17 @@ export function StorefrontShop({ settingsOverride, embedded = false }: { setting
       <footer className="sf-footer">
         <BrandLockup />
         <p>Regalos, deco y accesorios elegidos para hacer especial cada momento.</p>
-        <nav><button onClick={goHome}>Inicio</button><button onClick={() => openCatalog()}>Catálogo</button><button onClick={() => setStorePage("cart")}>Carrito</button></nav>
+        <nav><button onClick={goHome}>Inicio</button><button onClick={() => openCatalog()}>Catálogo</button><button onClick={() => setStorePage("help")}>Ayuda</button><button onClick={() => setStorePage("cart")}>Carrito</button></nav>
+        <div className="sf-footer-contact">
+          {settings.commerce.address && <span>{settings.commerce.address}</span>}
+          {settings.commerce.hours && <span>{settings.commerce.hours}</span>}
+          {settings.commerce.legalName && <small>{settings.commerce.legalName}</small>}
+        </div>
       </footer>
       <nav className="sf-mobile-nav" aria-label="Navegación móvil">
         <button className={clsx(storePage === "home" && "active")} onClick={goHome}><House size={21} /><span>Inicio</span></button>
         <button className={clsx(storePage === "catalog" && "active")} onClick={() => openCatalog()}><MagnifyingGlass size={21} /><span>Buscar</span></button>
+        {settings.commerce.giftFinderEnabled && <button className={clsx(storePage === "gift-finder" && "active")} onClick={() => setStorePage("gift-finder")}><Gift size={21} /><span>Regalo</span></button>}
         <button className={clsx(storePage === "cart" && "active")} onClick={() => setStorePage("cart")}><ShoppingCartSimple size={21} /><span>Carrito {cartCount ? `(${cartCount})` : ""}</span></button>
       </nav>
       {message && storePage !== "cart" && <div className="sf-toast" aria-live="polite">{message}</div>}
@@ -992,6 +1255,7 @@ export function StorefrontStudio() {
             ["portada", "Portada", "Textos e imágenes", Image],
             ["categorias", "Categorías", "Orden y presentación", SquaresFour],
             ["secciones", "Colecciones", "Filas de productos", Stack],
+            ["venta", "Venta asistida", "Regalos, packs y confianza", ShoppingBag],
             ["lifestyle", "Lifestyle", "Escena y encuadres", Sparkle]
           ] as Array<[StudioPage, string, string, typeof Image]>).map(([id, label, description, Icon]) => (
             <button key={id} className={clsx(studioPage === id && "active")} onClick={() => setStudioPage(id)}>
@@ -1150,6 +1414,83 @@ export function StorefrontStudio() {
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {studioPage === "venta" && (
+        <section className="sfs-editor-pane">
+          <StorefrontEditorHeader title="Venta asistida" description="Configurá la ayuda para elegir, los packs y la información de confianza de la tienda." />
+          <StorefrontEditBlock title="Contacto y confianza" description="Estos datos aparecen en la ayuda y al pie de la tienda.">
+            <div className="sfs-form-grid three">
+              <label>WhatsApp<input value={draft.commerce.whatsapp} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, whatsapp: event.target.value } }))} placeholder="549..." /></label>
+              <label>Instagram<input value={draft.commerce.instagram} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, instagram: event.target.value } }))} placeholder="@regaleria" /></label>
+              <label>Horarios<input value={draft.commerce.hours} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, hours: event.target.value } }))} /></label>
+              <label>Dirección<input value={draft.commerce.address} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, address: event.target.value } }))} /></label>
+              <label>Enlace de mapa<input value={draft.commerce.mapUrl} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, mapUrl: event.target.value } }))} /></label>
+              <label>Razón social visible<input value={draft.commerce.legalName} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, legalName: event.target.value } }))} /></label>
+            </div>
+            <div className="sfs-form-grid two">
+              <label>Entrega<textarea value={draft.commerce.shippingInfo} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, shippingInfo: event.target.value } }))} /></label>
+              <label>Cambios<textarea value={draft.commerce.changesPolicy} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, changesPolicy: event.target.value } }))} /></label>
+            </div>
+          </StorefrontEditBlock>
+          <StorefrontEditBlock title="Buscador de regalos" description="La tienda recomienda únicamente productos publicados y con stock.">
+            <label className="sfs-check"><input type="checkbox" checked={draft.commerce.giftFinderEnabled} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, giftFinderEnabled: event.target.checked } }))} /> Mostrar buscador de regalos</label>
+            <div className="sfs-form-grid two">
+              <label>Título<input value={draft.commerce.giftFinderTitle} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, giftFinderTitle: event.target.value } }))} /></label>
+              <label>Descripción<textarea value={draft.commerce.giftFinderDescription} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, giftFinderDescription: event.target.value } }))} /></label>
+            </div>
+          </StorefrontEditBlock>
+          <StorefrontEditBlock title="Preparación y financiación" description="Solo se muestra la información que completes de forma explícita.">
+            <div className="sfs-form-grid three">
+              <label>Nombre del envoltorio<input value={draft.commerce.giftWrapLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, giftWrapLabel: event.target.value } }))} /></label>
+              <label>Precio del envoltorio<input type="number" min="0" value={draft.commerce.giftWrapPrice} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, giftWrapPrice: Number(event.target.value) || 0 } }))} /></label>
+              <label>Cuotas informadas<input type="number" min="0" max="24" value={draft.commerce.installments} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, installments: Number(event.target.value) || 0 } }))} /></label>
+              <label>CFTEA / condición<input value={draft.commerce.cfteaLabel} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, cfteaLabel: event.target.value } }))} placeholder="Solo si está verificado" /></label>
+              <label>Envío gratis desde<input type="number" min="0" value={draft.commerce.freeShippingThreshold} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, freeShippingThreshold: Number(event.target.value) || 0 } }))} /></label>
+            </div>
+          </StorefrontEditBlock>
+          <StorefrontEditBlock title="Packs con ahorro real" description="Elegí los productos y fijá un precio menor al valor por separado. El servidor volverá a validar todo al confirmar.">
+            <button className="secondary-action" disabled={!editable} onClick={() => updateDraft((current) => ({
+              ...current,
+              commerce: {
+                ...current.commerce,
+                bundles: [...current.commerce.bundles, {
+                  id: `bundle-${crypto.randomUUID()}`,
+                  title: "Nuevo pack",
+                  tier: "completo",
+                  description: "",
+                  productIds: [],
+                  packPrice: 0,
+                  visible: false
+                }]
+              }
+            }))}><Plus size={18} /> Agregar pack</button>
+            <div className="sfs-bundle-list">
+              {draft.commerce.bundles.map((bundle, index) => (
+                <article key={bundle.id}>
+                  <div className="sfs-section-head">
+                    <strong>{bundle.title}</strong>
+                    <label className="sfs-check"><input type="checkbox" checked={bundle.visible} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, visible: event.target.checked }) } }))} /> Visible</label>
+                    <button className="sfs-danger-icon" disabled={!editable} onClick={() => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: current.commerce.bundles.filter((item) => item.id !== bundle.id) } }))}><Trash size={18} /></button>
+                  </div>
+                  <div className="sfs-form-grid three">
+                    <label>Nombre<input value={bundle.title} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, title: event.target.value }) } }))} /></label>
+                    <label>Nivel<select value={bundle.tier} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, tier: event.target.value as StorefrontBundle["tier"] }) } }))}><option value="rapido">Regalo rápido</option><option value="completo">Regalo completo</option><option value="inolvidable">Regalo inolvidable</option><option value="empresa">Pack empresa</option></select></label>
+                    <label>Precio del pack<input type="number" min="0" value={bundle.packPrice} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, packPrice: Number(event.target.value) || 0 }) } }))} /></label>
+                  </div>
+                  <label>Descripción<input value={bundle.description} disabled={!editable} onChange={(event) => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, description: event.target.value }) } }))} /></label>
+                  <div className="sfs-bundle-products">
+                    {products.filter((product) => product.publishable).map((product) => {
+                      const selected = bundle.productIds.includes(product.id);
+                      return <label key={product.id}><input type="checkbox" checked={selected} disabled={!editable || (!selected && bundle.productIds.length >= 6)} onChange={() => updateDraft((current) => ({ ...current, commerce: { ...current.commerce, bundles: replaceAt(current.commerce.bundles, index, { ...bundle, productIds: selected ? bundle.productIds.filter((id) => id !== product.id) : [...bundle.productIds, product.id] }) } }))} /> {product.name}</label>;
+                    })}
+                  </div>
+                  <p className="muted-text">Valor por separado: {formatMoney(bundleRegularPrice(bundle, products))} · Ahorro: {formatMoney(Math.max(0, bundleRegularPrice(bundle, products) - bundle.packPrice))}</p>
+                </article>
+              ))}
+            </div>
+          </StorefrontEditBlock>
         </section>
       )}
 

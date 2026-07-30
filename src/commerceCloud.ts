@@ -3,17 +3,28 @@ import { supabase } from "./supabaseClient";
 import type { EmailMessage, OnlineOrder, OnlineOrderManagementInput } from "./types";
 
 export async function saveCloudOrder(order: OnlineOrder, emails: EmailMessage[]) {
-  if (!isCloudCatalogEnabled()) return true;
-  if (!supabase) return false;
+  if (!isCloudCatalogEnabled()) return order;
+  if (!supabase) return null;
+  const { data: savedOrder, error: v3Error } = await supabase.rpc("create_store_order_v3", {
+    order_data: order
+  });
+  if (!v3Error && savedOrder) return savedOrder as OnlineOrder;
+
+  const missingV3 = v3Error?.code === "PGRST202" || v3Error?.message?.includes("create_store_order_v3");
+  if (!missingV3) {
+    console.error("No se pudo registrar el pedido web.", v3Error?.message);
+    return null;
+  }
+
   const { error } = await supabase.rpc("create_store_order", {
     order_data: order,
     email_data: emails
   });
   if (error) {
     console.error("No se pudo registrar el pedido web.", error.message);
-    return false;
+    return null;
   }
-  return true;
+  return { ...order, syncStatus: "sincronizado" as const };
 }
 
 export async function loadCloudCommerce() {

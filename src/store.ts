@@ -962,6 +962,7 @@ export const useStore = create<AppState>((set, get) => ({
       slug: input.slug?.trim(),
       seoTitle: input.seoTitle?.trim(),
       seoDescription: input.seoDescription?.trim(),
+      commerce: input.commerce,
       publishable: input.publishable,
       variants: current.variants.map((variant) => {
         const pricing = pricingByVariant.get(variant.id);
@@ -969,7 +970,9 @@ export const useStore = create<AppState>((set, get) => ({
         return {
           ...variant,
           price: Math.max(pricing.price, 0),
-          webPrice: pricing.webPrice === null ? undefined : Math.max(pricing.webPrice, 0)
+          webPrice: pricing.webPrice === null ? undefined : Math.max(pricing.webPrice, 0),
+          webCompareAtPrice: pricing.webCompareAtPrice == null ? undefined : Math.max(pricing.webCompareAtPrice, 0),
+          taxFreePrice: pricing.taxFreePrice == null ? undefined : Math.max(pricing.taxFreePrice, 0)
         };
       }),
       syncStatus: "sincronizado"
@@ -2094,6 +2097,7 @@ export const useStore = create<AppState>((set, get) => ({
       deliveryMethod: input.deliveryMethod,
       deliveryAddress: input.deliveryAddress.trim(),
       lines: cleanLines,
+      giftOptions: input.giftOptions,
       total: totals.total,
       status: "nuevo",
       paymentStatus: "pendiente",
@@ -2103,16 +2107,6 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: new Date().toISOString(),
       syncStatus: "pendiente"
     };
-    const movementsForOrder: StockMovement[] = cleanLines.map((line) => ({
-      id: `local_mov_${crypto.randomUUID()}`,
-      productId: line.productId,
-      variantId: line.variantId,
-      type: "ajuste",
-      quantity: -line.quantity,
-      reason: order.number,
-      createdAt: order.createdAt,
-      syncStatus: "pendiente"
-    }));
     const isFirstPurchase = !get().onlineOrders.some((item) => item.customerEmail.toLowerCase() === order.customerEmail.toLowerCase());
     const emailMessages: EmailMessage[] = [
       ...(isFirstPurchase && order.customerEmail
@@ -2149,29 +2143,24 @@ export const useStore = create<AppState>((set, get) => ({
     ];
     const saved = await saveCloudOrder(order, emailMessages);
     if (!saved) return null;
-    const stockReservation: Sale = {
-      id: order.id,
-      receiptNumber: order.number,
-      type: "detallada",
-      customerName: order.customerName,
-      lines: order.lines,
-      discount: 0,
-      paymentMethod: "otro",
-      paymentStatus: "pendiente",
-      paidAmount: 0,
-      payments: [],
-      total: order.total,
-      margin: 0,
-      createdAt: order.createdAt,
-      syncStatus: order.syncStatus
-    };
     set((state) => ({
-      onlineOrders: [order, ...state.onlineOrders],
+      onlineOrders: [saved, ...state.onlineOrders.filter((item) => item.id !== saved.id)],
       emailMessages: [...emailMessages, ...state.emailMessages],
-      movements: [...movementsForOrder, ...state.movements],
-      products: applySaleStock(state.products, stockReservation)
+      ...(import.meta.env.MODE === "test"
+        ? {
+            products: state.products.map((product) => ({
+              ...product,
+              variants: product.variants.map((variant) => {
+                const quantity = cleanLines
+                  .filter((line) => line.variantId === variant.id)
+                  .reduce((sum, line) => sum + line.quantity, 0);
+                return quantity ? { ...variant, stock: variant.stock - quantity } : variant;
+              })
+            }))
+          }
+        : {})
     }));
-    return order;
+    return saved;
   },
   manageOnlineOrder: async (input) => {
     if (import.meta.env.MODE === "test") {

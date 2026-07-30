@@ -847,3 +847,25 @@ Cada cambio importante debe agregarse con fecha, decision, motivo y alternativas
 - **Verificación productiva:** Render compiló el commit `087d318`, instaló 252 paquetes, reportó 0 vulnerabilidades y publicó la API. `/health` respondió `200` y `/api/images/optimize` rechazó una llamada sin sesión con `401`.
 - **Biblioteca optimizada:** se generaron cuatro derivados WebP para 53 originales. El total de originales conservados fue 21,06 MB y los cuatro juegos completos sumaron 8,76 MB. La tienda eligió 320 px para la bombilla y 640 px para el hero en una pantalla móvil de 390 px.
 - **Integridad:** antes y después del proceso se conservaron 45 productos publicados y 1 pedido online. No se creó, editó ni eliminó ningún dato comercial durante la prueba.
+
+# 2026-07-30 - Venta asistida para regalos y packs validados
+
+- **Decision:** extender producto, vidriera y checkout con campos comerciales opcionales, relaciones de venta, buscador de regalos, opciones de presentación y packs configurables.
+- **Compatibilidad:** los productos anteriores se normalizan con valores vacíos. No se recategorizan, no se publican, no cambian precio y no reciben relaciones por defecto.
+- **Venta relacionada:** cada producto admite hasta tres complementos, tres opciones superiores y tres alternativas económicas. Si no se configuran, la tienda puede proponer productos de la misma categoría con precio y stock reales.
+- **Packs:** la web muestra ahorro calculado contra los precios vigentes. PostgreSQL vuelve a verificar componentes, cantidades, disponibilidad y precio del pack al confirmar; el navegador no define el descuento final.
+- **Buscador de regalos:** V1 usa reglas determinísticas sobre destinatario, ocasión, interés, presupuesto, urgencia y presentación. No usa IA para decidir productos ni inventa disponibilidad.
+- **Confianza:** solo se muestran etiquetas, precio anterior, precio sin impuestos, cuotas, CFTEA, dirección, horarios y políticas cuando fueron configurados. No se crean reseñas, urgencia o descuentos artificiales.
+- **Regalo:** envoltorio, dedicatoria y envío directo quedan dentro del pedido. La factura y los precios no se incluyen en el paquete cuando esa regla está activa.
+- **Seguridad:** la migración `storefront-commerce-v3.sql` es aditiva para pedidos y revoca la lectura anónima directa del JSON completo del catálogo; la tienda pública conserva el procedimiento sanitizado.
+- **Actualización pública:** al no conceder lectura directa, la tienda consulta el procedimiento sanitizado al iniciar y cada diez segundos. Realtime continúa para usuarios internos autenticados.
+- **Alternativas descartadas:** descuentos automáticos ante abandono, por educar al cliente a esperar; packs calculados solo en el navegador, por permitir manipulación; reseñas ficticias, por reducir confianza.
+
+# 2026-07-30 - Asistente revisable de ficha comercial
+
+- **Decision:** incorporar `Completar ficha con IA` dentro del bloque comercial del editor de producto.
+- **Entrada mínima:** nombre, código, categoría, marca, descripción actual e imagen seleccionada.
+- **Límites:** el modelo recibe instrucciones de no inventar medidas, materiales, contenido, personalización, stock ni beneficios. Cuando falta evidencia devuelve campos vacíos.
+- **Control humano:** el resultado modifica solamente el borrador en pantalla. El usuario revisa campo por campo y debe usar `Guardar producto` para persistir.
+- **Permisos y costo:** solo dueño o administrador pueden usarlo; la API valida sesión y rol y comparte el límite temporal de herramientas de imagen para evitar consumo accidental.
+- **Datos:** la herramienta no modifica precio, costo, stock, categoría, imágenes, publicación ni relaciones de venta.

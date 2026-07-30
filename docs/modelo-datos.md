@@ -8,7 +8,11 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - Customer: cliente reutilizable para ventas y presupuestos, con contacto y notas.
 - Supplier: proveedor reutilizable para productos, compras y gastos.
 - Product: producto base con categoria, proveedor historico para compras, marca comercial opcional, descripcion y estado publicable.
-- Variant: variante vendible con SKU, codigo de barra, stock, costo, precio interno y precio web opcional.
+- ProductCommerce: ficha comercial opcional con propuesta de valor, destinatarios, ocasiones, contenido, materiales, cuidados, presentacion, personalizacion y hasta tres relaciones por tipo.
+- ProductGiftProfile: etiquetas determinísticas para recomendar por destinatario, ocasión, interés, presupuesto, urgencia y presentación.
+- StorefrontBundle: pack editable con nivel comercial, componentes, precio propio y visibilidad. El stock sigue perteneciendo a sus productos.
+- StorefrontCommerceSettings: contacto, confianza, preparación, políticas, envoltorio, cuotas, CFTEA, preguntas frecuentes y configuración del buscador.
+- Variant: variante vendible con SKU, codigo de barra, stock, costo, precio interno, precio web opcional, precio anterior verificado y precio sin impuestos opcional.
 - Category: lista administrable de categorias para productos y reportes.
 - Sale: venta con comprobante interno, total, margen, fecha/hora, cliente y turno asociado. Conserva estado de pago, total cobrado y una coleccion de cobros para no perder pagos parciales o posteriores.
 - SaleLine: lineas de venta.
@@ -21,6 +25,8 @@ El esquema base esta en `prisma/schema.prisma` y apunta a PostgreSQL.
 - PurchaseLine: lineas de compra que actualizan stock y costo de variantes. Puede conservar costo bruto, neto, alicuota, IVA unitario y subtotales discriminados.
 - OnlineOrder: pedido creado desde la web publica.
 - OnlineOrderLine: lineas del pedido web.
+- OnlineOrderGiftOptions: envoltorio, dedicatoria y envío directo elegidos por el cliente.
+- OnlineOrderBundle: resumen del pack y ahorro que PostgreSQL validó al crear el pedido.
 - StoreOrderEvent: evento inmutable de creación, estado, cobro, entrega, cancelación o vencimiento.
 - ImageAsset: URL original, hash de contenido, peso original y variantes WebP públicas.
 - StockMovement: historial de movimientos de stock.

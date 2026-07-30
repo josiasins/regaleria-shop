@@ -18,6 +18,8 @@ const aiPrompts = {
     "Extrae compra de una regaleria. Usa solo productos listados. Devuelve lineas detectadas. Si duda, confidence bajo y reason breve.",
   productCopySystem:
     "Redacta descripcion ecommerce breve para regaleria. Natural, sin exagerar, maximo 45 palabras.",
+  productEnrichmentSystem:
+    "Completa una ficha ecommerce de regaleria usando solo datos observables o declarados. No inventes medidas, materiales, contenido, marca, personalizacion, disponibilidad ni beneficios. Si no hay evidencia usa texto vacio o lista vacia. Español argentino natural, concreto y comercial, sin exageraciones.",
   productImageBase: (productName) => `Foto ecommerce realista de ${productName}. Sin texto, sin logos, producto reconocible.`,
   productImageWhite: "Fondo blanco limpio, luz suave, producto centrado.",
   productImageAmbient: "Ambiente calido de tienda de regalos, escena natural y elegante."
@@ -100,7 +102,7 @@ async function authorizeImageGeneration(req) {
   if (!roleResponse.ok) throw statusError("No se pudo verificar tu permiso.", 403);
   const role = await roleResponse.json();
   if (!["dueno", "administrador"].includes(String(role))) {
-    throw statusError("Solo dueño o administrador pueden generar fotos premium.", 403);
+    throw statusError("Solo dueño o administrador pueden usar las herramientas de IA.", 403);
   }
 
   const now = Date.now();
@@ -316,6 +318,106 @@ async function generateCatalogImage(payload, req) {
     ...access
   });
   return { imageUrl, model: catalogImageModel };
+}
+
+async function enrichProductContent(payload, req) {
+  await authorizeImageGeneration(req);
+  const client = createClient();
+  if (!client) throw statusError("OPENAI_API_KEY no está configurada.", 500);
+  if (!payload.productId || !String(payload.productName || "").trim()) {
+    throw statusError("Falta identificar el producto.", 400);
+  }
+
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      description: { type: "string" },
+      valueProposition: { type: "string" },
+      whatIsIt: { type: "string" },
+      idealFor: { type: "string" },
+      occasions: { type: "string" },
+      includes: { type: "array", items: { type: "string" } },
+      materials: { type: "string" },
+      care: { type: "string" },
+      presentation: { type: "string" },
+      recipients: { type: "array", items: { type: "string" } },
+      occasionTags: { type: "array", items: { type: "string" } },
+      interests: { type: "array", items: { type: "string" } }
+    },
+    required: [
+      "description",
+      "valueProposition",
+      "whatIsIt",
+      "idealFor",
+      "occasions",
+      "includes",
+      "materials",
+      "care",
+      "presentation",
+      "recipients",
+      "occasionTags",
+      "interests"
+    ]
+  };
+  const facts = {
+    nombre: String(payload.productName || "").slice(0, 160),
+    codigo: String(payload.code || "").slice(0, 80),
+    categoria: String(payload.category || "").slice(0, 100),
+    marca: String(payload.brand || "").slice(0, 100),
+    descripcionActual: String(payload.description || "").slice(0, 600)
+  };
+  const content = [
+    {
+      type: "input_text",
+      text: `Datos del producto: ${JSON.stringify(facts)}. Generá una propuesta breve. Las listas deben tener como máximo 6 elementos.`
+    }
+  ];
+  if (payload.imageUrl) {
+    try {
+      validateCatalogImageUrl(payload.imageUrl, supabaseServerConfig().url);
+      content.push({ type: "input_image", image_url: payload.imageUrl, detail: "low" });
+    } catch {
+      // La ficha puede completarse con los datos escritos aunque la imagen no sea accesible.
+    }
+  }
+
+  const response = await client.responses.create({
+    model: textModel,
+    input: [
+      { role: "system", content: aiPrompts.productEnrichmentSystem },
+      { role: "user", content }
+    ],
+    max_output_tokens: 650,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "product_enrichment",
+        schema,
+        strict: true
+      }
+    }
+  });
+  const result = JSON.parse(response.output_text);
+  return {
+    description: result.description,
+    commerce: {
+      valueProposition: result.valueProposition,
+      whatIsIt: result.whatIsIt,
+      idealFor: result.idealFor,
+      occasions: result.occasions,
+      includes: result.includes,
+      materials: result.materials,
+      care: result.care,
+      presentation: result.presentation,
+      giftProfile: {
+        recipients: result.recipients,
+        occasions: result.occasionTags,
+        interests: result.interests
+      }
+    },
+    model: textModel
+  };
 }
 
 function fallbackPurchase(products) {
@@ -548,6 +650,8 @@ export function registerOpenAiApi(server) {
   server.middlewares.use("/api/ai/catalog-image", handleCatalogImageRequest);
 
   server.middlewares.use("/api/ai/lifestyle", handleLifestyleImageRequest);
+
+  server.middlewares.use("/api/ai/product-enrichment", handleProductEnrichmentRequest);
 }
 
 export async function handleCatalogImageRequest(req, res) {
@@ -583,5 +687,23 @@ export async function handleLifestyleImageRequest(req, res) {
     sendJson(res, 200, await generateLifestyle(await readJson(req), req));
   } catch (error) {
     sendApiError(res, error, "Error al generar la composicion");
+  }
+}
+
+export async function handleProductEnrichmentRequest(req, res) {
+  applyInternalAppCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "Metodo no permitido" });
+  const origin = String(req.headers.origin || "");
+  if (origin && !res.getHeader("Access-Control-Allow-Origin")) {
+    return sendJson(res, 403, { error: "Origen no autorizado." });
+  }
+  try {
+    sendJson(res, 200, await enrichProductContent(await readJson(req), req));
+  } catch (error) {
+    sendApiError(res, error, "Error al completar la ficha comercial");
   }
 }

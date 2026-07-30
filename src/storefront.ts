@@ -1,4 +1,9 @@
 import type { Product } from "./types";
+import {
+  createDefaultStorefrontCommerce,
+  normalizeStorefrontCommerce,
+  type StorefrontCommerceSettings
+} from "./storefrontMerchandising";
 
 export type StorefrontProductRule = "seleccion" | "todos";
 export type StorefrontViewport = "desktop" | "tablet" | "mobile";
@@ -59,6 +64,7 @@ export interface StorefrontSettings {
   categories: StorefrontCategoryCard[];
   sections: StorefrontSection[];
   lifestyle: StorefrontLifestyle;
+  commerce: StorefrontCommerceSettings;
   updatedAt: string;
 }
 
@@ -168,6 +174,7 @@ export function createDefaultStorefrontSettings(products: readonly Product[]): S
       ctaLabel: "Ver la selección",
       productIds: []
     },
+    commerce: createDefaultStorefrontCommerce(),
     updatedAt: new Date(0).toISOString()
   };
 }
@@ -220,6 +227,7 @@ export function normalizeStorefrontSettings(value: Partial<StorefrontSettings> |
       ...(value.lifestyle ?? {}),
       imagePositions: normalizeImagePositions(value.lifestyle?.imagePositions)
     },
+    commerce: normalizeStorefrontCommerce(value.commerce),
     updatedAt: value.updatedAt || defaults.updatedAt
   };
 }

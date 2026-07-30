@@ -451,3 +451,29 @@
 3. Las variantes se guardan con URL inmutable y se registran en `image_assets`.
 4. La tienda consulta una vez el manifiesto y usa `srcset` para que cada dispositivo descargue el tamaño adecuado.
 5. Si una variante no está disponible, se muestra el original; nunca se deja una ficha sin imagen.
+
+## Completar ficha comercial con IA
+
+1. Dueño o administrador abre un producto en `Catálogo`.
+2. Abre `Ficha comercial y regalos` y selecciona la imagen que mejor representa el producto.
+3. `Completar ficha con IA` envía nombre, código, categoría, marca, descripción e imagen a la API protegida.
+4. La propuesta completa solamente datos comerciales respaldados por la entrada; las incertidumbres quedan vacías.
+5. El resultado se aplica al borrador para revisión y puede corregirse manualmente.
+6. Nada cambia en la nube hasta usar `Guardar producto`; precio, stock, costo, imágenes y publicación quedan fuera del asistente.
+
+## Buscar un regalo
+
+1. El cliente abre `Buscador de regalos`.
+2. Indica destinatario, ocasión, interés, presupuesto, urgencia y si debe llegar listo para regalar.
+3. La tienda evalúa solo productos publicados, con precio válido y stock real.
+4. Muestra tres recomendaciones, una económica, una premium y un pack válido cuando existe.
+5. El cliente puede abrir una ficha, agregar al carrito o consultar por WhatsApp con las respuestas precargadas.
+
+## Comprar un pack
+
+1. El cliente elige un pack visible con componentes publicados y stock.
+2. La tienda muestra precio por separado, precio del pack y ahorro calculado.
+3. Al agregar, las líneas quedan identificadas como una instancia de pack y no se alteran individualmente.
+4. PostgreSQL vuelve a consultar el pack publicado, compara exactamente los componentes, recalcula precios y valida existencias.
+5. Solo después descuenta stock, registra el ahorro y guarda el pedido.
+6. Si cambió el precio, falta un producto o se agotó una variante, el pedido se rechaza sin quedar parcial.

@@ -227,6 +227,17 @@
 - [x] Sincronización Realtime de pedidos y catálogo.
 - [x] Variantes WebP responsivas conservando originales.
 - [x] Optimización manual de biblioteca histórica con progreso y carga futura automática.
+- [x] Fichas comerciales ricas con información de regalo y campos opcionales.
+- [x] Venta relacionada con hasta tres complementos, superiores y alternativas económicas.
+- [x] Packs configurables con ahorro visible y validación final en PostgreSQL.
+- [x] Buscador de regalos por destinatario, ocasión, interés, presupuesto y urgencia.
+- [x] Envoltorio, dedicatoria y envío directo incluidos en el pedido web.
+- [x] Datos verificables alrededor del precio y etiquetas comerciales no genéricas.
+- [x] Datos de contacto, mapa, horarios, políticas y preguntas frecuentes configurables.
+- [x] Asistente de IA para completar la ficha comercial con revisión humana.
+- [ ] Reseñas verificadas vinculadas a pedidos entregados.
+- [ ] Seguimiento público mediante enlace firmado y sin exposición de datos personales.
+- [ ] Botón de arrepentimiento y circuito auditable después de validación legal.
 - [ ] Integrar pasarela de pago online y webhooks firmados.
 - [ ] Preparar cambios, devoluciones y reembolsos completos.
 - [ ] Separar direcciones y perfiles de clientes ecommerce en tablas dedicadas.
