@@ -179,7 +179,7 @@
 - [x] Herramienta lifestyle con dos o tres productos, borrador economico y aprobacion humana.
 - [x] Foto premium de catalogo con fondo blanco, una propuesta y aprobacion humana antes de guardar.
 - [ ] Desplegar y configurar la funcion Edge de composicion lifestyle en produccion.
-- [ ] Desplegar y configurar la API protegida de foto premium en produccion.
+- [x] Desplegar y configurar la API protegida de foto premium en produccion.
 
 ### Etapa 14: Produccion online
 

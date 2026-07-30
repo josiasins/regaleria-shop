@@ -241,7 +241,8 @@ La ruta `/api/ai/catalog-image` usa la misma validacion de sesion en local y pro
 
 ## API interna de imagenes
 
-- Servicio: `regaleria-shop-api` en Render.
+- Servicio: `regaleria-shop-api` en Render (`srv-d9laccm7bikc738mke90`).
+- URL: `https://regaleria-shop-api.onrender.com`.
 - Inicio: `npm run start:api`.
 - Salud: `/health`.
 - Origen admitido: `https://sistema.regaleriashop.com`.
