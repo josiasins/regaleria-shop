@@ -39,6 +39,7 @@ import {
   Wallet
 } from "@phosphor-icons/react";
 import { clsx } from "clsx";
+import { formatCalendarDate, toDateTimeInput as toDateTimeLocal } from "./dates";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -123,13 +124,6 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
   tarjeta: "Tarjeta",
   otro: "Otro"
 };
-
-function toDateTimeLocal(iso?: string) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
-}
 
 function fromDateTimeLocal(value: string, fallback: string) {
   if (!value) return fallback;
@@ -368,7 +362,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase?.auth.signOut();
+    await supabase?.auth.signOut({ scope: "local" });
   };
 
   if (!requiresLogin) return <>{children}</>;
@@ -3835,7 +3829,7 @@ function Capital() {
         <CapitalCard title="Capital propio" value={formatMoney(ownCapital)} note="Dinero del dueño o ajustes propios que no hay que devolver." percent={ownRatio} tone="own" />
         <CapitalCard title="Deuda pendiente" value={formatMoney(debtBalance)} note="Capital prestado y préstamos recibidos menos pagos realizados." percent={debtRatio} tone="debt" />
         <CapitalCard title="Pagos realizados" value={formatMoney(loanPayments)} note="Cuánto ya se devolvió de préstamos o capital prestado." percent={borrowedIn ? Math.min(100, (loanPayments / borrowedIn) * 100) : 0} tone="paid" />
-        <CapitalCard title="Próximo vencimiento" value={nextDue?.dueDate ? new Date(nextDue.dueDate).toLocaleDateString("es-AR") : "Sin fecha"} note={nextDue ? `${capitalLabels[nextDue.type]} · ${nextDue.source}` : "No hay préstamos con vencimiento cargado."} percent={nextDue ? 72 : 0} tone="due" />
+        <CapitalCard title="Próximo vencimiento" value={nextDue?.dueDate ? formatCalendarDate(nextDue.dueDate) : "Sin fecha"} note={nextDue ? `${capitalLabels[nextDue.type]} · ${nextDue.source}` : "No hay préstamos con vencimiento cargado."} percent={nextDue ? 72 : 0} tone="due" />
       </div>
 
       <div className="split">
@@ -3880,7 +3874,7 @@ function Capital() {
               <div className="table-row" key={entry.id}>
                 <div>
                   <strong>{capitalLabels[entry.type]}</strong>
-                  <span>{entry.source} · {new Date(entry.createdAt).toLocaleDateString("es-AR")}{entry.dueDate ? ` · vence ${new Date(entry.dueDate).toLocaleDateString("es-AR")}` : ""}</span>
+                  <span>{entry.source} · {new Date(entry.createdAt).toLocaleDateString("es-AR")}{entry.dueDate ? ` · vence ${formatCalendarDate(entry.dueDate)}` : ""}</span>
                   <span>{entry.note || "Sin nota"}</span>
                 </div>
                 <strong>{formatMoney(entry.amount)}</strong>

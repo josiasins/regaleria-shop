@@ -29,3 +29,9 @@ Solicitud del dueño: corregir los riesgos de sobrescritura y seguridad detectad
 - Respaldo posterior e inventario de imágenes verificados con SHA256. Los archivos y resultados detallados están en `backups/latest-status.json` y los manifiestos privados; no se incluyen respaldos ni importes del negocio en el repositorio.
 - Scripts de administración y respaldo verifican certificado y nombre del servidor PostgreSQL con la CA pública de Supabase. Se preservaron los valores de las conexiones. Archivos `.env` y respaldos con permisos privados.
 - Protección adicional aplicada: `20261113020013_prevent_accidental_hard_deletes.sql` bloquea borrados físicos y vaciados de tablas críticas e historial. Se probaron los rechazos en la base desechable y se conservó la huella del estado de producción.
+
+## Verificación de publicación del 13/11/2026
+
+- Render publicó el commit `e4e52fc` para el sitio interno y la API. La API respondió `200` en salud y `401` en generación/optimización sin sesión. La cuenta dueña ingresó por Google y la interfaz volvió a mostrar los datos recuperados.
+- Durante la prueba visual se detectó que los vencimientos de calendario se mostraban un día antes al interpretarse como medianoche UTC. La corrección conserva el texto de fecha guardado y muestra el día seleccionado; los campos de auditoría usan la hora local al editar.
+- Se endurece el ingreso Google con PKCE/S256; la aplicación intercambia un código vinculado al navegador en lugar de recibir tokens de sesión en la URL. Cerrar sesión afecta solo al navegador actual.
