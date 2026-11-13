@@ -18,6 +18,32 @@ describe("Regaleria app", () => {
     vi.mocked(generateCatalogProductImage).mockReset();
   });
 
+
+  it("counts collections and supplier payments without double-counting purchase invoices in treasury", async () => {
+    const sale = useStore.getState().sales[0];
+    useStore.setState({ sales: [{ ...sale, total: 1000, paidAmount: 0, payments: [], paymentStatus: "pendiente" }], capitalEntries: [],
+      expenses: [{ id: "purchase-expense", category: "Reposicion", vendor: "Fixture", amount: 1000, createdAt: "2026-01-01T00:00:00Z" }, { id: "ordinary-expense", category: "Otro", vendor: "Fixture", amount: 200, createdAt: "2026-01-02T00:00:00Z" }] as any,
+      purchaseReceipts: [{ id: "purchase", supplier: "Fixture", total: 1000, createdAt: "2026-01-01T00:00:00Z", lines: [] }] as any,
+      supplierPayments: [{ id: "payment", amount: 300, supplier: "Fixture", receiptId: "purchase" }] as any });
+    render(<App />); const user=userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Tesoreria" }));
+    const row = (label: string) => screen.getByText(label).closest(".table-row")!;
+    expect(row("Ventas cobradas registradas").textContent).toContain("0");
+    expect(row("Gastos registrados").textContent).toContain("200");
+    expect(row("Pagos a proveedores").textContent).toContain("300");
+    expect(screen.getByRole("heading", { level: 2, name: /-.*500/ })).toBeInTheDocument();
+  });
+
+  it("archives and restores a shift without removing its historical record", async () => {
+    const shift=useStore.getState().openCashShift(0,"dueno","Fixture");
+    expect(shift).not.toBeNull();
+    expect(await useStore.getState().deleteShiftWithAudit(shift!.id,"Fixture archive reason","dueno")).toBe(true);
+    expect(useStore.getState().cashShifts.find(x=>x.id===shift!.id)?.deletedAt).toBeTruthy();
+    const audit=useStore.getState().salesAuditEntries[0];
+    expect(await useStore.getState().restoreShiftWithAudit(audit.id,"Fixture restore reason","dueno")).toBe(true);
+    expect(useStore.getState().cashShifts.filter(x=>x.id===shift!.id)).toHaveLength(1);
+    expect(useStore.getState().cashShifts.find(x=>x.id===shift!.id)?.deletedAt).toBeUndefined();
+  });
   it("shows the dashboard and operational metrics", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "Panel" })).toBeInTheDocument();

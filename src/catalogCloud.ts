@@ -32,15 +32,6 @@ function isPublicStorefrontHost() {
     || preview.get("studioPreview") === "1";
 }
 
-function catalogRow(product: Product) {
-  return {
-    id: product.id,
-    publishable: product.publishable,
-    data: { ...product, syncStatus: "sincronizado" },
-    updated_at: new Date().toISOString()
-  };
-}
-
 export async function loadCloudCatalog() {
   if (!isCloudCatalogEnabled()) return [];
   return loadPublicCatalogSnapshot();
@@ -70,27 +61,12 @@ export async function loadPublicCatalogSnapshot() {
     return null;
   }
 
-  return (data as CatalogRow[]).map((row) => ({
+  return (data as CatalogRow[]).filter((row) => !('deletedAt' in row.data)).map((row) => ({
     ...row.data,
+    cloudUpdatedAt: row.updated_at,
     publishable: row.publishable,
     syncStatus: "sincronizado" as const
   }));
-}
-
-export async function saveCloudProduct(product: Product) {
-  if (!isCloudCatalogEnabled()) return true;
-  if (!supabase) return false;
-  const row = catalogRow(product);
-  const { error } = await supabase.rpc("save_catalog_product", {
-    product_id: row.id,
-    product_publishable: row.publishable,
-    product_data: row.data
-  });
-  if (error) {
-    console.error("No se pudo actualizar el producto compartido.", error.message);
-    return false;
-  }
-  return true;
 }
 
 export async function deleteCloudProduct(productId: string) {
@@ -101,17 +77,6 @@ export async function deleteCloudProduct(productId: string) {
   });
   if (error) {
     console.error("No se pudo eliminar el producto compartido.", error.message);
-    return false;
-  }
-  return true;
-}
-
-export async function seedCloudCatalog(products: Product[]) {
-  if (!isCloudCatalogEnabled()) return true;
-  if (!supabase || !products.length) return false;
-  const { error } = await supabase.from("public_catalog_products").upsert(products.map(catalogRow), { onConflict: "id" });
-  if (error) {
-    console.error("No se pudo iniciar el catalogo compartido.", error.message);
     return false;
   }
   return true;

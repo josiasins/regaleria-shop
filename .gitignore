@@ -8,3 +8,6 @@ public/generated/products/*
 
 .npm-cache/
 backups/
+
+# Supabase CLI cache contains machine-specific project state.
+supabase/.temp/

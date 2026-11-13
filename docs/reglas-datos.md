@@ -21,3 +21,12 @@ Ventas, turnos, cobros, compras, gastos, capital, movimientos de stock, clientes
 - Una venta nueva puede quedar pagada, parcialmente cobrada o pendiente.
 - Cada cobro posterior conserva importe, medio de pago, fecha/hora, turno y nota opcional.
 - Los cierres de turno y de caja contabilizan los cobros ocurridos en ese periodo, no solamente las ventas creadas en ese periodo.
+
+## Protección aplicada en noviembre de 2026
+
+- La carga de datos es de solo lectura. Cualquier error o ausencia del estado bloquea las operaciones; no se inicializa un estado vacío.
+- Las escrituras requieren una revisión confirmada y un bloqueo transaccional. El servidor rechaza versiones antiguas y la desaparición de IDs históricos. Stock y operación se confirman juntos.
+- La cola del navegador se guarda inmediatamente con usuario y base común. Los cambios incompatibles se conservan para revisión; una fecha local nunca autoriza una restauración.
+- El capital se filtra en el servidor. La tabla operativa completa y el historial privado no son accesibles directamente desde clientes.
+- Las bajas de productos y turnos conservan sus datos. No ejecutar de nuevo los SQL históricos de inicialización sobre producción.
+- Los respaldos se crean con `npm run backup -- --storage`. El archivo se considera completo solo tras validar el índice del dump y el inventario de imágenes. La carpeta `backups` y los archivos de conexión tienen permisos privados.

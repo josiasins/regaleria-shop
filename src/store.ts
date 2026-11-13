@@ -1,8 +1,11 @@
 import { create } from "zustand";
-import { deleteCloudProduct, loadCloudCatalog, saveCloudProduct, seedCloudCatalog } from "./catalogCloud";
+import { codeAlreadyUsed } from "./catalogCodes";
+import { mergeOperationalSnapshots, OperationalConflict, outboxKey, readOutbox, sameOperationalValue } from "./operationalSync";
+import type { OperationalOutbox } from "./operationalSync";
+import { deleteCloudProduct, loadCloudCatalog } from "./catalogCloud";
 import { loadCloudCommerce, manageCloudOrder, saveCloudOrder } from "./commerceCloud";
 import { businessProfile, capitalEntries, cashClosures, cashShifts, categories, customers, expenses, movements, onlineOrders, products, purchaseReceipts, quotes, rolePermissions, sales, supplierPayments, suppliers, transfers } from "./data";
-import { auditCloudOperations, isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
+import { isCloudOperationsEnabled, loadCloudOperations, saveCloudOperations } from "./operationalCloud";
 import type {
   BusinessProfile,
   BusinessProfileInput,
@@ -75,6 +78,10 @@ interface AppState {
   rolePermissions: RolePermissions;
   activeRole: Role;
   catalogStatus: "cargando" | "actualizado" | "error";
+  persistenceStatus: "loading" | "ready" | "saving" | "pending" | "error" | "conflict";
+  persistenceMessage: string;
+  operationsLoaded: boolean;
+  recoveryAvailable: boolean;
   initializeCatalog: () => Promise<void>;
   setRole: (role: AppState["activeRole"]) => void;
   addProduct: (product: NewProductInput) => Promise<Product | null>;
@@ -348,15 +355,6 @@ function initialDataState() {
   };
 }
 
-const blockedOperationalSeedIds = {
-  sales: new Set(["sale_001", "sale_002"]),
-  quotes: new Set(["quote_001"]),
-  transfers: new Set(["tr_001"]),
-  expenses: new Set(["exp_001", "exp_002"]),
-  movements: new Set(["mov_001", "mov_002"]),
-  customers: new Set(["cust_claudia", "cust_empresa_norte"])
-};
-
 // Las categorias configuradas y las que ya estan asignadas en el catalogo son
 // dos vistas del mismo dato de negocio. Nunca se debe ocultar una categoria que
 // siga siendo usada por un producto, aunque una copia operativa llegue atrasada.
@@ -375,17 +373,7 @@ function mergeCategories(configuredCategories: readonly string[], catalogProduct
   return merged;
 }
 
-function sanitizeOperationalSnapshot(snapshot: OperationalSnapshot): OperationalSnapshot {
-  return {
-    ...snapshot,
-    sales: (snapshot.sales ?? []).filter((item) => !blockedOperationalSeedIds.sales.has(item.id)),
-    quotes: (snapshot.quotes ?? []).filter((item) => !blockedOperationalSeedIds.quotes.has(item.id)),
-    transfers: (snapshot.transfers ?? []).filter((item) => !blockedOperationalSeedIds.transfers.has(item.id)),
-    expenses: (snapshot.expenses ?? []).filter((item) => !blockedOperationalSeedIds.expenses.has(item.id)),
-    movements: (snapshot.movements ?? []).filter((item) => !blockedOperationalSeedIds.movements.has(item.id)),
-    customers: (snapshot.customers ?? []).filter((item) => !blockedOperationalSeedIds.customers.has(item.id))
-  };
-}
+function sanitizeOperationalSnapshot(snapshot: OperationalSnapshot) { return snapshot; }
 
 function operationalSnapshotFromState(state: OperationalStateFields): OperationalSnapshot {
   return {
@@ -435,12 +423,7 @@ function stateFromOperationalSnapshot(snapshot: OperationalSnapshot): Operationa
     operationAuditEntries: cleanSnapshot.operationAuditEntries ?? [],
     businessProfile: cleanSnapshot.businessProfile ?? businessProfile,
     categories: mergeCategories(cleanSnapshot.categories ?? categories, cleanSnapshot.products ?? []),
-    rolePermissions: {
-      dueno: Array.from(new Set([...(cleanSnapshot.rolePermissions?.dueno ?? []), ...rolePermissions.dueno])),
-      administrador: Array.from(new Set([...(cleanSnapshot.rolePermissions?.administrador ?? []), ...rolePermissions.administrador])),
-      encargado: Array.from(new Set([...(cleanSnapshot.rolePermissions?.encargado ?? []), ...rolePermissions.encargado])),
-      cajero: Array.from(new Set([...(cleanSnapshot.rolePermissions?.cajero ?? []), ...rolePermissions.cajero]))
-    }
+    rolePermissions: cleanSnapshot.rolePermissions ?? structuredClone(rolePermissions)
   };
 }
 
@@ -503,11 +486,6 @@ function makeSupplier(input: SupplierDraftInput): Supplier | null {
 function shouldCreateContact(name: string) {
   const normalized = name.trim().toLowerCase();
   return normalized.length > 0 && normalized !== "consumidor final";
-}
-
-function syncProductsToCloud(products: Product[], productIds?: string[]) {
-  const selected = productIds ? products.filter((product) => productIds.includes(product.id)) : products;
-  return Promise.all(selected.map((product) => saveCloudProduct(product)));
 }
 
 function purchaseLineDeltas(before: PurchaseLine[], after: PurchaseLine[]) {
@@ -612,266 +590,188 @@ const operationalStateKeys: (keyof OperationalStateFields)[] = [
 ];
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let saveInFlight = false;
-let saveQueued = false;
+let savePromise: Promise<boolean> | null = null;
 let applyingSyncedState = false;
-let hasAppliedCloudOperations = false;
 let cloudOperationsUpdatedAt: string | null = null;
+let cloudBase: OperationalSnapshot | null = null;
+let operationalUserId: string | null = null;
+let changeGeneration = 0;
+let sessionGeneration = 0;
+let loadPromise: Promise<void> | null = null;
 const operationalSafetyBackupKey = "regaleria-operational-safety-backup";
 
 function hasOperationalChange(state: AppState, previous: AppState) {
   return operationalStateKeys.some((key) => state[key] !== previous[key]);
 }
 
-function hasPendingOperationalState(state: OperationalStateFields) {
-  return [
-    ...state.products,
-    ...state.sales,
-    ...state.quotes,
-    ...state.transfers,
-    ...state.expenses,
-    ...state.movements,
-    ...state.onlineOrders,
-    ...state.purchaseReceipts,
-    ...state.customers,
-    ...state.suppliers,
-    ...state.cashClosures,
-    ...state.cashShifts,
-    ...state.supplierPayments,
-    ...state.capitalEntries
-  ].some((item) => item.syncStatus !== "sincronizado");
-}
-
-function snapshotTimestamp(snapshot: OperationalSnapshot | null) {
-  const timestamp = snapshot?.updatedAt ? new Date(snapshot.updatedAt).getTime() : 0;
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function saveSafetyBackup(snapshot: OperationalSnapshot) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(operationalSafetyBackupKey, JSON.stringify(snapshot));
-  } catch {
-    // Best effort: Supabase remains the source of truth when local storage is unavailable.
-  }
-}
-
-function loadSafetyBackup() {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(operationalSafetyBackupKey);
-    return raw ? (JSON.parse(raw) as OperationalSnapshot) : null;
-  } catch {
-    return null;
-  }
-}
-
-function clearSafetyBackup() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(operationalSafetyBackupKey);
-  } catch {
-    // Nothing to do.
-  }
-}
-
-type SyncableRecord = { id: string; syncStatus: string };
-type IdentifiedRecord = { id: string };
-
-function mergePendingRecords<T extends SyncableRecord>(remote: T[], local: T[]) {
-  const pending = local.filter((item) => item.syncStatus !== "sincronizado");
-  const pendingIds = new Set(pending.map((item) => item.id));
-  return [...pending, ...remote.filter((item) => !pendingIds.has(item.id))];
-}
-
-function mergeImmutableRecords<T extends IdentifiedRecord>(remote: T[], local: T[]) {
-  const remoteIds = new Set(remote.map((item) => item.id));
-  return [...local.filter((item) => !remoteIds.has(item.id)), ...remote];
-}
-
-function rebaseOperationalState(remote: OperationalStateFields, local: OperationalStateFields, cloudProducts: Product[] | null): OperationalStateFields {
-  const onlineProducts = cloudProducts?.length ? cloudProducts : remote.products;
-  const rebasedProducts = mergePendingRecords(onlineProducts, local.products);
-  return {
-    ...remote,
-    // El catalogo se persiste por separado para que el stock visible quede alineado
-    // con la ultima version online antes de reintentar el snapshot operativo.
-    products: rebasedProducts,
-    sales: mergePendingRecords(remote.sales, local.sales),
-    quotes: mergePendingRecords(remote.quotes, local.quotes),
-    transfers: mergePendingRecords(remote.transfers, local.transfers),
-    expenses: mergePendingRecords(remote.expenses, local.expenses),
-    movements: mergePendingRecords(remote.movements, local.movements),
-    onlineOrders: mergePendingRecords(remote.onlineOrders, local.onlineOrders),
-    purchaseReceipts: mergePendingRecords(remote.purchaseReceipts, local.purchaseReceipts),
-    customers: mergePendingRecords(remote.customers, local.customers),
-    suppliers: mergePendingRecords(remote.suppliers, local.suppliers),
-    cashClosures: mergePendingRecords(remote.cashClosures, local.cashClosures),
-    cashShifts: mergePendingRecords(remote.cashShifts, local.cashShifts),
-    supplierPayments: mergePendingRecords(remote.supplierPayments, local.supplierPayments),
-    capitalEntries: mergePendingRecords(remote.capitalEntries, local.capitalEntries),
-    emailMessages: mergeImmutableRecords(remote.emailMessages, local.emailMessages),
-    salesAuditEntries: mergeImmutableRecords(remote.salesAuditEntries, local.salesAuditEntries),
-    operationAuditEntries: mergeImmutableRecords(remote.operationAuditEntries, local.operationAuditEntries),
-    // Configuracion remota gana en una colision: evita que un navegador atrasado
-    // revierta permisos o datos del negocio mientras se esta resolviendo stock.
-    businessProfile: remote.businessProfile,
-    categories: mergeCategories([...remote.categories, ...local.categories], rebasedProducts),
-    rolePermissions: remote.rolePermissions
-  };
-}
-
-async function retryOperationalConflict(localState: OperationalStateFields) {
-  const [operations, cloudProducts] = await Promise.all([loadCloudOperations(), loadCloudCatalog()]);
-  if (!operations) return false;
-
-  const remote = stateFromOperationalSnapshot(sanitizeOperationalSnapshot(operations.snapshot));
-  const rebased = rebaseOperationalState(remote, localState, cloudProducts);
-  const nextState = syncedOperationalState(rebased);
-  const snapshot = operationalSnapshotFromState(nextState);
-  saveSafetyBackup(snapshot);
-  const saved = await saveCloudOperations(snapshot, operations.updatedAt);
-  if (!saved.ok) return false;
-
-  cloudOperationsUpdatedAt = saved.updatedAt;
-  clearSafetyBackup();
+function applyOperationalState(snapshot: OperationalSnapshot) {
   applyingSyncedState = true;
-  useStore.setState(nextState);
-  applyingSyncedState = false;
-  return true;
+  try { useStore.setState(stateFromOperationalSnapshot(snapshot)); }
+  finally { applyingSyncedState = false; }
 }
 
-async function flushOperationalState() {
-  if (import.meta.env.MODE === "test") return;
-  if (saveInFlight) {
-    saveQueued = true;
-    return;
+function persistOutbox(snapshot = operationalSnapshotFromState(useStore.getState())) {
+  if (!operationalUserId || !cloudBase || !cloudOperationsUpdatedAt) return false;
+  try {
+    window.localStorage.setItem(outboxKey(operationalUserId), JSON.stringify({ version: 2, userId: operationalUserId, baseUpdatedAt: cloudOperationsUpdatedAt, base: cloudBase, pending: snapshot } satisfies OperationalOutbox));
+    return true;
+  } catch {
+    useStore.setState({ persistenceStatus: "error", persistenceMessage: "Este navegador no permite conservar la copia pendiente. Mantené esta ventana abierta y descargá tus cambios antes de salir." });
+    return false;
   }
+}
 
-  saveInFlight = true;
-  do {
-    saveQueued = false;
-    const localState = useStore.getState();
-    const pendingProductIds = localState.products
-      .filter((product) => product.syncStatus !== "sincronizado")
-      .map((product) => product.id);
-    if (pendingProductIds.length) await syncProductsToCloud(localState.products, pendingProductIds);
+function clearOutbox() {
+  if (!operationalUserId) return;
+  try { window.localStorage.removeItem(outboxKey(operationalUserId)); } catch { /* A confirmed server save is already durable. */ }
+}
 
-    const nextState = syncedOperationalState(localState);
-    const snapshot = operationalSnapshotFromState(nextState);
-    saveSafetyBackup(snapshot);
-    const saved = await saveCloudOperations(snapshot, cloudOperationsUpdatedAt);
-    if (saved.ok && !saveQueued) {
-      cloudOperationsUpdatedAt = saved.updatedAt;
-      clearSafetyBackup();
-      applyingSyncedState = true;
-      useStore.setState(nextState);
-      applyingSyncedState = false;
-    } else if (!saved.ok && saved.reason === "conflict") {
-      // Otra ventana guardo primero. Traemos esa version, incorporamos solo los
-      // registros locales pendientes y reintentamos contra su marca de tiempo.
-      await retryOperationalConflict(localState);
+async function runOperationalSave(auditReason = "") {
+  if (!isCloudOperationsEnabled()) return import.meta.env.MODE === "test";
+  if (!cloudBase || !cloudOperationsUpdatedAt || !operationalUserId) {
+    useStore.setState({ persistenceStatus: "error", persistenceMessage: "Primero hay que cargar los datos del negocio. Se bloqueó el guardado para protegerlos." });
+    return false;
+  }
+  const sessionAtStart = sessionGeneration;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const captured = operationalSnapshotFromState(useStore.getState());
+    if (sameOperationalValue(captured, cloudBase)) {
+      clearOutbox(); useStore.setState({ persistenceStatus: "ready", persistenceMessage: "" }); return true;
     }
-  } while (saveQueued);
-  saveInFlight = false;
+    if (!persistOutbox(captured)) return false;
+    const generation = changeGeneration;
+    const changedProducts = captured.products.filter((product) => !sameOperationalValue(product, cloudBase!.products.find((item) => item.id === product.id))).map((product) => product.id);
+    useStore.setState({ persistenceStatus: "saving", persistenceMessage: "Guardando cambios; la copia local ya está conservada." });
+    try {
+      const saved = await saveCloudOperations(captured, cloudOperationsUpdatedAt, changedProducts, auditReason);
+      if (sessionAtStart !== sessionGeneration) return false;
+      if (saved.ok) {
+        const newest = operationalSnapshotFromState(useStore.getState());
+        const next = generation === changeGeneration ? saved.snapshot : mergeOperationalSnapshots(captured, newest, saved.snapshot);
+        cloudBase = saved.snapshot;
+        cloudOperationsUpdatedAt = saved.updatedAt;
+        applyOperationalState(next);
+        if (generation === changeGeneration) {
+          clearOutbox(); useStore.setState({ persistenceStatus: "ready", persistenceMessage: "" }); return true;
+        }
+        persistOutbox(next);
+        continue;
+      }
+      if (saved.reason !== "conflict") {
+        useStore.setState({ persistenceStatus: "error", persistenceMessage: saved.message }); return false;
+      }
+      const remote = await loadCloudOperations();
+      if (sessionAtStart !== sessionGeneration || remote.userId !== operationalUserId) return false;
+      const merged = mergeOperationalSnapshots(cloudBase, operationalSnapshotFromState(useStore.getState()), remote.snapshot);
+      cloudBase = remote.snapshot; cloudOperationsUpdatedAt = remote.updatedAt;
+      applyOperationalState(merged); persistOutbox(merged);
+    } catch (error) {
+      useStore.setState({ persistenceStatus: error instanceof OperationalConflict ? "conflict" : "error", persistenceMessage: error instanceof OperationalConflict ? error.message : "No se pudo conectar. Tus cambios siguen conservados en este equipo; podés reintentar." });
+      return false;
+    }
+  }
+  useStore.setState({ persistenceStatus: "pending", persistenceMessage: "Hay cambios conservados pendientes de confirmar. Reintentá la sincronización." });
+  return false;
+}
+
+export function flushOperationalState(auditReason = ""): Promise<boolean> {
+  if (savePromise) return savePromise;
+  savePromise = runOperationalSave(auditReason).finally(() => { savePromise = null; });
+  return savePromise;
 }
 
 function scheduleOperationalSave() {
-  if (import.meta.env.MODE === "test") return;
+  if (!isCloudOperationsEnabled() || !cloudBase) return;
+  // The durable outbox is written in the same turn as the edit, before debounce.
+  changeGeneration++;
+  const durable = persistOutbox();
+  if (durable) useStore.setState({ persistenceStatus: "pending", persistenceMessage: "Cambios conservados en este equipo; esperando confirmación de la base." });
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    void flushOperationalState();
-  }, 350);
+  saveTimer = setTimeout(() => { saveTimer = null; void flushOperationalState(); }, 350);
 }
 
 async function commitAuditedState(nextState: OperationalStateFields, reason: string) {
-  const syncedState = syncedOperationalState(nextState);
-  const snapshot = operationalSnapshotFromState(syncedState);
-  saveSafetyBackup(snapshot);
-  const saved = await auditCloudOperations(snapshot, reason, cloudOperationsUpdatedAt);
-  if (!saved.ok) return false;
-  cloudOperationsUpdatedAt = saved.updatedAt;
-  clearSafetyBackup();
+  if (import.meta.env.MODE === "test") { useStore.setState(syncedOperationalState(nextState)); return true; }
+  // Serialize with ordinary saves; never construct an audit over a stale base.
+  const beforeWait = operationalSnapshotFromState(useStore.getState());
+  const proposed = operationalSnapshotFromState(nextState);
+  if (savePromise) await savePromise;
+  if (!cloudBase) return false;
+  try { applyOperationalState(mergeOperationalSnapshots(beforeWait, proposed, operationalSnapshotFromState(useStore.getState()))); }
+  catch { useStore.setState({ persistenceStatus: "conflict", persistenceMessage: "Los datos cambiaron durante la auditoría. Revisá la operación antes de reintentar." }); return false; }
+  changeGeneration++;
+  persistOutbox();
+  return flushOperationalState(reason);
+}
+
+export function resetOperationalSession() {
+  sessionGeneration++;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null; cloudBase = null; cloudOperationsUpdatedAt = null; operationalUserId = null; loadPromise = null;
   applyingSyncedState = true;
-  useStore.setState(syncedState);
-  applyingSyncedState = false;
-  return true;
+  try { useStore.setState({ ...initialDataState(), persistenceStatus: "loading", persistenceMessage: "", operationsLoaded: false }); }
+  finally { applyingSyncedState = false; }
+}
+
+export function receiveCloudProducts(products: Product[]) {
+  if (isCloudOperationsEnabled() && (!cloudBase || useStore.getState().persistenceStatus !== "ready" || savePromise)) return;
+  if (cloudBase) cloudBase = { ...cloudBase, products };
+  applyingSyncedState = true;
+  try { useStore.setState({ products, categories: mergeCategories(useStore.getState().categories, products), catalogStatus: "actualizado" }); }
+  finally { applyingSyncedState = false; }
+}
+
+export function receiveCloudOrders(orders: OnlineOrder[]) {
+  const byId = new Map(useStore.getState().onlineOrders.map((order) => [order.id, order]));
+  orders.forEach((order) => byId.set(order.id, order));
+  const onlineOrders = [...byId.values()];
+  if (cloudBase) cloudBase = { ...cloudBase, onlineOrders };
+  applyingSyncedState = true;
+  try { useStore.setState({ onlineOrders }); } finally { applyingSyncedState = false; }
+}
+
+async function initializePersistentCatalog() {
+  if (!isCloudOperationsEnabled()) {
+    const products = await loadCloudCatalog();
+    if (products) receiveCloudProducts(products);
+    else useStore.setState({ catalogStatus: "error" });
+    return;
+  }
+  if (savePromise) await savePromise;
+  const sessionAtStart = sessionGeneration;
+  try {
+    const [remote, commerce] = await Promise.all([loadCloudOperations(), loadCloudCommerce()]);
+    if (sessionAtStart !== sessionGeneration) return;
+    const pending = operationalUserId === remote.userId && cloudBase && !sameOperationalValue(operationalSnapshotFromState(useStore.getState()), cloudBase)
+      ? { base: cloudBase, pending: operationalSnapshotFromState(useStore.getState()) } : readOutbox(remote.userId);
+    const snapshot = pending ? mergeOperationalSnapshots(pending.base, pending.pending, remote.snapshot) : remote.snapshot;
+    operationalUserId = remote.userId; cloudBase = remote.snapshot; cloudOperationsUpdatedAt = remote.updatedAt;
+    applyOperationalState(snapshot);
+    receiveCloudOrders(commerce.orders);
+    useStore.setState({ catalogStatus: "actualizado", operationsLoaded: true, persistenceStatus: pending ? "pending" : "ready", persistenceMessage: pending ? "Se recuperaron tus cambios pendientes de este equipo." : "" });
+    // Preserve legacy copies for explicit review; never choose them by clock.
+    if (window.localStorage.getItem(operationalSafetyBackupKey)) useStore.setState({ recoveryAvailable: true });
+    if (pending) { persistOutbox(); void flushOperationalState(); }
+  } catch (error) {
+    useStore.setState({ catalogStatus: "error", persistenceStatus: error instanceof OperationalConflict ? "conflict" : "error", persistenceMessage: error instanceof Error ? error.message : "No se pudieron cargar los datos. El guardado está bloqueado." });
+  }
 }
 
 export const useStore = create<AppState>((set, get) => ({
   ...initialDataState(),
   activeRole: "dueno",
   catalogStatus: "cargando",
-  initializeCatalog: async () => {
-    if (hasAppliedCloudOperations && hasPendingOperationalState(get())) {
-      set({ catalogStatus: "actualizado" });
-      return;
-    }
-    const [cloudProducts, commerce, operations] = await Promise.all([loadCloudCatalog(), loadCloudCommerce(), loadCloudOperations()]);
-    const backup = loadSafetyBackup();
-    const cloudSnapshot = operations?.snapshot ?? null;
-    const selectedOperations = backup && snapshotTimestamp(backup) > snapshotTimestamp(cloudSnapshot) ? backup : cloudSnapshot;
-    if (selectedOperations) {
-      const cleanOperations = sanitizeOperationalSnapshot(selectedOperations);
-      const operationalState = stateFromOperationalSnapshot(cleanOperations);
-      cloudOperationsUpdatedAt = operations?.updatedAt ?? selectedOperations.updatedAt ?? null;
-      hasAppliedCloudOperations = true;
-      const resolvedProducts = cloudProducts?.length ? cloudProducts : operationalState.products;
-      set({
-        ...operationalState,
-        products: resolvedProducts,
-        categories: mergeCategories(operationalState.categories, resolvedProducts),
-        onlineOrders: commerce.orders.length ? commerce.orders : operationalState.onlineOrders,
-        emailMessages: commerce.emails.length ? commerce.emails : operationalState.emailMessages,
-        catalogStatus: cloudProducts === null ? "error" : "actualizado"
-      });
-      if (selectedOperations === backup || cleanOperations !== selectedOperations) void saveCloudOperations(cleanOperations, cloudOperationsUpdatedAt).then((saved) => {
-        if (saved.ok) {
-          cloudOperationsUpdatedAt = saved.updatedAt;
-          clearSafetyBackup();
-        }
-      });
-      return;
-    }
-
-    if (cloudProducts === null) {
-      set({ catalogStatus: "error" });
-      return;
-    }
-
-    if (cloudProducts.length) {
-      set({
-        products: cloudProducts,
-        categories: mergeCategories(get().categories, cloudProducts),
-        onlineOrders: commerce.orders.length ? commerce.orders : get().onlineOrders,
-        emailMessages: commerce.emails.length ? commerce.emails : get().emailMessages,
-        catalogStatus: "actualizado"
-      });
-      void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
-        if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
-      });
-      return;
-    }
-
-    if (isCloudOperationsEnabled()) {
-      set({ catalogStatus: "actualizado" });
-      void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
-        if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
-      });
-      hasAppliedCloudOperations = true;
-      return;
-    }
-
-    const seeded = await seedCloudCatalog(get().products);
-    if (seeded) void saveCloudOperations(operationalSnapshotFromState(get()), cloudOperationsUpdatedAt).then((saved) => {
-      if (saved.ok) cloudOperationsUpdatedAt = saved.updatedAt;
-    });
-    hasAppliedCloudOperations = true;
-    set({ catalogStatus: seeded ? "actualizado" : "error" });
+  persistenceStatus: isCloudOperationsEnabled() ? "loading" : "ready",
+  persistenceMessage: "",
+  operationsLoaded: !isCloudOperationsEnabled(),
+  recoveryAvailable: false,
+  initializeCatalog: () => {
+    if (!loadPromise) loadPromise = initializePersistentCatalog().finally(() => { loadPromise = null; });
+    return loadPromise;
   },
   setRole: (role) => set({ activeRole: role }),
   addProduct: async (input) => {
+    if (!input.name.trim() || codeAlreadyUsed(get().products, input.variant.sku, input.variant.barcode)) return null;
     const now = new Date().toISOString();
     const product: Product = {
       id: `local_prod_${crypto.randomUUID()}`,
@@ -909,11 +809,6 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: now,
       syncStatus: "pendiente"
     };
-    const saved = await saveCloudProduct(product);
-    if (!saved) {
-      set({ catalogStatus: "error" });
-      return null;
-    }
     set((state) => ({
       products: [product, ...state.products],
       movements: [movement, ...state.movements],
@@ -942,8 +837,6 @@ export const useStore = create<AppState>((set, get) => ({
         product.id === input.productId ? { ...product, publishable: input.publishable, syncStatus: "pendiente" } : product
       )
     }));
-    const product = get().products.find((item) => item.id === input.productId);
-    if (product) void saveCloudProduct(product);
   },
   updateProductDetails: async (input) => {
     if (!input.name.trim()) return false;
@@ -977,11 +870,6 @@ export const useStore = create<AppState>((set, get) => ({
       }),
       syncStatus: "sincronizado"
     };
-    const saved = await saveCloudProduct(product);
-    if (!saved) {
-      set({ catalogStatus: "error" });
-      return false;
-    }
     set((state) => ({
       products: state.products.map((item) => (item.id === product.id ? product : item)),
       categories: mergeCategories(state.categories, [product]),
@@ -990,7 +878,7 @@ export const useStore = create<AppState>((set, get) => ({
     return true;
   },
   updateVariant: (input) => {
-    if (!input.name.trim() || !input.sku.trim()) return;
+    if (!input.name.trim() || !input.sku.trim() || codeAlreadyUsed(get().products, input.sku, input.barcode, input.variantId)) return;
     set((state) => ({
       products: state.products.map((product) => ({
         ...product,
@@ -1010,11 +898,9 @@ export const useStore = create<AppState>((set, get) => ({
         )
       }))
     }));
-    const product = get().products.find((item) => item.variants.some((variant) => variant.id === input.variantId));
-    if (product) void saveCloudProduct(product);
   },
   addVariant: async (input) => {
-    if (!input.name.trim() || !input.sku.trim() || input.price <= 0) return false;
+    if (!input.name.trim() || !input.sku.trim() || input.price <= 0 || codeAlreadyUsed(get().products, input.sku, input.barcode)) return false;
     const current = get().products.find((product) => product.id === input.productId);
     if (!current || current.variants.some((variant) => variant.sku.toLowerCase() === input.sku.trim().toLowerCase())) return false;
     const product: Product = {
@@ -1034,14 +920,12 @@ export const useStore = create<AppState>((set, get) => ({
       ],
       syncStatus: "sincronizado"
     };
-    const saved = await saveCloudProduct(product);
-    if (!saved) return false;
     set((state) => ({ products: state.products.map((item) => (item.id === product.id ? product : item)) }));
     return true;
   },
   importProducts: (rows) => {
     const validRows = rows.filter((row) => row.name.trim() && row.sku.trim() && row.price > 0);
-    if (!validRows.length) return 0;
+    if (!validRows.length || validRows.length !== rows.length || new Set(validRows.map(row => row.sku.trim().toLocaleLowerCase())).size !== validRows.length || validRows.some(row => codeAlreadyUsed(get().products,row.sku))) return 0;
     const now = new Date().toISOString();
     const placeholder = "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=80";
     const newProducts: Product[] = validRows.map((row) => ({
@@ -1082,7 +966,6 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...newMovements, ...state.movements],
       categories: mergeCategories(state.categories, newProducts)
     }));
-    for (const product of newProducts) void saveCloudProduct(product);
     return newProducts.length;
   },
   addCustomer: (input) => {
@@ -1247,7 +1130,6 @@ export const useStore = create<AppState>((set, get) => ({
       )
     }));
     const product = get().products.find((item) => item.id === found.product.id);
-    if (product) void saveCloudProduct(product);
     return movement;
   },
   adjustStockBatch: (input) => {
@@ -1310,7 +1192,6 @@ export const useStore = create<AppState>((set, get) => ({
       ),
       operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
-    syncProductsToCloud(get().products, [...changedProductIds]);
     return createdMovements;
   },
   voidStockMovementBatch: (operationId, reason, requestedBy) => {
@@ -1353,12 +1234,11 @@ export const useStore = create<AppState>((set, get) => ({
       ),
       operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
-    syncProductsToCloud(get().products, [...changedProductIds]);
     return true;
   },
   addQuickSale: (variantId, quantity, paymentMethod, shiftId, discount = 0) => {
     const found = findVariant(get().products, variantId);
-    const shift = get().cashShifts.find((item) => item.id === shiftId && !item.closedAt);
+    const shift = get().cashShifts.find((item) => item.id === shiftId && !item.closedAt && !item.deletedAt);
     if (!shift || !found || quantity < 1 || found.variant.stock < quantity) return null;
 
     const line = buildSaleLine(found.product, found.variant, quantity);
@@ -1412,12 +1292,11 @@ export const useStore = create<AppState>((set, get) => ({
             }
       )
     }));
-    syncProductsToCloud(get().products, [found.product.id]);
     return sale;
   },
   addDetailedSale: (input) => {
     const cleanLines = input.lines.filter((line) => line.quantity > 0);
-    const shift = get().cashShifts.find((item) => item.id === input.shiftId && !item.closedAt);
+    const shift = get().cashShifts.find((item) => item.id === input.shiftId && !item.closedAt && !item.deletedAt);
     if (!shift || !cleanLines.length || !hasAvailableStock(get().products, cleanLines)) return null;
     const totals = saleTotals(cleanLines, input.discount);
     const total = totals.total;
@@ -1459,7 +1338,6 @@ export const useStore = create<AppState>((set, get) => ({
       products: applySaleStock(state.products, sale),
       customers: newCustomer ? [newCustomer, ...state.customers] : state.customers
     }));
-    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
     return sale;
   },
   addSalePayment: (saleId, input) => {
@@ -1683,7 +1561,6 @@ export const useStore = create<AppState>((set, get) => ({
         })
       }))
     }));
-    syncProductsToCloud(get().products, cleanLines.map((line) => line.productId));
     return receipt;
   },
   updatePurchaseReceipt: (id, input, requestedBy) => {
@@ -1720,7 +1597,6 @@ export const useStore = create<AppState>((set, get) => ({
       products: applyPurchaseDeltas(state.products, deltas),
       operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
-    syncProductsToCloud(get().products, Array.from(new Set([...current.lines, ...updated.lines].map((line) => line.productId))));
     return true;
   },
   deletePurchaseReceipt: (id, requestedBy) => {
@@ -1751,7 +1627,6 @@ export const useStore = create<AppState>((set, get) => ({
       products: applyPurchaseDeltas(state.products, deltas),
       operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
-    syncProductsToCloud(get().products, current.lines.map((line) => line.productId));
     return true;
   },
   restorePurchaseReceipt: (id, requestedBy) => {
@@ -1781,7 +1656,6 @@ export const useStore = create<AppState>((set, get) => ({
       products: applyPurchaseDeltas(state.products, deltas),
       operationAuditEntries: [entry, ...state.operationAuditEntries]
     }));
-    syncProductsToCloud(get().products, restored.lines.map((line) => line.productId));
     return true;
   },
   closeCashDay: (note) => {
@@ -1807,7 +1681,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   openCashShift: (initialCash, openedBy, note) => {
     if (initialCash < 0) return null;
-    const currentOpen = get().cashShifts.find((shift) => !shift.closedAt);
+    const currentOpen = get().cashShifts.find((shift) => !shift.closedAt && !shift.deletedAt);
     if (currentOpen) return currentOpen;
     const shift: CashShift = {
       id: `local_shift_${crypto.randomUUID()}`,
@@ -1822,7 +1696,7 @@ export const useStore = create<AppState>((set, get) => ({
     return shift;
   },
   closeCashShift: (id, declaredClosingCash, closedBy, note) => {
-    const shift = get().cashShifts.find((item) => item.id === id && !item.closedAt);
+    const shift = get().cashShifts.find((item) => item.id === id && !item.closedAt && !item.deletedAt);
     if (!shift || declaredClosingCash < 0) return null;
     const cashTotal = get().sales
       .filter((sale) => !sale.deletedAt)
@@ -1897,7 +1771,6 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...reversalStockMovementsForSale(sale, reason), ...current.movements],
       salesAuditEntries: [entry, ...current.salesAuditEntries]
     }, reason);
-    if (ok) syncProductsToCloud(nextProducts, sale.lines.map((line) => line.productId));
     return ok;
   },
   restoreSaleWithAudit: async (auditEntryId, reason, requestedBy) => {
@@ -1925,7 +1798,6 @@ export const useStore = create<AppState>((set, get) => ({
       movements: [...stockMovementsForSale(restoredSale), ...current.movements],
       salesAuditEntries: [entry, ...current.salesAuditEntries]
     }, reason);
-    if (ok) syncProductsToCloud(nextProducts, restoredSale.lines.map((line) => line.productId));
     return ok;
   },
   updateShiftWithAudit: async (shiftId, input, reason, requestedBy) => {
@@ -1976,15 +1848,15 @@ export const useStore = create<AppState>((set, get) => ({
     const current = get();
     return commitAuditedState({
       ...current,
-      cashShifts: current.cashShifts.filter((item) => item.id !== shiftId),
+      cashShifts: current.cashShifts.map((item) => item.id === shiftId ? { ...item, deletedAt: new Date().toISOString(), deletedBy: requestedBy } : item),
       salesAuditEntries: [entry, ...current.salesAuditEntries]
     }, reason);
   },
   restoreShiftWithAudit: async (auditEntryId, reason, requestedBy) => {
     const source = get().salesAuditEntries.find((entry) => entry.id === auditEntryId && entry.entityType === "turno" && entry.action === "eliminacion");
     const shift = source?.before && "number" in source.before && "openedAt" in source.before ? source.before : null;
-    if (!shift || get().cashShifts.some((item) => item.id === shift.id) || !canRunAudit(requestedBy, reason)) return false;
-    const restoredShift: CashShift = { ...shift, syncStatus: "pendiente" };
+    if (!shift || get().cashShifts.some((item) => item.id === shift.id && !item.deletedAt) || !canRunAudit(requestedBy, reason)) return false;
+    const restoredShift: CashShift = { ...shift, deletedAt: undefined, deletedBy: undefined, syncStatus: "pendiente" };
     const entry = makeAuditEntry({
       entityType: "turno",
       entityId: restoredShift.id,
@@ -1997,7 +1869,7 @@ export const useStore = create<AppState>((set, get) => ({
     const current = get();
     return commitAuditedState({
       ...current,
-      cashShifts: [restoredShift, ...current.cashShifts],
+      cashShifts: [restoredShift, ...current.cashShifts.filter((item) => item.id !== restoredShift.id)],
       salesAuditEntries: [entry, ...current.salesAuditEntries]
     }, reason);
   },
@@ -2230,7 +2102,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   convertQuote: (id) => {
     const quote = get().quotes.find((item) => item.id === id);
-    const shift = get().cashShifts.find((item) => !item.closedAt);
+    const shift = get().cashShifts.find((item) => !item.closedAt && !item.deletedAt);
     if (!quote || quote.status !== "abierto") return null;
     if (!shift || !hasAvailableStock(get().products, quote.lines)) return null;
     const totals = saleTotals(quote.lines, 0);
@@ -2258,7 +2130,6 @@ export const useStore = create<AppState>((set, get) => ({
       products: applySaleStock(state.products, sale),
       quotes: state.quotes.map((item) => (item.id === id ? { ...item, status: "convertido", syncStatus: "pendiente" } : item))
     }));
-    syncProductsToCloud(get().products, sale.lines.map((line) => line.productId));
     return sale;
   },
   markAllSynced: () => {
@@ -2276,8 +2147,19 @@ useStore.subscribe((state, previous) => {
 });
 
 export const resetStore = () => {
-  useStore.setState(initialDataState());
+  if (import.meta.env.MODE !== "test") throw new Error("Reset is available only in isolated tests.");
+  resetOperationalSession();
+  useStore.setState({ persistenceStatus: "ready", operationsLoaded: true, recoveryAvailable: false });
 };
 
 export const canSeeFinancials = (role: AppState["activeRole"]) => role === "dueno" || role === "administrador" || role === "encargado";
 export const canManageSettings = (role: AppState["activeRole"]) => role === "dueno" || role === "administrador";
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => { if (isCloudOperationsEnabled() && useStore.getState().persistenceStatus !== "conflict") void flushOperationalState(); });
+  window.addEventListener("beforeunload", (event) => {
+    if (isCloudOperationsEnabled() && cloudBase && !sameOperationalValue(operationalSnapshotFromState(useStore.getState()), cloudBase) && !persistOutbox()) {
+      event.preventDefault(); event.returnValue = "";
+    }
+  });
+}

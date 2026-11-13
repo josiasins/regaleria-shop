@@ -54,7 +54,8 @@ import { StorefrontShop, StorefrontStudio } from "./StorefrontExperience";
 import { normalizeProductCommerce } from "./storefrontMerchandising";
 import { OnlineOrders } from "./OnlineOrders";
 import { subscribeToCloudOrders } from "./commerceCloud";
-import { canSeeFinancials, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
+import { canSeeFinancials, flushOperationalState, receiveCloudProducts, receiveCloudOrders, resetOperationalSession, salePaidAmount, salePaymentEntries, salePaymentStatus, useStore } from "./store";
+import { isCloudOperationsEnabled } from "./operationalCloud";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import type { CapitalEntryType, CashShiftAuditUpdateInput, Customer, Expense, ImportProductRow, OperationAuditEntry, PaymentMethod, Product, ProductUpdateInput, PurchaseDocumentType, PurchaseLine, PurchaseReceipt, Role, SaleAuditUpdateInput, SaleLine, SalePaymentStatus, StockMovementType, Supplier } from "./types";
 import type { Session } from "@supabase/supabase-js";
@@ -262,7 +263,7 @@ function useCatalogSync() {
     if (!isCloudCatalogEnabled()) return;
     void refresh();
     const unsubscribeCatalog = subscribeToCloudCatalog((products) => {
-      useStore.setState({ products, catalogStatus: "actualizado" });
+      receiveCloudProducts(products);
     });
     let wasHidden = document.visibilityState === "hidden";
     const notifyWhenReturning = () => {
@@ -290,9 +291,7 @@ function isPublicWebsite() {
 }
 
 function shouldRequireInternalLogin() {
-  const hostname = window.location.hostname.toLowerCase();
-  const internalDomain = String(import.meta.env.VITE_INTERNAL_DOMAIN || "sistema.regaleriashop.com").toLowerCase();
-  return hostname === internalDomain || hostname.endsWith(".onrender.com");
+  return import.meta.env.MODE !== "test";
 }
 
 function AuthGate({ children }: { children: ReactNode }) {
@@ -320,7 +319,10 @@ function AuthGate({ children }: { children: ReactNode }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       const nextUserId = nextSession?.user.id ?? null;
-      if (observedUserId.current !== nextUserId) setAppRole(null);
+      if (observedUserId.current !== nextUserId) {
+        resetOperationalSession();
+        setAppRole(null);
+      }
       observedUserId.current = nextUserId;
       setSession(nextSession);
     });
@@ -466,7 +468,7 @@ function InternalApp() {
   }, []);
 
   useEffect(() => subscribeToCloudOrders((onlineOrders) => {
-    useStore.setState({ onlineOrders });
+    receiveCloudOrders(onlineOrders);
   }), []);
 
   const [section, setSection] = useState<Section>(getInitialSection);
@@ -475,6 +477,9 @@ function InternalApp() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [interfaceTheme, setInterfaceTheme] = useState<InterfaceTheme>(getInitialInterfaceTheme);
   const role = useStore((state) => state.activeRole);
+  const operationsLoaded = useStore((state) => state.operationsLoaded);
+  const persistenceStatus = useStore((state) => state.persistenceStatus);
+  const persistenceMessage = useStore((state) => state.persistenceMessage);
   const setRole = useStore((state) => state.setRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
   const canSwitchRolesForTest = import.meta.env.MODE === "test";
@@ -528,7 +533,14 @@ function InternalApp() {
   }, [section]);
 
   return (
-    <div className={clsx("app-shell", interfaceTheme === "noche" && "theme-night")}>
+    !operationsLoaded && isCloudOperationsEnabled() ? (
+      <main className="auth-screen"><section className="auth-card">
+        <BrandMark /><h1>Datos del negocio</h1>
+        <p role="status">{persistenceMessage || "Cargando los datos guardados…"}</p>
+        {persistenceStatus !== "loading" && <button className="primary-action" onClick={() => void refresh()}>Reintentar carga segura</button>}
+        <p>Las operaciones se habilitan cuando la base confirma la lectura.</p><PersistenceNotice />
+      </section></main>
+    ) : <div className={clsx("app-shell", interfaceTheme === "noche" && "theme-night")}>
       <button className="mobile-menu-button" onClick={() => setIsMobileNavOpen(true)} aria-label="Abrir menu">
         <span className="mobile-menu-trigger" aria-hidden="true">
           <List size={22} weight="regular" />
@@ -593,6 +605,7 @@ function InternalApp() {
       </aside>
       <main>
         <Header section={section} onNavigate={navigate} allowedSections={allowedSections} interfaceTheme={interfaceTheme} onToggleTheme={toggleInterfaceTheme} updateAvailable={updateAvailable} onRefresh={refresh} />
+        <PersistenceNotice />
         {section === "panel" && <Dashboard />}
         {section === "ventas" && <Sales />}
         {section === "pedidos" && <OnlineOrders />}
@@ -635,6 +648,7 @@ function Header({
   onRefresh: () => Promise<void>;
 }) {
   const { products, customers, suppliers, sales, onlineOrders } = useStore();
+  const persistenceStatus = useStore((state) => state.persistenceStatus);
   const activeSales = sales.filter((sale) => !sale.deletedAt);
   const [search, setSearch] = useState("");
   const pending = useStore((state) =>
@@ -701,11 +715,36 @@ function Header({
         </button>
         <button className={clsx("sync-pill", pending ? "syncing" : updateAvailable ? "update-available" : "synced")} onClick={() => void onRefresh()} title={updateAvailable ? "Revisar actualizaciones sin salir de esta pantalla" : "Revisar datos ahora"}>
           <ArrowClockwise size={18} />
-          {pending ? `Sincronizando ${pending} cambio${pending === 1 ? "" : "s"}` : updateAvailable ? "Revisar actualizaciones" : "Todo actualizado"}
+          {persistenceStatus === "error" ? "Guardado sin confirmar" : persistenceStatus === "conflict" ? "Revisar conflicto" : persistenceStatus === "saving" ? "Confirmando guardado" : pending ? `Sincronizando ${pending} cambio${pending === 1 ? "" : "s"}` : updateAvailable ? "Revisar actualizaciones" : "Todo actualizado"}
         </button>
       </div>
     </header>
   );
+}
+
+function PersistenceNotice() {
+  const status = useStore((state) => state.persistenceStatus);
+  const message = useStore((state) => state.persistenceMessage);
+  const recovery = useStore((state) => state.recoveryAvailable);
+  const role = useStore((state) => state.activeRole);
+  const download = async (legacy = false) => {
+    const { data } = await supabase!.auth.getSession();
+    const key = legacy ? "regaleria-operational-safety-backup" : `regaleria-operations-v2:${data.session?.user.id}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return;
+    const url = URL.createObjectURL(new Blob([raw], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = `regaleria-cambios-conservados-${new Date().toISOString().slice(0,10)}.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  if (!isCloudOperationsEnabled()) return null;
+  return <>
+    {status !== "ready" && status !== "loading" && <div className="persistence-notice" role={status === "error" || status === "conflict" ? "alert" : "status"}>
+      <span>{message}</span>
+      {status !== "saving" && <button className="secondary-action" onClick={() => void flushOperationalState()}>Reintentar guardado</button>}
+      <button className="secondary-action" onClick={() => void download()}>Descargar cambios pendientes</button>
+    </div>}
+    {recovery && role === "dueno" && <div className="persistence-notice" role="status"><span>Hay una copia antigua conservada para revisión. La base actual se mantiene como referencia.</span><button className="secondary-action" onClick={() => void download(true)}>Descargar copia antigua</button><button className="secondary-action" onClick={() => useStore.setState({ recoveryAvailable: false })}>Ocultar aviso</button></div>}
+  </>;
 }
 
 function Dashboard() {
@@ -754,7 +793,8 @@ function Sales() {
   const products = useStore((state) => state.products);
   const customers = useStore((state) => state.customers);
   const sales = useStore((state) => state.sales);
-  const cashShifts = useStore((state) => state.cashShifts);
+  const storedCashShifts = useStore((state) => state.cashShifts);
+  const cashShifts = useMemo(() => storedCashShifts.filter((shift) => !shift.deletedAt), [storedCashShifts]);
   const salesAuditEntries = useStore((state) => state.salesAuditEntries);
   const activeRole = useStore((state) => state.activeRole);
   const rolePermissions = useStore((state) => state.rolePermissions);
@@ -3634,8 +3674,10 @@ function Treasury() {
   const activeExpenses = expenses.filter((expense) => !expense.deletedAt);
   const activePurchases = purchaseReceipts.filter((receipt) => !receipt.deletedAt);
   const activeCapital = capitalEntries.filter((entry) => !entry.deletedAt);
-  const salesTotal = sales.filter((sale) => !sale.deletedAt).reduce((sum, sale) => sum + sale.total, 0);
-  const expensesTotal = activeExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const salesTotal = sales.filter((sale) => !sale.deletedAt).reduce((sum, sale) => sum + salePaidAmount(sale), 0);
+  // Purchase registrations also create a Reposicion expense for reporting.
+  // Cash leaves on supplier payment, so do not subtract that invoice twice.
+  const expensesTotal = activeExpenses.filter((expense) => !activePurchases.some((receipt) => expense.category === "Reposicion" && expense.vendor === receipt.supplier && expense.createdAt === receipt.createdAt)).reduce((sum, expense) => sum + expense.amount, 0);
   const purchasesTotal = activePurchases.reduce((sum, receipt) => sum + receipt.total, 0);
   const supplierPaymentsTotal = supplierPayments.reduce((sum, payment) => sum + payment.amount, 0);
   const ownCapitalIn = activeCapital.filter((entry) => entry.type === "capital_propio" || entry.type === "ajuste").reduce((sum, entry) => sum + entry.amount, 0);
@@ -3647,15 +3689,16 @@ function Treasury() {
   const loanDebt = Math.max(borrowedIn - loanPayments, 0);
   const supplierDebt = Math.max(purchasesTotal - supplierPaymentsTotal, 0);
   const moneyIn = salesTotal + capitalIn;
-  const moneyOut = expensesTotal + capitalOut;
+  const moneyOut = expensesTotal + supplierPaymentsTotal + capitalOut;
   const estimatedCash = moneyIn - moneyOut;
   const netAfterDebts = estimatedCash - loanDebt - supplierDebt;
-  const operatingResult = salesTotal - expensesTotal;
+  const operatingResult = salesTotal - expensesTotal - supplierPaymentsTotal;
   const maxFlow = Math.max(moneyIn, moneyOut, loanDebt + supplierDebt, 1);
   const treasuryRows = [
     { title: "Ventas cobradas registradas", value: salesTotal, kind: "Ingreso" },
     { title: "Capital ingresado", value: capitalIn, kind: "Ingreso" },
     { title: "Gastos registrados", value: expensesTotal, kind: "Salida" },
+    { title: "Pagos a proveedores", value: supplierPaymentsTotal, kind: "Salida" },
     { title: "Pagos/retiros de capital", value: capitalOut, kind: "Salida" },
     { title: "Deuda con proveedores", value: supplierDebt, kind: "Pendiente" },
     { title: "Deuda por prestamos", value: loanDebt, kind: "Pendiente" }
@@ -3667,7 +3710,7 @@ function Treasury() {
         <div>
           <span>Plata estimada del negocio</span>
           <h2>{formatMoney(estimatedCash)}</h2>
-          <p>Ventas más capital ingresado, menos gastos, pagos de préstamos y retiros cargados.</p>
+          <p>Cobros confirmados más capital ingresado, menos gastos, pagos a proveedores, préstamos y retiros.</p>
         </div>
         <div className="capital-balance">
           <strong>{formatMoney(netAfterDebts)}</strong>
@@ -3676,9 +3719,9 @@ function Treasury() {
       </div>
 
       <div className="capital-grid">
-        <CapitalCard title="Entradas" value={formatMoney(moneyIn)} note="Ventas registradas + capital propio/prestado." percent={(moneyIn / maxFlow) * 100} tone="own" />
-        <CapitalCard title="Salidas" value={formatMoney(moneyOut)} note="Gastos + pagos de préstamos + retiros del dueño." percent={(moneyOut / maxFlow) * 100} tone="debt" />
-        <CapitalCard title="Resultado operativo" value={formatMoney(operatingResult)} note="Ventas menos gastos cargados. No incluye capital." percent={Math.min(100, Math.abs(operatingResult) / maxFlow * 100)} tone="paid" />
+        <CapitalCard title="Entradas" value={formatMoney(moneyIn)} note="Cobros registrados + capital propio/prestado." percent={(moneyIn / maxFlow) * 100} tone="own" />
+        <CapitalCard title="Salidas" value={formatMoney(moneyOut)} note="Gastos + pagos a proveedores, préstamos y retiros." percent={(moneyOut / maxFlow) * 100} tone="debt" />
+        <CapitalCard title="Flujo operativo" value={formatMoney(operatingResult)} note="Cobros menos gastos y pagos a proveedores. No incluye capital." percent={Math.min(100, Math.abs(operatingResult) / maxFlow * 100)} tone="paid" />
         <CapitalCard title="Deudas pendientes" value={formatMoney(loanDebt + supplierDebt)} note="Préstamos pendientes + saldo estimado con proveedores." percent={((loanDebt + supplierDebt) / maxFlow) * 100} tone="due" />
       </div>
 

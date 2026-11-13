@@ -58,6 +58,8 @@ export interface ProductCommerce {
 }
 
 export interface Product {
+  /** Server revision used for atomic stock/catalog conflict checks. */
+  cloudUpdatedAt?: string;
   id: string;
   name: string;
   category: string;
@@ -476,7 +478,7 @@ export interface EmailMessage {
   subject: string;
   html: string;
   createdAt: string;
-  status: "pendiente" | "enviado" | "fallo";
+  status: "pendiente" | "enviado" | "fallo" | "requiere_revision";
 }
 
 export interface StockMovement {
@@ -510,6 +512,8 @@ export interface CashClosure {
 }
 
 export interface CashShift {
+  deletedAt?: string;
+  deletedBy?: Role;
   id: string;
   number: string;
   openedAt: string;

@@ -8,9 +8,9 @@ export async function saveCloudOrder(order: OnlineOrder, emails: EmailMessage[])
   const { data: savedOrder, error: v3Error } = await supabase.rpc("create_store_order_v3", {
     order_data: order
   });
-  if (!v3Error && savedOrder) return savedOrder as OnlineOrder;
+  if (!v3Error && savedOrder) return { ...order, ...savedOrder, syncStatus: "sincronizado" } as OnlineOrder;
 
-  const missingV3 = v3Error?.code === "PGRST202" || v3Error?.message?.includes("create_store_order_v3");
+  const missingV3 = v3Error?.code === "PGRST202";
   if (!missingV3) {
     console.error("No se pudo registrar el pedido web.", v3Error?.message);
     return null;
@@ -29,10 +29,17 @@ export async function saveCloudOrder(order: OnlineOrder, emails: EmailMessage[])
 
 export async function loadCloudCommerce() {
   if (!isCloudCatalogEnabled() || !supabase) return { orders: [], emails: [] };
-  const [{ data: orderRows }, { data: emailRows }] = await Promise.all([
-    supabase.from("store_orders").select("data").order("created_at", { ascending: false }).limit(100),
-    supabase.from("store_email_queue").select("data").order("created_at", { ascending: false }).limit(100)
-  ]);
+  const client = supabase;
+  const readAll = async (table: "store_orders" | "store_email_queue") => {
+    const rows: { data: unknown }[] = [];
+    for (let start = 0; ; start += 500) {
+      const { data, error } = await client.from(table).select("data").order("created_at").order("id").range(start, start + 499);
+      if (error) throw new Error("No se pudieron leer los pedidos o correos. Reintentá la carga segura.");
+      rows.push(...(data ?? []));
+      if (!data || data.length < 500) return rows.reverse();
+    }
+  };
+  const [orderRows, emailRows] = await Promise.all([readAll("store_orders"), readAll("store_email_queue")]);
   return {
     orders: (orderRows ?? []).map((row) => row.data as OnlineOrder),
     emails: (emailRows ?? []).map((row) => row.data as EmailMessage)
@@ -67,8 +74,10 @@ export function subscribeToCloudOrders(onChange: (orders: OnlineOrder[]) => void
   const client = supabase;
   let active = true;
   const refresh = async () => {
-    const commerce = await loadCloudCommerce();
-    if (active) onChange(commerce.orders);
+    try {
+      const commerce = await loadCloudCommerce();
+      if (active) onChange(commerce.orders);
+    } catch { console.warn("Se conservó la lista de pedidos: no se pudo confirmar la actualización."); }
   };
   const channel = client
     .channel("store-orders-live")
