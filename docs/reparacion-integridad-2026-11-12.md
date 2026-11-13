@@ -35,3 +35,11 @@ Solicitud del dueño: corregir los riesgos de sobrescritura y seguridad detectad
 - Render publicó el commit `e4e52fc` para el sitio interno y la API. La API respondió `200` en salud y `401` en generación/optimización sin sesión. La cuenta dueña ingresó por Google y la interfaz volvió a mostrar los datos recuperados.
 - Durante la prueba visual se detectó que los vencimientos de calendario se mostraban un día antes al interpretarse como medianoche UTC. La corrección conserva el texto de fecha guardado y muestra el día seleccionado; los campos de auditoría usan la hora local al editar.
 - Se endurece el ingreso Google con PKCE/S256; la aplicación intercambia un código vinculado al navegador en lugar de recibir tokens de sesión en la URL. Cerrar sesión afecta solo al navegador actual.
+
+### Cierre de la publicación
+
+- Sitio interno final publicado en Render: commit `a2f6bcc` (fechas de calendario y PKCE). La API quedó publicada con las dependencias corregidas en `e4e52fc`.
+- Ingreso nuevo por Google, cierre de sesión local, reingreso y recarga comprobados en el sitio real. El registro de capital y su fecha original siguieron visibles; la consola no mostró errores relevantes.
+- La huella del estado operativo antes y después de publicar, ingresar y recargar resultó idéntica. El comprobante detallado permanece en la carpeta privada `backups`.
+- Verificación final: 71 pruebas de aplicación, pruebas de base desechable y concurrencia, compilación y análisis de dependencias aprobados. La API productiva respondió salud `200` y rechazó operaciones de imágenes sin autorización con `401`.
+- Continúa pendiente configurar/verificar el proveedor y publicar/activar el worker de correo. Los mensajes antiguos se conservan para revisión y no se reenviaron.
