@@ -22,3 +22,4 @@ create publication supabase_realtime;
 \ir ../../supabase/storefront-commerce-v3.sql
 \ir ../../supabase/migrations/20261113012024_protect_operational_data.sql
 \ir ../../supabase/migrations/20261113014525_reliable_email_queue.sql
+\ir ../../supabase/migrations/20261113020013_prevent_accidental_hard_deletes.sql

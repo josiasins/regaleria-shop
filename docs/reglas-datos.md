@@ -30,3 +30,4 @@ Ventas, turnos, cobros, compras, gastos, capital, movimientos de stock, clientes
 - El capital se filtra en el servidor. La tabla operativa completa y el historial privado no son accesibles directamente desde clientes.
 - Las bajas de productos y turnos conservan sus datos. No ejecutar de nuevo los SQL históricos de inicialización sobre producción.
 - Los respaldos se crean con `npm run backup -- --storage`. El archivo se considera completo solo tras validar el índice del dump y el inventario de imágenes. La carpeta `backups` y los archivos de conexión tienen permisos privados.
+- La base rechaza también `DELETE` y `TRUNCATE` sobre las tablas comerciales críticas y su historial, incluso ante una instrucción administrativa accidental. Las bajas normales conservan registros.

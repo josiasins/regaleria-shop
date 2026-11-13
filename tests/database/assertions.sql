@@ -46,3 +46,7 @@ select pg_temp.assert_true((select count(*) from public.claim_store_email_batch(
 reset role;
 select pg_temp.assert_true((select status from public.store_email_queue where id='old-email')='requiere_revision','stale email preserved for review');
 select pg_temp.assert_true((select count(*) from public.store_email_queue where status='procesando')=2,'no duplicate claims');
+select pg_temp.assert_error('truncate public.operational_state','42501');
+select pg_temp.assert_error('delete from public.public_catalog_products','42501');
+select pg_temp.assert_error('truncate app_private.business_history','42501');
+select pg_temp.assert_true((select count(*) from public.operational_state)=1,'business data survives destructive statements');
